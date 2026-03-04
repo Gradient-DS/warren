@@ -5,9 +5,12 @@ Uses fake workers with pre-baked data — fast, deterministic, no
 external dependencies. 4 fake documents produce 18 chunks and
 18 embeddings.
 """
-from typing import Dict
+from typing import Dict, Optional
 
 from document_processing.distributed.common import ConsumeMessageFunc
+from document_processing.distributed.storage.documents.interface import (
+    GetDocumentFunc,
+)
 from document_processing.distributed.e2e_test.fake.workers.document_parser import (
     DocumentParserWorker,
 )
@@ -26,6 +29,7 @@ from document_processing.distributed.storage.results.interface import (
 def _create_document_parser(
     worker_id: str,
     stores: Dict[str, ResultsStoreInterface],
+    get_document_func: Optional[GetDocumentFunc],
 ) -> ConsumeMessageFunc:
     return DocumentParserWorker(
         worker_id=worker_id,
@@ -36,6 +40,7 @@ def _create_document_parser(
 def _create_text_chunker(
     worker_id: str,
     stores: Dict[str, ResultsStoreInterface],
+    get_document_func: Optional[GetDocumentFunc],
 ) -> ConsumeMessageFunc:
     return TextChunkerWorker(
         worker_id=worker_id,
@@ -47,6 +52,7 @@ def _create_text_chunker(
 def _create_embedding_generator(
     worker_id: str,
     stores: Dict[str, ResultsStoreInterface],
+    get_document_func: Optional[GetDocumentFunc],
 ) -> ConsumeMessageFunc:
     return EmbeddingGeneratorWorker(
         worker_id=worker_id,

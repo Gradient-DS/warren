@@ -20,7 +20,12 @@ from document_processing.distributed.e2e_test.fake.workers.embedding_generator i
 from document_processing.distributed.e2e_test.fake.workers.text_chunker import (
     TextChunkerWorker,
 )
-from document_processing.distributed.e2e_test.spec import ScenarioSpec, WorkerSpec
+from document_processing.distributed.e2e_test.failure_injection import FailureSpec
+from document_processing.distributed.e2e_test.spec import (
+    E2ETestWorkerSpec,
+    ScenarioSpec,
+    WorkerSpec,
+)
 from document_processing.distributed.storage.results.interface import (
     ResultsStoreInterface,
 )
@@ -67,9 +72,14 @@ SCENARIO: ScenarioSpec = ScenarioSpec(
             collections={"write": "parsed_documents"},
             factory=_create_document_parser,
         ),
-        "text_chunker": WorkerSpec(
+        "text_chunker": E2ETestWorkerSpec(
             collections={"read": "parsed_documents", "write": "chunks"},
             factory=_create_text_chunker,
+            failure_spec=FailureSpec(
+                fail_at_attempts=[1],
+                retry_after=2,
+                retry_max=3,
+            ),
         ),
         "embedding_generator": WorkerSpec(
             collections={"read": "chunks", "write": "embeddings"},

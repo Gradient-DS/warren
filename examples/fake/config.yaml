@@ -11,6 +11,9 @@ rabbitmq:
   consumer:
     prefetch_count: 1
     on_shutdown_timeout_seconds: 30.0
+  retry:
+    enabled: true
+    collection_name: retries
 
 mongodb:
   host: localhost

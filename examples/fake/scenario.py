@@ -77,6 +77,7 @@ SCENARIO: ScenarioSpec = ScenarioSpec(
             factory=_create_text_chunker,
             failure_spec=FailureSpec(
                 fail_at_attempts=[1],
+                target_data_type="markdown_document",
                 retry_after=2,
                 retry_max=3,
             ),

@@ -25,14 +25,14 @@ from document_processing.distributed.e2e_test.config import (
     resolve_log_level,
 )
 from document_processing.distributed.e2e_test.fake.data import FAKE_DOCUMENTS
-from document_processing.distributed.pubsub.rabbitmq.connection import (
+from document_processing.distributed.framework.pubsub.rabbitmq.connection import (
     RMQConnectionConfig,
     RMQConnectionManager,
 )
-from document_processing.distributed.pubsub.rabbitmq.consumer import (
+from document_processing.distributed.framework.pubsub.rabbitmq.consumer import (
     RMQExchangeConfig,
 )
-from document_processing.distributed.pubsub.rabbitmq.publisher import RMQPublisher
+from document_processing.distributed.framework.pubsub.rabbitmq.publisher import RMQPublisher
 
 module_logger: logging.Logger = get_logger(__name__)
 

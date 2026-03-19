@@ -7,8 +7,8 @@ external dependencies. 4 fake documents produce 18 chunks and
 """
 from typing import Dict, Optional
 
-from document_processing.distributed.common import ConsumeMessageFunc
-from document_processing.distributed.storage.documents.interface import (
+from document_processing.distributed.framework.common import ConsumeMessageFunc
+from document_processing.distributed.framework.storage.documents.interface import (
     GetDocumentFunc,
 )
 from document_processing.distributed.e2e_test.fake.workers.document_parser import (
@@ -26,7 +26,7 @@ from document_processing.distributed.e2e_test.spec import (
     ScenarioSpec,
     WorkerSpec,
 )
-from document_processing.distributed.storage.results.interface import (
+from document_processing.distributed.framework.storage.results.interface import (
     ResultsStoreInterface,
 )
 

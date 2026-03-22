@@ -8,6 +8,7 @@ Usage:
         --job-id e2e-test-001 \
         --config-file document_processing/distributed/e2e_test/fake/config.yaml
 """
+
 from typing import Dict, List
 
 import argparse
@@ -32,7 +33,9 @@ from document_processing.distributed.framework.pubsub.rabbitmq.connection import
 from document_processing.distributed.framework.pubsub.rabbitmq.consumer import (
     RMQExchangeConfig,
 )
-from document_processing.distributed.framework.pubsub.rabbitmq.publisher import RMQPublisher
+from document_processing.distributed.framework.pubsub.rabbitmq.publisher import (
+    RMQPublisher,
+)
 
 module_logger: logging.Logger = get_logger(__name__)
 
@@ -48,18 +51,20 @@ def _build_messages(job_id: str) -> List[Dict]:
     messages: List[Dict] = []
 
     for doc_id in FAKE_DOCUMENTS:
-        messages.append({
-            "data_type": "pdf_document",
-            "data": {
-                "doc_id": doc_id,
-                "path": f"/fake/path/{doc_id}.pdf",
-            },
-            "job_id": job_id,
-            "origin": {
-                "type": "test_publisher",
-                "name": "e2e-publisher",
-            },
-        })
+        messages.append(
+            {
+                "data_type": "pdf_document",
+                "data": {
+                    "doc_id": doc_id,
+                    "path": f"/fake/path/{doc_id}.pdf",
+                },
+                "job_id": job_id,
+                "origin": {
+                    "type": "test_publisher",
+                    "name": "e2e-publisher",
+                },
+            }
+        )
 
     return messages
 

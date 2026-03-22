@@ -5,6 +5,7 @@ Uses fake workers with pre-baked data — fast, deterministic, no
 external dependencies. 4 fake documents produce 18 chunks and
 18 embeddings.
 """
+
 from typing import Dict, Optional
 
 from document_processing.distributed.framework.common import ConsumeMessageFunc

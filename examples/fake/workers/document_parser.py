@@ -4,13 +4,16 @@ Fake document parser worker for E2E testing.
 Receives pdf_document messages, looks up fake markdown content,
 stores the result, and publishes a markdown_document message.
 """
+
 from typing import Dict, Optional
 
 from document_processing.distributed.e2e_test.fake.data import FAKE_DOCUMENTS
 from document_processing.distributed.framework.storage.results.interface import (
     ResultsStoreInterface,
 )
-from document_processing.distributed.framework.workers.workers import FilteringWorkerBase
+from document_processing.distributed.framework.workers.workers import (
+    FilteringWorkerBase,
+)
 
 
 class DocumentParserWorker(FilteringWorkerBase):

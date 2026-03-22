@@ -5,6 +5,7 @@ Receives text_chunks messages, reads stored chunks, generates fake
 embedding vectors, and stores them. This is a terminal worker —
 it does not publish downstream.
 """
+
 from typing import Dict, List, Optional
 
 import hashlib
@@ -13,7 +14,9 @@ import struct
 from document_processing.distributed.framework.storage.results.interface import (
     ResultsStoreInterface,
 )
-from document_processing.distributed.framework.workers.workers import FilteringWorkerBase
+from document_processing.distributed.framework.workers.workers import (
+    FilteringWorkerBase,
+)
 
 EMBEDDING_DIM: int = 8
 
@@ -21,7 +24,7 @@ EMBEDDING_DIM: int = 8
 def _fake_embedding(text: str) -> List[float]:
     """Generate a deterministic fake embedding from text content."""
     digest = hashlib.sha256(text.encode()).digest()
-    return list(struct.unpack(f"{EMBEDDING_DIM}f", digest[:EMBEDDING_DIM * 4]))
+    return list(struct.unpack(f"{EMBEDDING_DIM}f", digest[: EMBEDDING_DIM * 4]))
 
 
 class EmbeddingGeneratorWorker(FilteringWorkerBase):
@@ -46,8 +49,8 @@ class EmbeddingGeneratorWorker(FilteringWorkerBase):
         job_id: str = message["job_id"]
 
         chunks = [
-            chunk async for chunk
-            in self._read_store.stream_doc_processing_results(
+            chunk
+            async for chunk in self._read_store.stream_doc_processing_results(
                 doc_id=doc_id,
                 job_id=job_id,
             )

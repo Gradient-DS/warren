@@ -5,12 +5,15 @@ Receives markdown_document messages, reads the stored markdown,
 splits by paragraph (double newline), stores each chunk, and
 publishes a text_chunks message.
 """
+
 from typing import Dict, Optional
 
 from document_processing.distributed.framework.storage.results.interface import (
     ResultsStoreInterface,
 )
-from document_processing.distributed.framework.workers.workers import FilteringWorkerBase
+from document_processing.distributed.framework.workers.workers import (
+    FilteringWorkerBase,
+)
 
 
 class TextChunkerWorker(FilteringWorkerBase):

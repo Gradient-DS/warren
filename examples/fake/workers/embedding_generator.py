@@ -2,8 +2,8 @@
 Fake embedding generator worker for E2E testing.
 
 Receives text_chunks messages, reads stored chunks, generates fake
-embedding vectors, and stores them. This is a terminal worker —
-it does not publish downstream.
+embedding vectors, and stores them. Publishes an ``embedded_document``
+message for observability (job status tracking).
 """
 
 from typing import Dict, List, Optional
@@ -28,7 +28,7 @@ def _fake_embedding(text: str) -> List[float]:
 
 
 class EmbeddingGeneratorWorker(FilteringWorkerBase):
-    """Generates fake embeddings for text chunks. Terminal worker."""
+    """Generates fake embeddings for text chunks."""
 
     def __init__(
         self,
@@ -69,4 +69,9 @@ class EmbeddingGeneratorWorker(FilteringWorkerBase):
 
         self._log.info(f"Embedded {doc_id}: {len(chunks)} vectors")
 
-        return None
+        return {
+            "data_type": "embedded_document",
+            "data": {"doc_id": doc_id, "num_embeddings": len(chunks)},
+            "job_id": job_id,
+            "origin": {"type": self.worker_type, "name": self.worker_id},
+        }

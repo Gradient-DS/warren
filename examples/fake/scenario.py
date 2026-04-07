@@ -86,10 +86,10 @@ SCENARIO: ScenarioSpec = ScenarioSpec(
         "embedding_generator": WorkerSpec(
             collections={"read": "chunks", "write": "embeddings"},
             factory=_create_embedding_generator,
-            terminal=True,
         ),
     },
     result_collections=["parsed_documents", "chunks", "embeddings"],
     reference_collection="chunks",
     completion_collection="embeddings",
+    final_data_type="embedded_document",
 )

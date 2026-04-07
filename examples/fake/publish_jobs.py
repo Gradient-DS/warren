@@ -1,7 +1,8 @@
 """
-Publish initial pdf_document messages for the fake E2E scenario.
+Publish fake documents for the fake E2E scenario.
 
-Publishes one message per fake document to the fanout exchange.
+Creates a job entry, publishes synthetic documents via
+``FakeE2EPublisher``, and reports the outcome.
 
 Usage:
     python -m document_processing.distributed.e2e_test.fake.publish_jobs \
@@ -9,7 +10,7 @@ Usage:
         --config-file document_processing/distributed/e2e_test/fake/config.yaml
 """
 
-from typing import Dict, List
+from typing import AsyncIterable, Tuple
 
 import argparse
 import asyncio
@@ -19,6 +20,7 @@ from pathlib import Path
 
 from basics.logging import get_logger
 from pydantic import SecretStr
+from pymongo import AsyncMongoClient
 
 from document_processing.distributed.e2e_test.config import (
     E2EConfig,
@@ -26,6 +28,10 @@ from document_processing.distributed.e2e_test.config import (
     resolve_log_level,
 )
 from document_processing.distributed.e2e_test.fake.data import FAKE_DOCUMENTS
+from document_processing.distributed.e2e_test.fake.e2e_publisher import (
+    FakeE2EPublisher,
+)
+from document_processing.distributed.e2e_test.fake.scenario import SCENARIO
 from document_processing.distributed.framework.pubsub.rabbitmq.connection import (
     RMQConnectionConfig,
     RMQConnectionManager,
@@ -36,45 +42,48 @@ from document_processing.distributed.framework.pubsub.rabbitmq.consumer import (
 from document_processing.distributed.framework.pubsub.rabbitmq.publisher import (
     RMQPublisher,
 )
+from document_processing.distributed.framework.storage.jobs.mongodb import (
+    MongoDBJobStore,
+)
+from document_processing.distributed.framework.storage.publishing_tracker.mongodb import (
+    MongoDBPublishingTracker,
+)
 
 module_logger: logging.Logger = get_logger(__name__)
 
 DEFAULT_CONFIG_PATH: Path = Path(__file__).parent / "config.yaml"
 
 
-def _build_messages(job_id: str) -> List[Dict]:
-    """Build pdf_document messages for all fake documents.
-
-    :param job_id: Job identifier to attach to each message.
-    :return: List of message dicts ready for publishing.
-    """
-    messages: List[Dict] = []
-
-    for doc_id in FAKE_DOCUMENTS:
-        messages.append(
-            {
-                "data_type": "pdf_document",
-                "data": {
-                    "doc_id": doc_id,
-                    "path": f"/fake/path/{doc_id}.pdf",
-                },
-                "job_id": job_id,
-                "origin": {
-                    "type": "test_publisher",
-                    "name": "e2e-publisher",
-                },
-            }
-        )
-
-    return messages
+async def _as_async_iterable(
+    items: dict,
+) -> AsyncIterable[Tuple[str, str]]:
+    """Wrap FAKE_DOCUMENTS dict as an async iterable of (doc_id, content)."""
+    for doc_id, content in items.items():
+        yield (doc_id, content)
 
 
 async def _publish(config: E2EConfig, job_id: str) -> None:
-    """Connect to RabbitMQ and publish all test messages.
+    """Create job, publish fake documents, report results."""
+    mongo_cfg = config.mongodb
+    mongo_client = AsyncMongoClient(host=mongo_cfg.host, port=mongo_cfg.port)
 
-    :param config: E2E configuration.
-    :param job_id: Job identifier.
-    """
+    job_store = MongoDBJobStore(
+        client=mongo_client,
+        database_name=mongo_cfg.database,
+    )
+    await job_store.setup()
+
+    tracker = MongoDBPublishingTracker(
+        client=mongo_client,
+        database_name=mongo_cfg.database,
+    )
+    await tracker.setup()
+
+    await job_store.create_job(
+        job_id=job_id,
+        final_data_type=SCENARIO.final_data_type,
+    )
+
     rmq_conn_cfg = config.rabbitmq.connection
     connection_manager = RMQConnectionManager(
         RMQConnectionConfig(
@@ -101,16 +110,27 @@ async def _publish(config: E2EConfig, job_id: str) -> None:
         await connection_manager.setup()
         await publisher.setup()
 
-        messages = _build_messages(job_id)
-        for msg in messages:
-            await publisher(msg)
-            module_logger.info(f"Published {msg['data']['doc_id']} (job={job_id})")
+        e2e_publisher = FakeE2EPublisher(
+            publisher=publisher,
+            tracker=tracker,
+            job_store=job_store,
+            name="fake-e2e-publisher",
+        )
 
-        module_logger.info(f"Published {len(messages)} messages for job {job_id}")
+        result = await e2e_publisher.publish_job(
+            job_id=job_id,
+            sources=_as_async_iterable(FAKE_DOCUMENTS),
+        )
+
+        module_logger.info(
+            f"Job {job_id}: published={result['published']}, "
+            f"failed={result['failed']}, total={result['total']}"
+        )
 
     finally:
         await publisher.teardown()
         await connection_manager.teardown()
+        await mongo_client.close()
 
 
 def _parse_args() -> argparse.Namespace:

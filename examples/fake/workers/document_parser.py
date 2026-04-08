@@ -21,11 +21,11 @@ class DocumentParserWorker(FilteringWorkerBase):
 
     def __init__(
         self,
-        worker_id: str,
+        worker_name: str,
         *,
         write_store: ResultsStoreInterface,
     ) -> None:
-        super().__init__(worker_id)
+        super().__init__(worker_name)
         self._write_store = write_store
 
     def should_process(self, message: Dict) -> bool:
@@ -49,5 +49,5 @@ class DocumentParserWorker(FilteringWorkerBase):
             "data_type": "markdown_document",
             "data": {"doc_id": doc_id},
             "job_id": job_id,
-            "origin": {"type": "document_parser", "name": self._worker_id},
+            "origin": {"type": self.type, "name": self.name},
         }

@@ -32,12 +32,12 @@ class EmbeddingGeneratorWorker(FilteringWorkerBase):
 
     def __init__(
         self,
-        worker_id: str,
+        worker_name: str,
         *,
         read_store: ResultsStoreInterface,
         write_store: ResultsStoreInterface,
     ) -> None:
-        super().__init__(worker_id)
+        super().__init__(worker_name)
         self._read_store = read_store
         self._write_store = write_store
 
@@ -73,5 +73,5 @@ class EmbeddingGeneratorWorker(FilteringWorkerBase):
             "data_type": "embedded_document",
             "data": {"doc_id": doc_id, "num_embeddings": len(chunks)},
             "job_id": job_id,
-            "origin": {"type": self.worker_type, "name": self.worker_id},
+            "origin": {"type": self.type, "name": self.name},
         }

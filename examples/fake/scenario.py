@@ -8,7 +8,7 @@ external dependencies. 4 fake documents produce 18 chunks and
 
 from typing import Dict, Optional
 
-from document_processing.distributed.framework.common import ConsumeMessageFunc
+from document_processing.distributed.framework.common import MessageConsumerInterface
 from document_processing.distributed.framework.storage.documents.interface import (
     GetDocumentFunc,
 )
@@ -33,35 +33,35 @@ from document_processing.distributed.framework.storage.results.interface import 
 
 
 def _create_document_parser(
-    worker_id: str,
+    worker_name: str,
     stores: Dict[str, ResultsStoreInterface],
     get_document_func: Optional[GetDocumentFunc],
-) -> ConsumeMessageFunc:
+) -> MessageConsumerInterface:
     return DocumentParserWorker(
-        worker_id=worker_id,
+        worker_name=worker_name,
         write_store=stores["write"],
     )
 
 
 def _create_text_chunker(
-    worker_id: str,
+    worker_name: str,
     stores: Dict[str, ResultsStoreInterface],
     get_document_func: Optional[GetDocumentFunc],
-) -> ConsumeMessageFunc:
+) -> MessageConsumerInterface:
     return TextChunkerWorker(
-        worker_id=worker_id,
+        worker_name=worker_name,
         read_store=stores["read"],
         write_store=stores["write"],
     )
 
 
 def _create_embedding_generator(
-    worker_id: str,
+    worker_name: str,
     stores: Dict[str, ResultsStoreInterface],
     get_document_func: Optional[GetDocumentFunc],
-) -> ConsumeMessageFunc:
+) -> MessageConsumerInterface:
     return EmbeddingGeneratorWorker(
-        worker_id=worker_id,
+        worker_name=worker_name,
         read_store=stores["read"],
         write_store=stores["write"],
     )

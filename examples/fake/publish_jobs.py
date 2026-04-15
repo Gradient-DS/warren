@@ -2,11 +2,12 @@
 Publish fake documents for the fake E2E scenario.
 
 Creates a job entry, publishes synthetic documents via
-``FakeE2EPublisher``, and reports the outcome.
+``FakeE2EPublisher``, and reports the outcome. Prints the
+store-generated job ID to stdout for capture by the caller.
 
 Usage:
     python -m document_processing.distributed.e2e_test.fake.publish_jobs \
-        --job-id e2e-test-001 \
+        --job-name e2e-test-001 \
         --config-file document_processing/distributed/e2e_test/fake/config.yaml
 """
 
@@ -15,7 +16,6 @@ from typing import AsyncIterable, Tuple
 import argparse
 import asyncio
 import logging
-import uuid
 from pathlib import Path
 
 from basics.logging import get_logger
@@ -62,8 +62,11 @@ async def _as_async_iterable(
         yield (doc_id, content)
 
 
-async def _publish(config: E2EConfig, job_id: str) -> None:
-    """Create job, publish fake documents, report results."""
+async def _publish(config: E2EConfig, job_name: str) -> str:
+    """Create job, publish fake documents, report results.
+
+    :return: The store-generated job ID.
+    """
     mongo_cfg = config.mongodb
     mongo_client = AsyncMongoClient(host=mongo_cfg.host, port=mongo_cfg.port)
 
@@ -79,9 +82,12 @@ async def _publish(config: E2EConfig, job_id: str) -> None:
     )
     await tracker.setup()
 
-    await job_store.create_job(
-        job_id=job_id,
+    # job_name allows tracking across scripts (publish, check)
+    # without scraping the store-generated job_id from logs,
+    # which is fragile.
+    job_id = await job_store.create_job(
         final_data_type=SCENARIO.final_data_type,
+        metadata={"job_name": job_name},
     )
 
     rmq_conn_cfg = config.rabbitmq.connection
@@ -132,15 +138,20 @@ async def _publish(config: E2EConfig, job_id: str) -> None:
         await connection_manager.teardown()
         await mongo_client.close()
 
+    return job_id
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Publish fake E2E test messages to RabbitMQ",
     )
+    # job_name is stored in metadata so callers (check_completion)
+    # can look up the job without scraping the store-generated
+    # job_id from logs.
     parser.add_argument(
-        "--job-id",
-        default=None,
-        help="Job ID (default: auto-generated e2e-<uuid>).",
+        "--job-name",
+        required=True,
+        help="Human-readable job name (stored in metadata).",
     )
     parser.add_argument(
         "--config-file",
@@ -165,10 +176,10 @@ def main() -> None:
     module_logger = get_logger(__name__, log_level=log_level)
 
     config = E2EConfig.from_yaml(args.config_file)
-    job_id = args.job_id or f"e2e-{uuid.uuid4().hex[:8]}"
 
-    module_logger.info(f"Job ID: {job_id}")
-    asyncio.run(_publish(config, job_id))
+    job_id = asyncio.run(_publish(config, args.job_name))
+    # Print job ID for capture by callers (e.g., start_e2e.sh)
+    print(f"JOB_ID={job_id}")
 
 
 if __name__ == "__main__":

@@ -177,9 +177,7 @@ def main() -> None:
 
     config = E2EConfig.from_yaml(args.config_file)
 
-    job_id = asyncio.run(_publish(config, args.job_name))
-    # Print job ID for capture by callers (e.g., start_e2e.sh)
-    print(f"JOB_ID={job_id}")
+    asyncio.run(_publish(config, args.job_name))
 
 
 if __name__ == "__main__":

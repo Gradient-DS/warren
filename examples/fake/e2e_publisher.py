@@ -15,12 +15,12 @@ from document_processing.distributed.framework.storage.jobs.interface import (
 from document_processing.distributed.framework.storage.publishing_tracker.interface import (
     PublishingTrackerInterface,
 )
-from document_processing.distributed.framework.workers.publishing_worker_base import (
-    PublishingWorkerBase,
+from document_processing.distributed.framework.workers.job_documents_publisher import (
+    JobDocumentsPublisher,
 )
 
 
-class FakeE2EPublisher(PublishingWorkerBase):
+class FakeE2EPublisher(JobDocumentsPublisher):
     """Publishes fake documents for E2E testing.
 
     Sources are ``(doc_id, content)`` tuples from ``FAKE_DOCUMENTS``.

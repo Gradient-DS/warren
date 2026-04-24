@@ -5,7 +5,7 @@ Publishes synthetic documents from ``FAKE_DOCUMENTS`` — no actual file
 loading or document store registration. Each doc_id is pre-assigned.
 """
 
-from typing import Optional, Tuple, Dict, Any
+from typing import Any
 
 from document_processing.distributed.framework.constants import PUBLISHER_ORIGIN_TYPE
 from document_processing.distributed.framework.pubsub.common import PublisherInterface
@@ -39,7 +39,7 @@ class FakeE2EPublisher(JobDocumentsPublisher):
         publisher: PublisherInterface,
         tracker: PublishingTrackerInterface,
         job_store: JobStoreInterface,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> None:
         super().__init__(
             publisher=publisher,
@@ -48,7 +48,7 @@ class FakeE2EPublisher(JobDocumentsPublisher):
             name=name,
         )
 
-    async def _load_document(self, source: Any) -> Tuple[str, str]:
+    async def _load_document(self, source: Any) -> tuple[str, str]:
         """Return the source as-is (doc_id, content)."""
         return source
 
@@ -66,8 +66,14 @@ class FakeE2EPublisher(JobDocumentsPublisher):
         job_id: str,
         doc_id: str,
         doc_data: Any,
-    ) -> Dict:
-        """Create a pdf_document message for the exchange."""
+        job_parameters: dict[str, Any],
+    ) -> dict:
+        """Create a pdf_document message for the exchange.
+
+        ``job_parameters`` is accepted for base-class conformance but
+        ignored — the fake scenario exercises only the in-memory happy
+        path and has no settings that parametrise message construction.
+        """
         return {
             "data_type": "pdf_document",
             "data": {

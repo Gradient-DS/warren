@@ -16,13 +16,13 @@ from document_processing.distributed.e2e_test.fake.workers.embedding_generator i
 from document_processing.distributed.e2e_test.fake.workers.text_chunker import (
     TextChunkerWorker,
 )
-from document_processing.distributed.e2e_test.spec import (
-    E2ETestWorkerSpec,
+from document_processing.distributed.e2e_test.spec import E2ETestWorkerSpec
+from document_processing.distributed.framework.common import MessageConsumerInterface
+from document_processing.distributed.framework.workers.spec import (
     ScenarioSpec,
     WorkerFactoryContext,
     WorkerSpec,
 )
-from document_processing.distributed.framework.common import MessageConsumerInterface
 
 
 async def _create_document_parser(

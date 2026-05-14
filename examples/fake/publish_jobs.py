@@ -32,14 +32,16 @@ from document_processing.distributed.e2e_test.fake.e2e_publisher import (
     FakeE2EPublisher,
 )
 from document_processing.distributed.e2e_test.fake.scenario import SCENARIO
-from document_processing.distributed.framework.pubsub.rabbitmq.connection import (
+from document_processing.distributed.framework.pubsub.rabbitmq.config import (
     RMQConnectionConfig,
+)
+from document_processing.distributed.framework.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
-from document_processing.distributed.framework.pubsub.rabbitmq.consumer import (
+from document_processing.distributed.framework.pubsub.rabbitmq.config import (
     RMQExchangeConfig,
 )
-from document_processing.distributed.framework.pubsub.rabbitmq.publisher import (
+from document_processing.distributed.framework.pubsub.rabbitmq.aio_pika.publisher import (
     RMQPublisher,
 )
 from document_processing.distributed.framework.storage.jobs.mongodb import (

@@ -15,7 +15,7 @@ from document_processing.distributed.framework.storage.jobs.interface import (
 from document_processing.distributed.framework.storage.publishing_tracker.interface import (
     PublishingTrackerInterface,
 )
-from document_processing.distributed.framework.workers.job_documents_publisher import (
+from document_processing.distributed.framework.jobs.publishing.job_documents_publisher import (
     JobDocumentsPublisher,
 )
 

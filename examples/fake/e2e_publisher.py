@@ -7,15 +7,15 @@ loading or document store registration. Each doc_id is pre-assigned.
 
 from typing import Any
 
-from document_processing.distributed.framework.constants import PUBLISHER_ORIGIN_TYPE
-from document_processing.distributed.framework.pubsub.common import PublisherInterface
-from document_processing.distributed.framework.storage.jobs.interface import (
+from document_processing.distributed.warren.constants import PUBLISHER_ORIGIN_TYPE
+from document_processing.distributed.warren.pubsub.common import PublisherInterface
+from document_processing.distributed.warren.storage.jobs.interface import (
     JobStoreInterface,
 )
-from document_processing.distributed.framework.storage.publishing_tracker.interface import (
+from document_processing.distributed.warren.storage.publishing_tracker.interface import (
     PublishingTrackerInterface,
 )
-from document_processing.distributed.framework.jobs.publishing.job_documents_publisher import (
+from document_processing.distributed.warren.jobs.publishing.job_documents_publisher import (
     JobDocumentsPublisher,
 )
 

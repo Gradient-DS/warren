@@ -8,10 +8,10 @@ stores the result, and publishes a markdown_document message.
 from typing import Dict, Optional
 
 from document_processing.distributed.e2e_test.fake.data import FAKE_DOCUMENTS
-from document_processing.distributed.framework.storage.results.interface import (
+from document_processing.distributed.warren.storage.results.interface import (
     ResultsStoreInterface,
 )
-from document_processing.distributed.framework.workers.workers import (
+from document_processing.distributed.warren.workers.workers import (
     FilteringWorkerBase,
 )
 

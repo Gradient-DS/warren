@@ -17,8 +17,8 @@ from document_processing.distributed.e2e_test.fake.workers.text_chunker import (
     TextChunkerWorker,
 )
 from document_processing.distributed.e2e_test.spec import E2ETestWorkerSpec
-from document_processing.distributed.framework.common import MessageConsumerInterface
-from document_processing.distributed.framework.runtime.spec import (
+from document_processing.distributed.warren.common import MessageConsumerInterface
+from document_processing.distributed.warren.runtime.spec import (
     PipelineSpec,
     WorkerFactoryContext,
     WorkerSpec,

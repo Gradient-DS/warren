@@ -11,10 +11,10 @@ from typing import Dict, List, Optional
 import hashlib
 import struct
 
-from document_processing.distributed.framework.storage.results.interface import (
+from document_processing.distributed.warren.storage.results.interface import (
     ResultsStoreInterface,
 )
-from document_processing.distributed.framework.workers.workers import (
+from document_processing.distributed.warren.workers.workers import (
     FilteringWorkerBase,
 )
 

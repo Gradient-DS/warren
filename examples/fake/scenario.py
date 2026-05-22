@@ -18,8 +18,8 @@ from document_processing.distributed.e2e_test.fake.workers.text_chunker import (
 )
 from document_processing.distributed.e2e_test.spec import E2ETestWorkerSpec
 from document_processing.distributed.framework.common import MessageConsumerInterface
-from document_processing.distributed.framework.workers.spec import (
-    ScenarioSpec,
+from document_processing.distributed.framework.runtime.spec import (
+    PipelineSpec,
     WorkerFactoryContext,
     WorkerSpec,
 )
@@ -52,7 +52,7 @@ async def _create_embedding_generator(
     )
 
 
-SCENARIO: ScenarioSpec = ScenarioSpec(
+SCENARIO: PipelineSpec = PipelineSpec(
     workers={
         "document_parser": WorkerSpec(
             collections={"write": "parsed_documents"},

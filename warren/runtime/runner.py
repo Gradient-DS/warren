@@ -56,7 +56,6 @@ from document_processing.distributed.warren.runtime.infrastructure import (
     create_runtime_infrastructure,
 )
 from document_processing.distributed.warren.runtime.spec import (
-    PipelineSpec,
     WorkerFactoryContext,
     WorkerSpec,
 )
@@ -68,37 +67,48 @@ module_logger: logging.Logger = get_logger(__name__)
 class DefaultWorkerRunner(WorkerRunnerBase):
     """Concrete runner that wires RMQ + MongoDB + Redis for a worker.
 
-    All worker-specific decisions are driven by the ``WorkerSpec``
-    from the pipeline — no branching on worker type name.
+    All worker-specific decisions are driven by the ``WorkerSpec`` —
+    no branching on worker type name.
 
-    :param worker_type: Name of the worker type (must exist in
-        pipeline spec).
-    :param worker_name: Unique worker instance identifier.
-    :param config: Runtime infrastructure configuration.
-    :param pipeline: Pipeline spec defining workers and completion
-        criteria.
+    Creates infrastructure from ``RuntimeConfig`` and builds default
+    components in ``setup()``. Inject custom components to override
+    defaults (e.g. for testing).
+
+    :param config: runtime infrastructure configuration.
+    :param worker_name: unique worker instance identifier.
+    :param worker_type: name of the worker type (used for queue naming).
+    :param worker_spec: spec defining collections, factory, and flags.
+    :param document_fetcher: optional override for the document fetcher.
+        Default: ``CachedDocumentFetcher`` with path + GCS resolvers
+        (created when ``worker_spec.needs_document_fetcher`` is True).
+    :param document_store: optional override for the document store.
+        Default: ``MongoDBDocumentStore`` on the ``documents``
+        collection (created when ``worker_spec.needs_document_store``
+        is True).
+    :param results_stores: optional override for the results stores.
+        Default: one ``DefaultResultsStore`` per collection in
+        ``worker_spec.collections``.
     """
 
     def __init__(
         self,
-        worker_type: str,
-        worker_name: str,
         config: RuntimeConfig,
-        pipeline: PipelineSpec,
+        worker_name: str,
+        *,
+        worker_type: str,
+        worker_spec: WorkerSpec,
+        document_fetcher: GetDocumentFunc | None = None,
+        document_store: DocumentStoreInterface | None = None,
+        results_stores: dict[str, ResultsStoreInterface] | None = None,
     ) -> None:
         super().__init__(name=worker_name)
         self._worker_type = worker_type
         self._worker_name = worker_name
         self._config = config
-
-        if worker_type not in pipeline.workers:
-            valid = ", ".join(pipeline.workers.keys())
-            raise ValueError(
-                f"Unknown worker type '{worker_type}'. "
-                f"Valid types: {valid}"
-            )
-
-        self._worker_spec: WorkerSpec = pipeline.workers[worker_type]
+        self._worker_spec: WorkerSpec = worker_spec
+        self._document_fetcher = document_fetcher
+        self._document_store = document_store
+        self._results_stores = results_stores
         self._infra: RuntimeInfra | None = None
         self._worker: MessageConsumerInterface | None = None
 
@@ -106,23 +116,28 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         """Wire connections, stores, worker, publishers, and consumer.
 
         1. Set up infrastructure (MongoDB, Redis, RabbitMQ)
-        2. Create results stores from pipeline's collection config
-        3. Create document fetcher (if worker spec requires it)
-        4. Create document store (if worker spec requires it)
-        5. Create worker via pipeline's factory (async)
-        6. Wrap worker (subclass hook, e.g. for failure injection)
-        7. Run worker-level setup (start owned async resources)
-        8. Create publishers for downstream routing
-        9. Create and set up the consumer manager
+        2. Build default stores/fetcher for any not injected
+        3. Create worker via spec's factory (async)
+        4. Wrap worker (subclass hook, e.g. for failure injection)
+        5. Run worker-level setup (start owned async resources)
+        6. Create publishers for downstream routing
+        7. Create and set up the consumer manager
         """
         self._infra = await create_runtime_infrastructure(self._config)
-        stores = await self._create_results_stores()
-        document_fetcher = self._create_document_fetcher()
-        document_store = await self._create_document_store()
+
+        if self._results_stores is None:
+            self._results_stores = await self._create_default_results_stores()
+
+        if self._document_fetcher is None and self._worker_spec.needs_document_fetcher:
+            self._document_fetcher = self._create_default_document_fetcher()
+
+        if self._document_store is None and self._worker_spec.needs_document_store:
+            self._document_store = await self._create_default_document_store()
+
         self._worker = await self._create_worker(
-            stores,
-            document_fetcher,
-            document_store,
+            self._results_stores,
+            self._document_fetcher,
+            self._document_store,
         )
         self._worker = self._wrap_worker(self._worker, self._worker_spec)
         await self._worker.setup()
@@ -189,7 +204,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
 
         return resolvers
 
-    async def _create_results_stores(
+    async def _create_default_results_stores(
         self,
     ) -> dict[str, ResultsStoreInterface]:
         stores: dict[str, ResultsStoreInterface] = {}
@@ -204,11 +219,8 @@ class DefaultWorkerRunner(WorkerRunnerBase):
 
         return stores
 
-    async def _create_document_store(self) -> DocumentStoreInterface | None:
-        """Create a MongoDBDocumentStore if the worker spec requires it."""
-        if not self._worker_spec.needs_document_store:
-            return None
-
+    async def _create_default_document_store(self) -> DocumentStoreInterface:
+        """Create a MongoDBDocumentStore for the ``documents`` collection."""
         store = MongoDBDocumentStore(
             client=self._infra.mongo_client,
             database_name=self._config.mongodb.database,
@@ -219,14 +231,8 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         await store.setup()
         return store
 
-    def _create_document_fetcher(self) -> GetDocumentFunc | None:
-        """Create a CachedDocumentFetcher if the worker spec requires it."""
-        if not self._worker_spec.needs_document_fetcher:
-            return None
-
-        # TODO: wrap _create_resolvers() in try/except — it's an
-        #  override hook and subclass implementations are untrusted.
-        #  Deferred to B4 (exception hierarchy).
+    def _create_default_document_fetcher(self) -> GetDocumentFunc:
+        """Create a CachedDocumentFetcher with path + GCS resolvers."""
         return create_cached_document_fetcher(
             redis_client=self._infra.redis_client,
             resolvers=self._create_resolvers(),

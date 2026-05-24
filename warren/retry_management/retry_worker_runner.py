@@ -1,73 +1,123 @@
 """
 Runner for the retry worker.
 
-Manages the RetryWorker lifecycle: creates the worker from injected
-dependencies, sets up the consumer, schedules pending retries on
-startup, and cancels timers on shutdown.
+Manages the RetryWorker lifecycle: creates infrastructure connections,
+builds the retry store and publisher, sets up the consumer, schedules
+pending retries on startup, and cancels timers on shutdown.
 
-Transport-agnostic — the caller provides pre-built store, publisher,
-and a factory for the consumer manager.
+Accepts ``RuntimeConfig`` and manages its own infrastructure. Custom
+components can be injected to override the defaults (e.g. for testing).
 """
 
 from typing import Dict, Optional, Callable
 
-from document_processing.distributed.warren.pubsub.common import PublisherInterface
+from document_processing.distributed.warren.common import MessageConsumerInterface
+from document_processing.distributed.warren.pubsub.common import (
+    ConsumerManagerInterface,
+    PublisherInterface,
+)
+from document_processing.distributed.warren.pubsub.rabbitmq.config import (
+    RMQConsumerConfig,
+    RMQConsumerManagerConfig,
+    RMQExchangeConfig,
+    RMQQueueConfig,
+)
+from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.consumer import (
+    RMQConsumerManager,
+)
+from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.publisher import (
+    RMQPublisher,
+)
+from document_processing.distributed.warren.retry_management.retry_worker import (
+    RetryWorker,
+)
+from document_processing.distributed.warren.runtime.config import RuntimeConfig
+from document_processing.distributed.warren.runtime.infrastructure import (
+    RuntimeInfra,
+    close_runtime_infrastructure,
+    create_runtime_infrastructure,
+)
+from document_processing.distributed.warren.storage.cache.redis import RedisDictCache
+from document_processing.distributed.warren.storage.cached_document_store import (
+    CachedDocumentStore,
+)
 from document_processing.distributed.warren.storage.document_store.interface import (
     DocumentStoreInterface,
 )
-from document_processing.distributed.warren.retry_management.retry_worker import RetryWorker
+from document_processing.distributed.warren.storage.document_store.mongodb import (
+    MongoDBDocumentStore,
+)
 from document_processing.distributed.warren.workers.runners import (
     ConsumerManagerFactory,
     WorkerRunnerBase,
 )
 
+RETRY_WORKER_TYPE: str = "retry_worker"
+
 
 class RetryWorkerRunner(WorkerRunnerBase):
     """Runs a RetryWorker with its lifecycle hooks.
 
-    Accepts pre-built dependencies. The caller is responsible for
-    creating the retry store, publisher, and consumer manager factory
-    with appropriate transport configuration.
+    Creates infrastructure from ``RuntimeConfig`` and builds default
+    components in ``setup()``. Inject custom components to override
+    defaults (e.g. for testing).
 
-    :param worker_name: Unique identifier for this retry worker.
-    :param retry_store: Persistent store for retry envelopes. Must
-        use ``"retry_key"`` as its ``doc_id_field``.
-    :param republish_publisher: Publisher targeting the processing
-        exchange. The runner calls ``setup()`` and ``teardown()``
-        on it.
-    :param consumer_manager_factory: Factory that creates a consumer
-        manager for the retry worker. Called with the worker as
-        argument. The runner calls ``setup()`` on the result.
-    :param message_key_func: Optional function to extract a composite
+    :param config: runtime infrastructure configuration.
+    :param worker_name: unique identifier for this retry worker.
+    :param retry_store: optional override for the retry envelope store.
+        Default: ``CachedDocumentStore`` wrapping MongoDB + Redis.
+    :param republish_publisher: optional override for the exchange
+        publisher. Default: ``RMQPublisher`` targeting the processing
+        exchange.
+    :param consumer_manager_factory: optional override for the consumer
+        manager factory. Default: factory creating ``RMQConsumerManager``
+        on the retry queue.
+    :param message_key_func: optional function to extract a composite
         key from a message dict. Passed to ``RetryWorker``.
     """
 
     def __init__(
         self,
+        config: RuntimeConfig,
         worker_name: str,
         *,
-        retry_store: DocumentStoreInterface,
-        republish_publisher: PublisherInterface,
-        consumer_manager_factory: ConsumerManagerFactory,
+        retry_store: DocumentStoreInterface | None = None,
+        republish_publisher: PublisherInterface | None = None,
+        consumer_manager_factory: ConsumerManagerFactory | None = None,
         message_key_func: Optional[Callable[[Dict], str]] = None,
     ) -> None:
         super().__init__(name=worker_name)
         self._worker_name = worker_name
+        self._config = config
         self._retry_store = retry_store
         self._republish_publisher = republish_publisher
         self._consumer_manager_factory = consumer_manager_factory
         self._message_key_func = message_key_func
-        self._retry_worker: Optional[RetryWorker] = None
+        self._infra: RuntimeInfra | None = None
+        self._retry_worker: RetryWorker | None = None
 
     async def setup(self) -> None:
-        """Create retry worker, set up publisher and consumer,
-        schedule pending retries.
+        """Create infrastructure, build defaults, wire the worker.
 
-        1. Set up the republish publisher (channel + exchange)
-        2. Create the RetryWorker with injected dependencies
-        3. Create and set up the consumer manager via factory
-        4. Schedule pending retries from the store
+        1. Create infrastructure (MongoDB, Redis, RabbitMQ)
+        2. Build default retry store, publisher, consumer factory
+           for any components not injected
+        3. Set up the republish publisher
+        4. Create the RetryWorker
+        5. Create and set up the consumer manager
+        6. Schedule pending retries from the store
         """
+        self._infra = await create_runtime_infrastructure(self._config)
+
+        if self._retry_store is None:
+            self._retry_store = await self._create_default_retry_store()
+
+        if self._republish_publisher is None:
+            self._republish_publisher = self._create_default_publisher()
+
+        if self._consumer_manager_factory is None:
+            self._consumer_manager_factory = self._create_default_consumer_factory()
+
         await self._republish_publisher.setup()
 
         self._retry_worker = RetryWorker(
@@ -77,16 +127,78 @@ class RetryWorkerRunner(WorkerRunnerBase):
             message_key_func=self._message_key_func,
         )
 
-        self._consumer_manager = self._consumer_manager_factory(self._retry_worker)
+        self._consumer_manager = self._consumer_manager_factory(
+            self._retry_worker,
+        )
         await self._consumer_manager.setup()
 
         await self._retry_worker.schedule_pending()
         self._mark_setup_succeeded()
 
     async def _on_teardown(self) -> None:
-        """Cancel retry timers and tear down the republish
-        publisher."""
         if self._retry_worker is not None:
             await self._retry_worker.shutdown()
 
-        await self._republish_publisher.teardown()
+        if self._republish_publisher is not None:
+            await self._republish_publisher.teardown()
+
+        if self._infra is not None:
+            await close_runtime_infrastructure(self._infra)
+
+    async def _create_default_retry_store(self) -> DocumentStoreInterface:
+        retry_cfg = self._config.retry
+        mongo_store = MongoDBDocumentStore(
+            client=self._infra.mongo_client,
+            database_name=self._config.mongodb.database,
+            collection_name=retry_cfg.collection_name,
+            doc_id_field=RetryWorker.REQUIRED_DOC_ID_FIELD,
+        )
+        await mongo_store.setup()
+
+        cache = RedisDictCache(
+            client=self._infra.redis_client,
+            base_key=f"retry:{retry_cfg.collection_name}",
+        )
+        return CachedDocumentStore(mongo_store, cache)
+
+    def _create_default_publisher(self) -> PublisherInterface:
+        exchange_cfg = self._config.rabbitmq.exchange
+        return RMQPublisher(
+            connection_manager=self._infra.rmq_connection_manager,
+            exchange_config=RMQExchangeConfig(
+                name=exchange_cfg.name,
+                type=exchange_cfg.type,
+                durable=exchange_cfg.durable,
+            ),
+        )
+
+    def _create_default_consumer_factory(self) -> ConsumerManagerFactory:
+        exchange_cfg = self._config.rabbitmq.exchange
+        consumer_cfg = self._config.rabbitmq.consumer
+
+        manager_config = RMQConsumerManagerConfig(
+            exchange=RMQExchangeConfig(
+                name=exchange_cfg.name,
+                type=exchange_cfg.type,
+                durable=exchange_cfg.durable,
+            ),
+            queue=RMQQueueConfig(
+                name=f"{exchange_cfg.name}.{RETRY_WORKER_TYPE}",
+                durable=True,
+            ),
+            consumer=RMQConsumerConfig(
+                prefetch_count=consumer_cfg.prefetch_count,
+                on_shutdown_timeout=consumer_cfg.on_shutdown_timeout,
+            ),
+        )
+
+        def factory(
+            consumer: MessageConsumerInterface,
+        ) -> ConsumerManagerInterface:
+            return RMQConsumerManager(
+                config=manager_config,
+                connection_manager=self._infra.rmq_connection_manager,
+                consumer=consumer,
+            )
+
+        return factory

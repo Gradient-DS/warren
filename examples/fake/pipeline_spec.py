@@ -1,5 +1,5 @@
 """
-Fake scenario for E2E testing.
+Fake pipeline spec for E2E testing.
 
 Uses fake workers with pre-baked data — fast, deterministic, no
 external dependencies. 4 fake documents produce 18 chunks and
@@ -52,7 +52,7 @@ async def _create_embedding_generator(
     )
 
 
-SCENARIO: PipelineSpec = PipelineSpec(
+PIPELINE: PipelineSpec = PipelineSpec(
     workers={
         "document_parser": WorkerSpec(
             collections={"write": "parsed_documents"},

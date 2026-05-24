@@ -16,7 +16,7 @@ from document_processing.distributed.warren.exceptions import WarrenError
 from document_processing.distributed.warren.runtime.config import RuntimeConfig
 from document_processing.distributed.warren.workers.runners import WorkerRunnerBase
 
-from document_processing.distributed.runtime_scripts._lib.pipeline import (
+from document_processing.distributed.runtime_scripts.lib.pipeline import (
     load_config,
 )
 

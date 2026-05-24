@@ -42,20 +42,20 @@ from pathlib import Path
 from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.runtime_scripts._lib.cli import (
+from document_processing.distributed.runtime_scripts.lib.cli import (
     add_common_args,
 )
-from document_processing.distributed.runtime_scripts._lib.logging_setup import (
+from document_processing.distributed.runtime_scripts.lib.logging_setup import (
     configure_logging,
     resolve_log_level,
 )
-from document_processing.distributed.runtime_scripts._lib.pipeline import (
+from document_processing.distributed.runtime_scripts.lib.pipeline import (
     DEFAULT_PIPELINE_DIR,
     DEFAULT_SPEC_VAR,
     load_pipeline,
     resolve_config_path,
 )
-from document_processing.distributed.runtime_scripts._lib.runner import run
+from document_processing.distributed.runtime_scripts.lib.runner import run
 from document_processing.distributed.warren.exceptions import WarrenError
 from document_processing.distributed.warren.runtime.runner import (
     DefaultWorkerRunner,

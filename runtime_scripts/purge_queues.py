@@ -26,11 +26,11 @@ from pathlib import Path
 from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.runtime_scripts._lib.logging_setup import (
+from document_processing.distributed.runtime_scripts.lib.logging_setup import (
     configure_logging,
     resolve_log_level,
 )
-from document_processing.distributed.runtime_scripts._lib.pipeline import (
+from document_processing.distributed.runtime_scripts.lib.pipeline import (
     DEFAULT_PIPELINE_DIR,
     DEFAULT_SPEC_VAR,
     load_config,

@@ -19,27 +19,20 @@ import logging
 from pathlib import Path
 
 from basics.logging import get_logger
-from pydantic import SecretStr
 from pymongo import AsyncMongoClient
 
-from document_processing.distributed.e2e_test.config import (
-    E2EConfig,
-    configure_logging,
-    resolve_log_level,
-)
 from document_processing.distributed.e2e_test.fake.data import FAKE_DOCUMENTS
 from document_processing.distributed.e2e_test.fake.e2e_publisher import (
     FakeE2EPublisher,
 )
-from document_processing.distributed.e2e_test.fake.scenario import SCENARIO
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
-    RMQConnectionConfig,
+from document_processing.distributed.e2e_test.fake.pipeline_spec import PIPELINE
+from document_processing.distributed.runtime_scripts.lib.logging_setup import (
+    configure_logging,
+    resolve_log_level,
 )
+from document_processing.distributed.warren.runtime.config import RuntimeConfig
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
-)
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
-    RMQExchangeConfig,
 )
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.publisher import (
     RMQPublisher,
@@ -64,7 +57,7 @@ async def _as_async_iterable(
         yield (doc_id, content)
 
 
-async def _publish(config: E2EConfig, job_name: str) -> str:
+async def _publish(config: RuntimeConfig, job_name: str) -> str:
     """Create job, publish fake documents, report results.
 
     :return: The store-generated job ID.
@@ -88,26 +81,12 @@ async def _publish(config: E2EConfig, job_name: str) -> str:
     # without scraping the store-generated job_id from logs,
     # which is fragile.
     job_id = await job_store.create_job(
-        final_data_type=SCENARIO.final_data_type,
+        final_data_type=PIPELINE.final_data_type,
         metadata={"job_name": job_name},
     )
 
-    rmq_conn_cfg = config.rabbitmq.connection
-    connection_manager = RMQConnectionManager(
-        RMQConnectionConfig(
-            host=rmq_conn_cfg.host,
-            port=rmq_conn_cfg.port,
-            login=rmq_conn_cfg.login,
-            password=SecretStr(rmq_conn_cfg.password),
-        )
-    )
-
-    exchange_cfg = config.rabbitmq.exchange
-    exchange_config = RMQExchangeConfig(
-        name=exchange_cfg.name,
-        type=exchange_cfg.type,
-        durable=exchange_cfg.durable,
-    )
+    connection_manager = RMQConnectionManager(config.rabbitmq.connection)
+    exchange_config = config.rabbitmq.exchange
 
     publisher = RMQPublisher(
         connection_manager=connection_manager,
@@ -177,7 +156,7 @@ def main() -> None:
     configure_logging(debug=args.debug)
     module_logger = get_logger(__name__, log_level=log_level)
 
-    config = E2EConfig.from_yaml(args.config_file)
+    config = RuntimeConfig.from_yaml(args.config_file)
 
     asyncio.run(_publish(config, args.job_name))
 

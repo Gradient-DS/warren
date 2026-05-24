@@ -19,14 +19,14 @@ import sys
 from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.runtime_scripts._lib.cli import (
+from document_processing.distributed.runtime_scripts.lib.cli import (
     add_common_args,
 )
-from document_processing.distributed.runtime_scripts._lib.logging_setup import (
+from document_processing.distributed.runtime_scripts.lib.logging_setup import (
     configure_logging,
     resolve_log_level,
 )
-from document_processing.distributed.runtime_scripts._lib.runner import run
+from document_processing.distributed.runtime_scripts.lib.runner import run
 from document_processing.distributed.warren.retry_management.retry_worker_runner import (
     RetryWorkerRunner,
 )

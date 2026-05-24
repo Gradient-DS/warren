@@ -65,6 +65,6 @@ async def close_runtime_infrastructure(infra: RuntimeInfra) -> None:
     except Exception:
         pass
     try:
-        infra.mongo_client.close()
+        await infra.mongo_client.close()
     except Exception:
         pass

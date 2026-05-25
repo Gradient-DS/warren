@@ -4,16 +4,16 @@ Job publication worker launcher.
 Starts a ``JobPublicationWorkerRunner`` that consumes job messages and
 publishes their documents into the processing pipeline.
 
-Unlike other launchers, this one requires application-specific wiring
-for the ``documents_publisher`` (which carries adapters, stores, etc.).
-The ``--pipeline-spec`` flag is used to load a factory function from
-the pipeline that builds the publisher.
+Requires a ``--publisher-factory`` pointing to an async factory function
+matching ``DocumentsPublisherFactoryFunc``. The runner calls this factory
+in ``setup()`` with the shared RMQ publisher, infrastructure, config,
+and worker name.
 
 Usage::
 
     python -m document_processing.distributed.runtime_scripts.start_job_publication_worker \
         --config-file ./pipeline/config.yaml \
-        --publisher-factory my_pipeline.publishers:create_publisher
+        --publisher-factory my_pipeline.publishers.factory:create_multi_type_publisher
 """
 
 import argparse
@@ -52,10 +52,11 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         required=True,
         help=(
-            "Dotted path to a factory function that creates the "
-            "documents publisher, e.g. my.module:create_publisher. "
-            "The factory receives (config: RuntimeConfig, "
-            "worker_name: str) and returns a JobDocumentsPublisher."
+            "Dotted path to an async factory function matching "
+            "DocumentsPublisherFactoryFunc, e.g. "
+            "my.module:create_multi_type_publisher. "
+            "The factory receives (publisher, infra, config, "
+            "worker_name) and returns a JobDocumentsPublisher."
         ),
     )
     add_common_args(parser)
@@ -104,9 +105,8 @@ async def start_job_publication_worker(
     """Start a job publication worker.
 
     :param publisher_factory: dotted path to the publisher factory
-        function (``module:func``). The factory receives
-        ``(config, worker_name)`` and returns a
-        ``JobDocumentsPublisher``.
+        function (``module:func``) matching
+        ``DocumentsPublisherFactoryFunc``.
     :param config_file: path to RuntimeConfig YAML.
     :param worker_name: unique worker instance name.
     :param debug: enable DEBUG logging.
@@ -133,12 +133,10 @@ async def start_job_publication_worker(
         Path(config_file) if config_file else Path("./pipeline/config.yaml")
     )
 
-    def runner_factory(config, wn):
-        publisher = pub_factory_func(config, wn)
-        return JobPublicationWorkerRunner(
-            config, wn,
-            documents_publisher=publisher,
-        )
+    runner_factory = partial(
+        JobPublicationWorkerRunner,
+        documents_publisher_factory=pub_factory_func,
+    )
 
     await run(
         runner_factory_func=runner_factory,

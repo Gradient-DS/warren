@@ -2,15 +2,19 @@
 Runner for the job publication worker.
 
 Manages the JobPublicationWorker lifecycle: creates infrastructure,
-wires the consumer, and delegates document publishing to the injected
-``JobDocumentsPublisher``.
+wires the consumer, and delegates document publishing to an
+application-specific ``JobDocumentsPublisher``.
 
 Accepts ``RuntimeConfig`` and manages its own infrastructure. The
-``documents_publisher`` is always required — it is application-specific
-and has no sensible default.
+documents publisher is created via an injected factory that receives
+the runner's shared RMQ publisher and infrastructure connections,
+so the application can build its stores from the same MongoDB client
+and publish through the same RMQ channel.
 """
 
 from typing import Optional, Dict, Callable, AsyncIterable
+
+from abc import abstractmethod
 
 from document_processing.distributed.warren.common import MessageConsumerInterface
 from document_processing.distributed.warren.jobs.publishing.job_documents_publisher import (
@@ -49,18 +53,51 @@ from document_processing.distributed.warren.workers.runners import (
 PUBLICATION_WORKER_TYPE: str = "publication"
 
 
+class DocumentsPublisherFactoryFunc:
+    """Factory protocol for creating application-specific publishers.
+
+    Called by ``JobPublicationWorkerRunner.setup()`` after infrastructure
+    is created. The factory receives the runner's shared resources and
+    is responsible for creating all components the publisher needs
+    (stores, adapters, etc.).
+
+    :param publisher: RMQ publisher for downstream messages, shared
+        with the consumer manager. Already created but not yet set up
+        — setup happens when the consumer manager starts.
+    :param infra: runtime connections (MongoDB, Redis, RabbitMQ).
+        Use ``infra.mongo_client`` to create stores that share the
+        runner's connection rather than opening a second one.
+    :param config: runtime configuration. Use
+        ``config.mongodb.database`` for store database names and any
+        other infrastructure settings the publisher needs.
+    :param worker_name: unique worker instance name, useful for
+        naming the publisher and log context.
+    """
+
+    @abstractmethod
+    async def __call__(
+        self,
+        publisher: PublisherInterface,
+        infra: RuntimeInfra,
+        config: RuntimeConfig,
+        worker_name: str,
+    ) -> JobDocumentsPublisher: ...
+
+
 class JobPublicationWorkerRunner(WorkerRunnerBase):
     """Runs a JobPublicationWorker with its lifecycle hooks.
 
-    Creates infrastructure from ``RuntimeConfig`` and builds default
-    consumer factory in ``setup()``. The ``documents_publisher`` is
-    always required — it carries application-specific adapters and
-    stores with no sensible default.
+    Creates infrastructure from ``RuntimeConfig``, then calls the
+    injected ``documents_publisher_factory`` to build the
+    application-specific publisher. The factory receives the runner's
+    shared RMQ publisher and infrastructure so it can create stores
+    from the same connections.
 
     :param config: runtime infrastructure configuration.
     :param worker_name: unique identifier for this worker instance.
-    :param documents_publisher: publisher harness for the
-        load -> register -> publish flow.
+    :param documents_publisher_factory: async callable matching
+        ``DocumentsPublisherFactoryFunc``. Called in ``setup()``
+        after infrastructure is created.
     :param consumer_manager_factory: optional override for the consumer
         manager factory. Default: factory creating ``RMQConsumerManager``
         on the publication queue.
@@ -75,7 +112,7 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         config: RuntimeConfig,
         worker_name: str,
         *,
-        documents_publisher: JobDocumentsPublisher,
+        documents_publisher_factory: DocumentsPublisherFactoryFunc,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
         create_source_generator: Optional[
             Callable[[Dict], AsyncIterable]
@@ -84,24 +121,30 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         super().__init__(name=worker_name)
         self._worker_name = worker_name
         self._config = config
-        self._documents_publisher = documents_publisher
+        self._documents_publisher_factory = documents_publisher_factory
         self._consumer_manager_factory = consumer_manager_factory
         self._create_source_generator = create_source_generator
         self._infra: RuntimeInfra | None = None
         self._publisher: PublisherInterface | None = None
+        self._documents_publisher: JobDocumentsPublisher | None = None
 
     async def setup(self) -> None:
-        """Create infrastructure, build defaults, wire the worker.
+        """Create infrastructure, build publisher, wire the worker.
 
         1. Create infrastructure (MongoDB, Redis, RabbitMQ)
-        2. Build default consumer factory if not injected
-        3. Create the JobPublicationWorker
-        4. Create and set up the consumer manager
+        2. Create RMQ publisher for downstream messages
+        3. Call documents publisher factory with shared infrastructure
+        4. Build default consumer factory if not injected
+        5. Create the JobPublicationWorker and consumer manager
         """
         self._infra = await create_runtime_infrastructure(self._config)
+        self._publisher = self._create_default_publisher()
+
+        self._documents_publisher = await self._documents_publisher_factory(
+            self._publisher, self._infra, self._config, self._worker_name,
+        )
 
         if self._consumer_manager_factory is None:
-            self._publisher = self._create_default_publisher()
             self._consumer_manager_factory = (
                 self._create_default_consumer_factory()
             )

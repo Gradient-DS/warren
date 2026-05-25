@@ -5,10 +5,12 @@ from document_processing.distributed.warren.jobs.publishing.job_publication_work
     JobPublicationWorker,
 )
 from document_processing.distributed.warren.jobs.publishing.job_publication_worker_runner import (
+    DocumentsPublisherFactoryFunc,
     JobPublicationWorkerRunner,
 )
 
 __all__ = [
+    "DocumentsPublisherFactoryFunc",
     "JobDocumentsPublisher",
     "JobPublicationWorker",
     "JobPublicationWorkerRunner",

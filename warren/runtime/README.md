@@ -103,16 +103,19 @@ from my_pipeline.pipeline_spec import PIPELINE
 
 config = RuntimeConfig.from_yaml("config.yaml")
 runner = DefaultWorkerRunner(
-    worker_type="parser",
-    worker_name="parser-1",
     config=config,
-    pipeline=PIPELINE,
+    worker_name="parser-1",
+    worker_type="parser",
+    worker_spec=PIPELINE.workers["parser"],
 )
 
 await runner.setup()
 await runner.run()      # blocks until SIGINT/SIGTERM
 await runner.teardown()
 ```
+
+See `USAGE.md` for the full guide including launcher scripts,
+factory conventions, and custom runners.
 
 ### 4. Custom runner (optional)
 

@@ -14,6 +14,7 @@ import logging
 from functools import partial
 
 from basics.logging import get_logger
+from basics.logging_utils import summarize_exception_chain
 
 from document_processing.distributed.warren.common import MessageConsumerInterface
 from document_processing.distributed.warren.pubsub.common import (
@@ -123,30 +124,41 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         6. Create publishers for downstream routing
         7. Create and set up the consumer manager
         """
-        self._infra = await create_runtime_infrastructure(self._config)
+        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
+            self._infra = await create_runtime_infrastructure(self._config)
 
         if self._results_stores is None:
-            self._results_stores = await self._create_default_results_stores()
+            with self._exception_wrapping("Results store creation"):
+                self._results_stores = await self._create_default_results_stores()
 
         if self._document_fetcher is None and self._worker_spec.needs_document_fetcher:
-            self._document_fetcher = self._create_default_document_fetcher()
+            with self._exception_wrapping("Document fetcher creation"):
+                self._document_fetcher = self._create_default_document_fetcher()
 
         if self._document_store is None and self._worker_spec.needs_document_store:
-            self._document_store = await self._create_default_document_store()
+            with self._exception_wrapping("Document store creation"):
+                self._document_store = await self._create_default_document_store()
 
-        self._worker = await self._create_worker(
-            self._results_stores,
-            self._document_fetcher,
-            self._document_store,
-        )
-        self._worker = self._wrap_worker(self._worker, self._worker_spec)
-        await self._worker.setup()
-        publishers = self._create_publishers()
-        self._consumer_manager = self._create_consumer_manager(
-            self._worker,
-            publishers,
-        )
-        await self._consumer_manager.setup()
+        with self._exception_wrapping("Worker creation"):
+            self._worker = await self._create_worker(
+                self._results_stores,
+                self._document_fetcher,
+                self._document_store,
+            )
+        with self._exception_wrapping("Worker wrapping"):
+            self._worker = self._wrap_worker(self._worker, self._worker_spec)
+        with self._exception_wrapping("Worker setup"):
+            await self._worker.setup()
+
+        with self._exception_wrapping("Consumer manager creation"):
+            publishers = self._create_publishers()
+            self._consumer_manager = self._create_consumer_manager(
+                self._worker,
+                publishers,
+            )
+        with self._exception_wrapping("Consumer manager setup"):
+            await self._consumer_manager.setup()
+
         self._mark_setup_succeeded()
 
     async def _on_teardown(self) -> None:
@@ -155,10 +167,17 @@ class DefaultWorkerRunner(WorkerRunnerBase):
                 await self._worker.teardown()
             except Exception as exc:
                 self._log.warning(
-                    f"Worker teardown failed: {type(exc).__name__}: {exc}"
+                    f"Worker teardown failed: {summarize_exception_chain(exc)}"
                 )
+
         if self._infra is not None:
-            await close_runtime_infrastructure(self._infra)
+            try:
+                await close_runtime_infrastructure(self._infra)
+            except Exception as exc:
+                self._log.warning(
+                    f"Infrastructure teardown failed: "
+                    f"{summarize_exception_chain(exc)}"
+                )
 
     def _wrap_worker(
         self,
@@ -196,10 +215,14 @@ class DefaultWorkerRunner(WorkerRunnerBase):
 
             resolvers["cloud"] = partial(resolve_gcs, client=GCSClient())
         except ImportError:
-            pass
-        except Exception:
-            module_logger.info(
-                "GCS credentials not available — 'cloud' document resolver disabled"
+            module_logger.debug(
+                "google-cloud-storage not installed — "
+                "'cloud' document resolver disabled"
+            )
+        except Exception as exc:
+            module_logger.warning(
+                "Could not initialise GCS client — 'cloud' document "
+                f"resolver disabled: {summarize_exception_chain(exc)}"
             )
 
         return resolvers
@@ -233,9 +256,11 @@ class DefaultWorkerRunner(WorkerRunnerBase):
 
     def _create_default_document_fetcher(self) -> GetDocumentFunc:
         """Create a CachedDocumentFetcher with path + GCS resolvers."""
+        with self._exception_wrapping("Creation of resolvers"):
+            resolvers = self._create_resolvers()
         return create_cached_document_fetcher(
             redis_client=self._infra.redis_client,
-            resolvers=self._create_resolvers(),
+            resolvers=resolvers,
         )
 
     async def _create_worker(

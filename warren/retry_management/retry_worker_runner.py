@@ -11,6 +11,8 @@ components can be injected to override the defaults (e.g. for testing).
 
 from typing import Dict, Optional, Callable
 
+from basics.logging_utils import summarize_exception_chain
+
 from document_processing.distributed.warren.common import MessageConsumerInterface
 from document_processing.distributed.warren.pubsub.common import (
     ConsumerManagerInterface,
@@ -107,10 +109,12 @@ class RetryWorkerRunner(WorkerRunnerBase):
         5. Create and set up the consumer manager
         6. Schedule pending retries from the store
         """
-        self._infra = await create_runtime_infrastructure(self._config)
+        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
+            self._infra = await create_runtime_infrastructure(self._config)
 
         if self._retry_store is None:
-            self._retry_store = await self._create_default_retry_store()
+            with self._exception_wrapping("Retry store creation"):
+                self._retry_store = await self._create_default_retry_store()
 
         if self._republish_publisher is None:
             self._republish_publisher = self._create_default_publisher()
@@ -118,7 +122,8 @@ class RetryWorkerRunner(WorkerRunnerBase):
         if self._consumer_manager_factory is None:
             self._consumer_manager_factory = self._create_default_consumer_factory()
 
-        await self._republish_publisher.setup()
+        with self._exception_wrapping("Republish publisher setup"):
+            await self._republish_publisher.setup()
 
         self._retry_worker = RetryWorker(
             worker_name=self._worker_name,
@@ -127,23 +132,42 @@ class RetryWorkerRunner(WorkerRunnerBase):
             message_key_func=self._message_key_func,
         )
 
-        self._consumer_manager = self._consumer_manager_factory(
-            self._retry_worker,
-        )
-        await self._consumer_manager.setup()
+        with self._exception_wrapping("Consumer manager setup"):
+            self._consumer_manager = self._consumer_manager_factory(
+                self._retry_worker,
+            )
+            await self._consumer_manager.setup()
 
-        await self._retry_worker.schedule_pending()
+        with self._exception_wrapping("Scheduling pending retries"):
+            await self._retry_worker.schedule_pending()
         self._mark_setup_succeeded()
 
     async def _on_teardown(self) -> None:
         if self._retry_worker is not None:
-            await self._retry_worker.shutdown()
+            try:
+                await self._retry_worker.shutdown()
+            except Exception as exc:
+                self._log.warning(
+                    f"Retry worker shutdown failed: "
+                    f"{summarize_exception_chain(exc)}"
+                )
 
         if self._republish_publisher is not None:
-            await self._republish_publisher.teardown()
+            try:
+                await self._republish_publisher.teardown()
+            except Exception as exc:
+                self._log.warning(
+                    f"Publisher teardown failed: {summarize_exception_chain(exc)}"
+                )
 
         if self._infra is not None:
-            await close_runtime_infrastructure(self._infra)
+            try:
+                await close_runtime_infrastructure(self._infra)
+            except Exception as exc:
+                self._log.warning(
+                    f"Infrastructure teardown failed: "
+                    f"{summarize_exception_chain(exc)}"
+                )
 
     async def _create_default_retry_store(self) -> DocumentStoreInterface:
         retry_cfg = self._config.retry

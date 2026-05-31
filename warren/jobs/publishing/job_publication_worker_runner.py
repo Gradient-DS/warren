@@ -16,6 +16,8 @@ from typing import Optional, Dict, Callable, AsyncIterable
 
 from abc import abstractmethod
 
+from basics.logging_utils import summarize_exception_chain
+
 from document_processing.distributed.warren.common import MessageConsumerInterface
 from document_processing.distributed.warren.jobs.publishing.job_documents_publisher import (
     JobDocumentsPublisher,
@@ -137,12 +139,15 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         4. Build default consumer factory if not injected
         5. Create the JobPublicationWorker and consumer manager
         """
-        self._infra = await create_runtime_infrastructure(self._config)
+        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
+            self._infra = await create_runtime_infrastructure(self._config)
+
         self._publisher = self._create_default_publisher()
 
-        self._documents_publisher = await self._documents_publisher_factory(
-            self._publisher, self._infra, self._config, self._worker_name,
-        )
+        with self._exception_wrapping("Documents publisher creation"):
+            self._documents_publisher = await self._documents_publisher_factory(
+                self._publisher, self._infra, self._config, self._worker_name,
+            )
 
         if self._consumer_manager_factory is None:
             self._consumer_manager_factory = (
@@ -155,16 +160,28 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
             create_source_generator=self._create_source_generator,
         )
 
-        self._consumer_manager = self._consumer_manager_factory(worker)
-        await self._consumer_manager.setup()
+        with self._exception_wrapping("Consumer manager setup"):
+            self._consumer_manager = self._consumer_manager_factory(worker)
+            await self._consumer_manager.setup()
         self._mark_setup_succeeded()
 
     async def _on_teardown(self) -> None:
         if self._publisher is not None:
-            await self._publisher.teardown()
+            try:
+                await self._publisher.teardown()
+            except Exception as exc:
+                self._log.warning(
+                    f"Publisher teardown failed: {summarize_exception_chain(exc)}"
+                )
 
         if self._infra is not None:
-            await close_runtime_infrastructure(self._infra)
+            try:
+                await close_runtime_infrastructure(self._infra)
+            except Exception as exc:
+                self._log.warning(
+                    f"Infrastructure teardown failed: "
+                    f"{summarize_exception_chain(exc)}"
+                )
 
     def _create_default_publisher(self) -> PublisherInterface:
         exchange_cfg = self._config.rabbitmq.exchange

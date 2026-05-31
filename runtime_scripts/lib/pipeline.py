@@ -37,7 +37,10 @@ def split_var_suffix(spec_str: str) -> tuple[str, str]:
 def import_file(file_path: Path) -> object:
     """Import a .py file as a module and return it.
 
-    :raises ImportError: if the file cannot be loaded.
+    The spec module's own import/syntax/runtime errors propagate
+    unchanged — the calling launcher wraps them with phase context
+    (e.g. "Unable to load pipeline spec from: ..."). Only failure to
+    create the module spec raises ``ImportError`` here.
     """
     spec = importlib.util.spec_from_file_location(
         file_path.stem, file_path,

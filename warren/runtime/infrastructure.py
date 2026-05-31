@@ -3,15 +3,23 @@ Runtime infrastructure: create and close MongoDB, Redis, and RabbitMQ
 connections from a ``RuntimeConfig``.
 """
 
-from typing import NamedTuple
+from typing import Awaitable, Callable, NamedTuple
+
+import logging
 
 from pymongo import AsyncMongoClient
 from redis.asyncio import Redis
+
+from basics.logging import get_logger
+from basics.logging_utils import summarize_exception_chain
 
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
 from document_processing.distributed.warren.runtime.config import RuntimeConfig
+
+
+module_logger: logging.Logger = get_logger(__name__)
 
 
 class RuntimeInfra(NamedTuple):
@@ -52,19 +60,33 @@ async def create_runtime_infrastructure(config: RuntimeConfig) -> RuntimeInfra:
 
 
 async def close_runtime_infrastructure(infra: RuntimeInfra) -> None:
-    """Close all connections. Best-effort — continues on errors.
+    """Close all connections. Best-effort — logs and continues on errors.
 
     :param infra: Infrastructure to close.
     """
+    await _close_connection(
+        infra.rmq_connection_manager.teardown, "RabbitMQ connection"
+    )
+    await _close_connection(infra.redis_client.aclose, "Redis client")
+    await _close_connection(infra.mongo_client.close, "MongoDB client")
+
+
+async def _close_connection(
+    close: Callable[[], Awaitable[None]],
+    what: str,
+) -> None:
+    """Close a connection, logging the outcome — best-effort, never silent.
+
+    A failure closing one connection is logged at warning (never raised)
+    so it cannot prevent the others from being closed, and so cleanup is
+    never silently swallowed.
+    """
+    module_logger.debug(f"Closing {what} ...")
     try:
-        await infra.rmq_connection_manager.teardown()
-    except Exception:
-        pass
-    try:
-        await infra.redis_client.aclose()
-    except Exception:
-        pass
-    try:
-        await infra.mongo_client.close()
-    except Exception:
-        pass
+        await close()
+    except Exception as e:
+        module_logger.warning(
+            f"Error closing {what}: {summarize_exception_chain(e)}"
+        )
+    else:
+        module_logger.debug(f"Closed {what}")

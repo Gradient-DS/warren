@@ -11,16 +11,18 @@ Lifecycle: setup() -> run() -> teardown()
 - teardown() cleans up resources
 """
 
-from typing import Callable, Optional
+from typing import Callable, Iterator, Optional
 
 from abc import ABCMeta, abstractmethod
 import asyncio
+from contextlib import contextmanager
 import signal
 
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
 
 from document_processing.distributed.warren.common import MessageConsumerInterface
+from document_processing.distributed.warren.exceptions import WarrenError
 from document_processing.distributed.warren.pubsub.common import (
     ConsumerManagerInterface,
 )
@@ -96,12 +98,11 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
     async def teardown(self) -> None:
         """Stop consuming, run subclass cleanup, and reset state.
 
-        Safe to call multiple times. After teardown, ``setup()`` can
-        be called again to reuse the instance.
+        Idempotent and safe after a partial or failed ``setup()``: tears
+        down whatever exists, best-effort, regardless of whether
+        ``setup()`` ran to completion. ``_setup_succeeded`` gates
+        ``run()`` only — never cleanup.
         """
-        if not self._setup_succeeded:
-            return
-
         if self._consumer_manager is not None:
             try:
                 await self._consumer_manager.stop_consuming()
@@ -110,7 +111,12 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
                     f"Error stopping consumer: {summarize_exception_chain(e)}"
                 )
 
-        await self._on_teardown()
+        try:
+            await self._on_teardown()
+        except Exception as e:
+            self._log.warning(
+                f"Error during teardown: {summarize_exception_chain(e)}"
+            )
 
         self._consumer_manager = None
         self._setup_succeeded = False
@@ -127,3 +133,27 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
     def _mark_setup_succeeded(self) -> None:
         """Mark setup as complete. Call at the end of ``setup()``."""
         self._setup_succeeded = True
+
+    @contextmanager
+    def _exception_wrapping(self, description: str) -> Iterator[None]:
+        """Wrap a setup phase so a failure carries phase + worker context.
+
+        Use around calls to overridable methods/hooks or externally
+        injected callables — neither can be trusted to contextualise
+        their own errors. The original exception is chained, so
+        ``summarize_exception_chain`` renders the full layered trace
+        (phase -> inner detail -> root cause).
+
+        A synchronous context manager intentionally — it correctly
+        wraps exceptions raised by ``await`` expressions inside its
+        ``with`` body.
+
+        :param description: Human-readable name of the phase being run.
+        """
+        try:
+            yield
+        except Exception as e:
+            worker = getattr(self, "_worker_name", "?")
+            raise WarrenError(
+                f"{description} failed for worker '{worker}'"
+            ) from e

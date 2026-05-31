@@ -13,6 +13,7 @@ from abc import ABCMeta, abstractmethod
 from collections.abc import AsyncIterable
 
 from basics.base import Base
+from basics.logging_utils import summarize_exception_chain
 
 from document_processing.distributed.warren.pubsub.common import PublisherInterface
 from document_processing.distributed.warren.storage.jobs.interface import (
@@ -131,17 +132,19 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
         try:
             doc_data = await self._load_document(source)
         except Exception as e:
-            await self._tracker.record_failure(job_id, None, source_id, str(e), "load")
-            self._log.error(f"Failed to load {source_id}: {e}")
+            chain = summarize_exception_chain(e)
+            self._log.error(f"Failed to load {source_id}: {chain}")
+            await self._record_failure_safe(job_id, None, source_id, chain, "load")
             return None
 
         try:
             doc_id = await self._register_document(job_id, doc_data)
         except Exception as e:
-            await self._tracker.record_failure(
-                job_id, None, source_id, str(e), "register"
+            chain = summarize_exception_chain(e)
+            self._log.error(f"Failed to register {source_id}: {chain}")
+            await self._record_failure_safe(
+                job_id, None, source_id, chain, "register"
             )
-            self._log.error(f"Failed to register {source_id}: {e}")
             return None
 
         try:
@@ -152,14 +155,58 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
                 job_parameters,
             )
             await self._publisher(message)
-            await self._tracker.record_success(job_id, doc_id)
-            return doc_id
         except Exception as e:
-            await self._tracker.record_failure(
-                job_id, doc_id, source_id, str(e), "publish"
+            chain = summarize_exception_chain(e)
+            self._log.error(f"Failed to publish {source_id}: {chain}")
+            await self._record_failure_safe(
+                job_id, doc_id, source_id, chain, "publish"
             )
-            self._log.error(f"Failed to publish {source_id}: {e}")
             return None
+
+        # Publish succeeded. Recording success is best-effort and lives
+        # outside the publish try/except so a tracker failure can never be
+        # misclassified as a publish failure — the document *was* published.
+        await self._record_success_safe(job_id, doc_id)
+        return doc_id
+
+    async def _record_failure_safe(
+        self,
+        job_id: str,
+        doc_id: str | None,
+        source_id: str,
+        error: str,
+        stage: str,
+    ) -> None:
+        """Record a per-document failure, best-effort.
+
+        A tracker failure must not abort the publishing loop — a
+        document's outcome is independent of whether we persisted its
+        tracking record — so it is logged and swallowed.
+        """
+        try:
+            await self._tracker.record_failure(
+                job_id, doc_id, source_id, error, stage
+            )
+        except Exception as e:
+            self._log.warning(
+                f"Failed to record '{stage}' failure for {source_id}: "
+                f"{summarize_exception_chain(e)}"
+            )
+
+    async def _record_success_safe(self, job_id: str, doc_id: str) -> None:
+        """Record a per-document success, best-effort.
+
+        The document has already been published, so a tracker failure
+        here is logged and swallowed rather than aborting the loop or
+        being misread as a publish failure.
+        """
+        try:
+            await self._tracker.record_success(job_id, doc_id)
+        except Exception as e:
+            self._log.warning(
+                f"Failed to record success for doc '{doc_id}': "
+                f"{summarize_exception_chain(e)}"
+            )
 
     @abstractmethod
     async def _load_document(self, source: Any) -> Any:

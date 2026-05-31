@@ -163,9 +163,16 @@ class RMQConsumerManager(ConsumerManagerBase):
                     f"Error closing consumer channel: {summarize_exception_chain(e)}"
                 )
 
-        # Tear down all publishers
+        # Tear down all publishers — best-effort so one failure cannot
+        # block the rest of shutdown.
         for publisher in self._publishers:
-            await publisher.teardown()
+            try:
+                await publisher.teardown()
+            except Exception as e:
+                self._log.warning(
+                    f"Error tearing down publisher during shutdown: "
+                    f"{summarize_exception_chain(e)}"
+                )
 
         # Consumer stopped.
         # Connection is owned by RMQConnectionManager — not our responsibility to close.

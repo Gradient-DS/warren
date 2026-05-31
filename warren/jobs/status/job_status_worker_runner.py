@@ -9,6 +9,8 @@ Accepts ``RuntimeConfig`` and manages its own infrastructure. Custom
 components can be injected to override the defaults (e.g. for testing).
 """
 
+from basics.logging_utils import summarize_exception_chain
+
 from document_processing.distributed.warren.common import MessageConsumerInterface
 from document_processing.distributed.warren.jobs.status.job_status_worker import (
     JobStatusWorker,
@@ -100,15 +102,18 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         3. Create the JobStatusWorker
         4. Create and set up the consumer manager
         """
-        self._infra = await create_runtime_infrastructure(self._config)
+        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
+            self._infra = await create_runtime_infrastructure(self._config)
 
         if self._job_store is None:
-            self._job_store = await self._create_default_job_store()
+            with self._exception_wrapping("Job store creation"):
+                self._job_store = await self._create_default_job_store()
 
         if self._job_results_store is None:
-            self._job_results_store = (
-                await self._create_default_job_results_store()
-            )
+            with self._exception_wrapping("Job results store creation"):
+                self._job_results_store = (
+                    await self._create_default_job_results_store()
+                )
 
         if self._consumer_manager_factory is None:
             self._publisher = self._create_default_publisher()
@@ -122,16 +127,28 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
             job_results_store=self._job_results_store,
         )
 
-        self._consumer_manager = self._consumer_manager_factory(worker)
-        await self._consumer_manager.setup()
+        with self._exception_wrapping("Consumer manager setup"):
+            self._consumer_manager = self._consumer_manager_factory(worker)
+            await self._consumer_manager.setup()
         self._mark_setup_succeeded()
 
     async def _on_teardown(self) -> None:
         if self._publisher is not None:
-            await self._publisher.teardown()
+            try:
+                await self._publisher.teardown()
+            except Exception as exc:
+                self._log.warning(
+                    f"Publisher teardown failed: {summarize_exception_chain(exc)}"
+                )
 
         if self._infra is not None:
-            await close_runtime_infrastructure(self._infra)
+            try:
+                await close_runtime_infrastructure(self._infra)
+            except Exception as exc:
+                self._log.warning(
+                    f"Infrastructure teardown failed: "
+                    f"{summarize_exception_chain(exc)}"
+                )
 
     async def _create_default_job_store(self) -> JobStoreInterface:
         store = MongoDBJobStore(

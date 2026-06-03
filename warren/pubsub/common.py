@@ -17,6 +17,18 @@ class PublishFailureException(WarrenError):
     pass
 
 
+class PubSubSetupError(WarrenError):
+    """Failed to set up a pubsub resource (channel, exchange, queue, publisher).
+
+    Raised by the topology helpers and the publisher/consumer ``setup()``
+    paths to give a transport-layer failure warren-specific context
+    (which exchange/queue/publisher) before it reaches the runner's
+    higher-level setup-phase wrapping.
+    """
+
+    pass
+
+
 @dataclass(frozen=True)
 class Route:
     """

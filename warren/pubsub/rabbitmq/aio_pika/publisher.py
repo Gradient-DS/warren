@@ -15,6 +15,7 @@ from document_processing.distributed.warren.pubsub.common import (
     Route,
     RouteFunc,
     PublishFailureException,
+    PubSubSetupError,
 )
 from document_processing.distributed.warren.pubsub.base import BasePublisher
 
@@ -78,8 +79,24 @@ class RMQPublisher(BasePublisher):
         self._exchange: Optional[AbstractExchange] = None
 
     async def setup(self) -> None:
-        self._channel = await self._connection_manager.create_channel()
-        self._exchange = await declare_exchange(self._channel, self._exchange_config)
+        """Open a channel and declare the publisher's exchange.
+
+        On partial failure the caller is responsible for cleanup via
+        ``teardown()`` (idempotent, best-effort).
+
+        :raises PubSubSetupError: if the channel or exchange cannot be
+            set up.
+        """
+        try:
+            self._channel = await self._connection_manager.create_channel()
+            self._exchange = await declare_exchange(
+                self._channel, self._exchange_config
+            )
+        except Exception as e:
+            raise PubSubSetupError(
+                f"{self}: Publisher setup failed for exchange "
+                f"'{self._exchange_config.name}'"
+            ) from e
 
     async def teardown(self) -> None:
         if self._channel is not None and not self._channel.is_closed:

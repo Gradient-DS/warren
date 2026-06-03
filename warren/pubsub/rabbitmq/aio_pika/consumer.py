@@ -4,6 +4,7 @@ import random
 
 from aio_pika.abc import (
     AbstractChannel,
+    AbstractExchange,
     AbstractIncomingMessage,
     AbstractQueue,
 )
@@ -18,6 +19,7 @@ from document_processing.distributed.warren.pubsub.base import ConsumerManagerBa
 from document_processing.distributed.warren.pubsub.common import (
     PublisherInterface,
     PublishFailureException,
+    PubSubSetupError,
 )
 from document_processing.distributed.warren.pubsub.rabbitmq.config import (
     RetryConfig,
@@ -71,6 +73,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         self._publish_hard_failures = publish_hard_failures
 
         self._channel: AbstractChannel | None = None
+        self._exchange: AbstractExchange | None = None
         self._queue: AbstractQueue | None = None
         self._consumer_tag: str | None = None
 
@@ -87,17 +90,31 @@ class RMQConsumerManager(ConsumerManagerBase):
         - Declares the necessary exchange and queue, and binds the queue to the exchange.
         - Must be called before start_consuming().
         """
+        # Publishers self-contextualise their own setup failures (exchange
+        # identity), so the loop is left unwrapped.
         for publisher in self._publishers:
             await publisher.setup()
 
-        self._channel = await self._connection_manager.create_channel()
-        # TODO: Couple this to the worker's concurrency level?
-        await self._channel.set_qos(prefetch_count=self._config.consumer.prefetch_count)
+        try:
 
-        # Declare exchange (idempotent)
+            self._channel = await self._connection_manager.create_channel()
+        except Exception as e:
+            raise PubSubSetupError("Failed to create consumer channel") from e
+
+        try:
+            # TODO: Couple this to the worker's concurrency level?
+            await self._channel.set_qos(
+                prefetch_count=self._config.consumer.prefetch_count
+            )
+        except Exception as e:
+            raise PubSubSetupError(
+                f"Failed to set consumer QoS "
+                f"(prefetch_count={self._config.consumer.prefetch_count})"
+            ) from e
+
+        # declare_exchange / declare_queue self-contextualise (exchange/queue
+        # identity), so they are left unwrapped.
         self._exchange = await declare_exchange(self._channel, self._config.exchange)
-
-        # Declare queue and bind to exchange (idempotent)
         self._queue = await declare_queue(
             self._channel,
             self._exchange,

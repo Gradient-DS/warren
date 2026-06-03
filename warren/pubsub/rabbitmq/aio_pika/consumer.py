@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 import random
 
@@ -95,15 +96,20 @@ class RMQConsumerManager(ConsumerManagerBase):
         for publisher in self._publishers:
             await publisher.setup()
 
+        # Each resource is published onto the instance the moment it exists,
+        # so a partial setup leaves truthful state and teardown can close the
+        # channel (the only closeable resource). The locals are passed
+        # downstream to keep the type narrowed — instance attributes are not
+        # narrowed across awaits.
         try:
-
-            self._channel = await self._connection_manager.create_channel()
+            channel = await self._connection_manager.create_channel()
         except Exception as e:
             raise PubSubSetupError("Failed to create consumer channel") from e
+        self._channel = channel
 
         try:
             # TODO: Couple this to the worker's concurrency level?
-            await self._channel.set_qos(
+            await channel.set_qos(
                 prefetch_count=self._config.consumer.prefetch_count
             )
         except Exception as e:
@@ -114,13 +120,16 @@ class RMQConsumerManager(ConsumerManagerBase):
 
         # declare_exchange / declare_queue self-contextualise (exchange/queue
         # identity), so they are left unwrapped.
-        self._exchange = await declare_exchange(self._channel, self._config.exchange)
-        self._queue = await declare_queue(
-            self._channel,
-            self._exchange,
+        exchange = await declare_exchange(channel, self._config.exchange)
+        self._exchange = exchange
+
+        queue = await declare_queue(
+            channel,
+            exchange,
             self._config.queue,
             exchange_type=self._config.exchange.type,
         )
+        self._queue = queue
 
     async def start_consuming(self) -> None:
         """
@@ -220,9 +229,9 @@ class RMQConsumerManager(ConsumerManagerBase):
         # iscoroutinefunction checks both plain async functions and callable
         # objects with async __call__ (the latter requires checking __call__).
         try:
-            is_async = asyncio.iscoroutinefunction(
+            is_async = inspect.iscoroutinefunction(
                 self._consumer
-            ) or asyncio.iscoroutinefunction(getattr(self._consumer, "__call__", None))
+            ) or inspect.iscoroutinefunction(getattr(self._consumer, "__call__", None))
             if is_async:
                 result = await self._consumer(body)
             else:

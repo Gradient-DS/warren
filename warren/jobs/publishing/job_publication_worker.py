@@ -6,7 +6,7 @@ extracts document sources from the message data, and delegates to a
 ``JobDocumentsPublisher`` for the load -> register -> publish flow.
 """
 
-from collections.abc import AsyncIterable, Callable
+from collections.abc import AsyncIterable, Callable, Iterable
 
 from document_processing.distributed.warren.common import HardFailureException
 from document_processing.distributed.warren.jobs.publishing.job_documents_publisher import (
@@ -20,7 +20,7 @@ from document_processing.distributed.warren.workers.workers import (
 _MAX_DATA_REPR_LENGTH: int = 500
 
 
-async def _items_as_async_iterable(items: object) -> AsyncIterable:
+async def _items_as_async_iterable(items: Iterable) -> AsyncIterable:
     """Wrap an iterable as an async iterable."""
     for item in items:
         yield item

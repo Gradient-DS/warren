@@ -138,6 +138,9 @@ class RMQPublisher(BasePublisher):
         routing_key: Optional[str] = None,
     ) -> None:
         """Publish to a specific exchange with a routing key. If no routing key is provided (fan-out), RMQ requires passing an empty string (which is ignored in fanout exchanges)."""
+        if self._exchange is None:
+            raise RuntimeError("Must call setup() before publishing.")
+
         try:
             if routing_key is None:
                 await self._exchange.publish(amqp_message, routing_key="")

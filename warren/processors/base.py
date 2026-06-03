@@ -11,8 +11,8 @@ the correct processor, storing results, and publishing downstream messages.
 from typing import Any, Protocol, TypeVar
 
 
-TInput = TypeVar("TInput")
-TOutput = TypeVar("TOutput")
+TInput = TypeVar("TInput", contravariant=True)
+TOutput = TypeVar("TOutput", covariant=True)
 
 
 class Processor(Protocol[TInput, TOutput]):

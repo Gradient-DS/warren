@@ -32,7 +32,6 @@ from document_processing.distributed.runtime_scripts.lib.logging_setup import (
 )
 from document_processing.distributed.runtime_scripts.lib.pipeline import (
     DEFAULT_PIPELINE_DIR,
-    DEFAULT_SPEC_VAR,
     load_config,
     load_pipeline,
 )

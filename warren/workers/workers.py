@@ -1,4 +1,3 @@
-import asyncio
 import re
 from abc import ABCMeta, abstractmethod
 
@@ -251,14 +250,3 @@ class FilteringWorkerBase(AsyncProcessingWorkerBase):
         if not self.should_process(message):
             return None
         return await self.process(message)
-
-
-# Example workers for testing and demonstration purposes.
-class EchoWorker(AsyncProcessingWorkerBase):
-    def __init__(self, worker_name: str):
-        super().__init__(worker_name)
-
-    async def __call__(self, message: dict) -> dict | None:
-        self._log.info(f"Processing: {message}")
-        await asyncio.sleep(1)  # simulate work
-        return {"source": self._worker_name, "result": message}

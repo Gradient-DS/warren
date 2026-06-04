@@ -11,8 +11,12 @@ from basics.base import Base
 from document_processing.distributed.warren.storage.job_results.interface import (
     JobResultsStoreInterface,
 )
+from document_processing.distributed.warren.storage.mongo_errors import (
+    classify_transient_methods,
+)
 
 
+@classify_transient_methods
 class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
     """Async MongoDB implementation of JobResultsStoreInterface.
 

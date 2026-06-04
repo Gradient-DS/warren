@@ -25,7 +25,15 @@ class JobCreationFailedError(WarrenError):
 
 
 class JobStoreInterface(Protocol):
-    """Storage protocol for job definitions and job-level status."""
+    """Storage protocol for job definitions and job-level status.
+
+    **Transient-error contract:** transient backend failures (connection
+    blips, failover) are raised as ``TransientStoreError`` (see
+    ``storage/exceptions.py``); permanent failures propagate as other
+    exceptions. Callers that cannot tolerate a dropped operation — notably
+    the ``JobStatusWorker`` observer, where a lost completion update
+    strands a job — should retry on ``TransientStoreError``.
+    """
 
     async def setup(self) -> None:
         """Create indexes and prepare the store for use."""

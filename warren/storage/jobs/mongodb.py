@@ -13,8 +13,12 @@ from document_processing.distributed.warren.storage.jobs.interface import (
     JobNotFoundError,
     JobStoreInterface,
 )
+from document_processing.distributed.warren.storage.mongo_errors import (
+    classify_transient_methods,
+)
 
 
+@classify_transient_methods
 class MongoDBJobStore(Base, JobStoreInterface):
     """Async MongoDB implementation of JobStoreInterface.
 

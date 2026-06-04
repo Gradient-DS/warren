@@ -12,7 +12,15 @@ from typing import Protocol, Optional, List, Dict
 
 
 class JobResultsStoreInterface(Protocol):
-    """Storage protocol for per-document processing results."""
+    """Storage protocol for per-document processing results.
+
+    **Transient-error contract:** transient backend failures (connection
+    blips, failover) are raised as ``TransientStoreError`` (see
+    ``storage/exceptions.py``); permanent failures propagate as other
+    exceptions. Callers that cannot tolerate a dropped operation — notably
+    the ``JobStatusWorker`` observer, where a lost write strands a job —
+    should retry on ``TransientStoreError``.
+    """
 
     async def setup(self) -> None:
         """Create indexes and prepare the store for use."""

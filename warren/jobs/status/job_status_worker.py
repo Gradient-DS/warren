@@ -13,6 +13,14 @@ Message classification:
 
 from typing import Optional, Dict
 
+from basics.logging_utils import summarize_exception_chain
+
+from document_processing.distributed.warren.storage.exceptions import (
+    TransientStoreError,
+)
+from document_processing.distributed.warren.storage.retry import (
+    run_with_transient_retry,
+)
 from document_processing.distributed.warren.storage.jobs.interface import (
     JobStoreInterface,
 )
@@ -47,10 +55,14 @@ class JobStatusWorker(FilteringWorkerBase):
         job_store: JobStoreInterface,
         job_results_store: JobResultsStoreInterface,
         worker_type: Optional[str] = None,
+        store_retry_attempts: int = 5,
+        store_retry_base_delay: float = 1.0,
     ) -> None:
         super().__init__(worker_name, worker_type=worker_type)
         self._job_store = job_store
         self._job_results_store = job_results_store
+        self._store_retry_attempts = store_retry_attempts
+        self._store_retry_base_delay = store_retry_base_delay
 
     def should_process(self, message: Dict) -> bool:
         """Process everything with a job_id, except own completion
@@ -69,7 +81,18 @@ class JobStatusWorker(FilteringWorkerBase):
         return message.get("job_id") is not None
 
     async def process(self, message: Dict) -> Optional[Dict]:
-        """Classify message, record result, check completion."""
+        """Classify the message, record the result, and check completion.
+
+        Store interactions run under a bounded local retry on
+        ``TransientStoreError`` (``run_with_transient_retry``): this
+        worker is a pure observer, so a transient store blip that escaped
+        would drop the observation — losing a completion increment and
+        potentially stranding the job. Permanent errors and malformed
+        messages are not ``TransientStoreError``, so they propagate
+        immediately (fail loud). A sustained outage exhausts the retries;
+        the observation is then dropped (acked) rather than re-fanned to
+        the bus.
+        """
         data_type = message.get("data_type")
         job_id = message["job_id"]
 
@@ -79,12 +102,44 @@ class JobStatusWorker(FilteringWorkerBase):
             )
             return None
 
+        try:
+            return await run_with_transient_retry(
+                lambda: self._record_and_check(data_type, job_id, message),
+                attempts=self._store_retry_attempts,
+                base_delay=self._store_retry_base_delay,
+                on_retry=lambda attempt, error: self._log.warning(
+                    f"Job {job_id}: transient store error "
+                    f"(attempt {attempt}/{self._store_retry_attempts}), "
+                    f"retrying: {summarize_exception_chain(error)}"
+                ),
+            )
+        except TransientStoreError as e:
+            self._log.error(
+                f"Job {job_id}: transient store error persisted after "
+                f"{self._store_retry_attempts} attempts; dropping observation "
+                f"(likely a store outage): {summarize_exception_chain(e)}"
+            )
+            return None
+
+    async def _record_and_check(
+        self,
+        data_type: str,
+        job_id: str,
+        message: Dict,
+    ) -> Optional[Dict]:
+        """Record the observation for ``message`` and check job completion.
+
+        Store operations are idempotent (deterministic upserts keyed on
+        ``(job_id, data_type, doc_id)``; ``update_completion`` is a
+        ``$set``), so re-running the whole record+check after a partial
+        transient failure is safe. ``message["data"]`` stays unguarded: a
+        missing field is malformed, not transient, so it fails loud
+        immediately (not retried).
+        """
         if data_type == "soft-failure":
-            inner = message["data"]
-            await self._handle_soft_failure(job_id, inner, message)
+            await self._handle_soft_failure(job_id, message["data"], message)
         elif data_type == "hard-failure":
-            inner = message["data"]
-            await self._handle_hard_failure(job_id, inner, message)
+            await self._handle_hard_failure(job_id, message["data"], message)
         else:
             await self._handle_success(job_id, message)
 

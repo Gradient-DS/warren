@@ -82,9 +82,23 @@ class SoftFailureException(WarrenError):
 
 
 class HardFailureException(WarrenError):
-    """Permanent failure — message is dropped. No retry."""
+    """Permanent failure — message is dropped. No retry.
 
-    pass
+    :param reason: Human-readable description of the failure.
+    :param cause: Optional exception that caused this failure.
+        Sets ``__cause__`` for exception chaining.
+    """
+
+    def __init__(
+        self,
+        reason: str = "",
+        *,
+        cause: Exception | None = None,
+    ) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        if cause is not None:
+            self.__cause__ = cause
 
 
 class MessageConsumerIdentity(Protocol):

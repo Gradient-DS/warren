@@ -8,6 +8,7 @@ The only thing that differs between launchers is the
 
 import logging
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 from basics.logging import get_logger
@@ -22,12 +23,12 @@ from document_processing.distributed.runtime_scripts.lib.pipeline import (
 
 module_logger: logging.Logger = get_logger(__name__)
 
-RunnerFactoryFunc = "Callable[[RuntimeConfig, str], WorkerRunnerBase]"
+RunnerFactoryFunc = Callable[[RuntimeConfig, str], WorkerRunnerBase]
 
 
 async def run(
     *,
-    runner_factory_func: "Callable[[RuntimeConfig, str], WorkerRunnerBase]",
+    runner_factory_func: RunnerFactoryFunc,
     config_file: Path,
     worker_name: str | None = None,
     worker_name_prefix: str = "worker",

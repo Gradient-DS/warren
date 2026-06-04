@@ -15,6 +15,7 @@ import argparse
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
@@ -77,8 +78,6 @@ async def start_retry_worker(
         debug=debug,
         logger=log,
     )
-
-    from pathlib import Path
 
     resolved_config = Path(config_file) if config_file else Path("./pipeline/config.yaml")
 

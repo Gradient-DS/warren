@@ -68,7 +68,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
             if data is None:
                 return None
             return self._deserialize(data)
-        except RedisError as e:
+        except (RedisError, ValueError, TypeError) as e:
             raise CacheOperationError(operation="get") from e
 
     async def set(self, key: str, value: T, ttl_seconds: Optional[int] = None) -> None:
@@ -86,7 +86,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
             await self._client.set(
                 self._full_key(key), serialized, ex=self._get_ttl(ttl_seconds)
             )
-        except RedisError as e:
+        except (RedisError, ValueError, TypeError) as e:
             raise CacheOperationError(operation="set") from e
 
     async def delete(self, key: str) -> bool:
@@ -150,7 +150,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
                     result[self._strip_base_key(full_key)] = self._deserialize(data)
 
             return result
-        except RedisError as e:
+        except (RedisError, ValueError, TypeError) as e:
             raise CacheOperationError(operation="get_by_key_prefix") from e
 
     async def set_many(
@@ -176,7 +176,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
                 await pipeline.set(self._full_key(key), serialized, ex=ttl)
 
             await pipeline.execute()
-        except RedisError as e:
+        except (RedisError, ValueError, TypeError) as e:
             raise CacheOperationError(operation="set_many") from e
 
     async def delete_by_key_prefix(self, key_prefix: str) -> int:

@@ -160,10 +160,21 @@ class RetryWorker(AsyncProcessingWorkerBase):
         now = time.time()
         immediate_count = 0
         scheduled_count = 0
+        skipped_count = 0
 
         async for envelope in self._retry_store.query({}):
-            retry_key = envelope[self.REQUIRED_DOC_ID_FIELD]
-            fire_at = envelope["fire_at"]
+            try:
+                retry_key = envelope[self.REQUIRED_DOC_ID_FIELD]
+                fire_at = envelope["fire_at"]
+            except KeyError as e:
+                # A single malformed persisted envelope must not abort
+                # recovery of the rest.
+                skipped_count += 1
+                self._log.warning(
+                    f"Skipping malformed persisted retry envelope: "
+                    f"{summarize_exception_chain(e)}"
+                )
+                continue
 
             if fire_at <= now:
                 asyncio.create_task(self._republish(retry_key))
@@ -176,6 +187,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
         self._log.info(
             f"Scheduled {scheduled_count} pending retries, "
             f"{immediate_count} republished immediately"
+            + (f", {skipped_count} malformed skipped" if skipped_count else "")
         )
 
     async def shutdown(self) -> None:

@@ -37,6 +37,7 @@ from document_processing.distributed.runtime_scripts.lib.logging_setup import (
 from document_processing.distributed.runtime_scripts.lib.runner import run
 from document_processing.distributed.warren.exceptions import WarrenError
 from document_processing.distributed.warren.jobs.publishing.job_publication_worker_runner import (
+    DocumentsPublisherFactoryFunc,
     JobPublicationWorkerRunner,
 )
 
@@ -78,7 +79,7 @@ def describe_config(
     logger.info(f"  debug: {debug}")
 
 
-def _load_publisher_factory(factory_path: str) -> callable:
+def _load_publisher_factory(factory_path: str) -> DocumentsPublisherFactoryFunc:
     """Import a publisher factory from ``module.path:func_name``."""
     if ":" not in factory_path:
         raise ValueError(

@@ -9,7 +9,7 @@ Warren separates the **framework** (worker base classes, storage interfaces, pub
 ## Installation
 
 ```bash
-pip install git+https://github.com/Gradient-DS/warren.git@v1.0.0
+pip install git+https://github.com/Gradient-DS/warren.git@v0.1.0
 ```
 
 Requires Python 3.12+. For development:

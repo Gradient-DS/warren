@@ -2,7 +2,7 @@ from typing import Protocol, Union
 
 from collections.abc import AsyncGenerator
 
-from document_processing.distributed.warren.storage.exceptions import (
+from warren.storage.exceptions import (
     ResourceAlreadyExistsError,
     ResourceNotFoundError,
 )

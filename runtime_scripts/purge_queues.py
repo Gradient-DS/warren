@@ -7,12 +7,12 @@ Reads queue names from a pipeline spec or accepts them as CLI args.
 Usage::
 
     # From pipeline spec
-    python -m document_processing.distributed.runtime_scripts.purge_queues \
+    python -m runtime_scripts.purge_queues \
         --config-file ./pipeline/config.yaml \
         --pipeline-spec ./pipeline
 
     # Explicit queue names
-    python -m document_processing.distributed.runtime_scripts.purge_queues \
+    python -m runtime_scripts.purge_queues \
         --config-file ./pipeline/config.yaml \
         --queues jobs.parser jobs.chunker jobs.embedder
 """
@@ -26,23 +26,23 @@ from pathlib import Path
 from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.runtime_scripts.lib.logging_setup import (
+from runtime_scripts.lib.logging_setup import (
     configure_logging,
     resolve_log_level,
 )
-from document_processing.distributed.runtime_scripts.lib.pipeline import (
+from runtime_scripts.lib.pipeline import (
     DEFAULT_PIPELINE_DIR,
     load_config,
     load_pipeline,
 )
-from document_processing.distributed.warren.exceptions import WarrenError
-from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
+from warren.exceptions import WarrenError
+from warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.purge import (
+from warren.pubsub.rabbitmq.aio_pika.purge import (
     purge_queues,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
+from warren.pubsub.rabbitmq.config import (
     RMQConnectionConfig,
 )
 

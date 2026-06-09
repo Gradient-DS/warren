@@ -20,9 +20,9 @@ from contextlib import contextmanager
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.warren.common import MessageConsumerInterface
-from document_processing.distributed.warren.exceptions import WarrenError
-from document_processing.distributed.warren.pubsub.common import (
+from warren.common import MessageConsumerInterface
+from warren.exceptions import WarrenError
+from warren.pubsub.common import (
     ConsumerManagerInterface,
 )
 

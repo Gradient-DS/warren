@@ -17,36 +17,36 @@ from collections.abc import AsyncIterable, Callable
 
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.warren.common import MessageConsumerInterface
-from document_processing.distributed.warren.jobs.publishing.job_documents_publisher import (
+from warren.common import MessageConsumerInterface
+from warren.jobs.publishing.job_documents_publisher import (
     JobDocumentsPublisher,
 )
-from document_processing.distributed.warren.jobs.publishing.job_publication_worker import (
+from warren.jobs.publishing.job_publication_worker import (
     JobPublicationWorker,
 )
-from document_processing.distributed.warren.pubsub.common import (
+from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.consumer import (
+from warren.pubsub.rabbitmq.aio_pika.consumer import (
     RMQConsumerManager,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.publisher import (
+from warren.pubsub.rabbitmq.aio_pika.publisher import (
     RMQPublisher,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
+from warren.pubsub.rabbitmq.config import (
     RMQConsumerConfig,
     RMQConsumerManagerConfig,
     RMQExchangeConfig,
     RMQQueueConfig,
 )
-from document_processing.distributed.warren.runtime.config import RuntimeConfig
-from document_processing.distributed.warren.runtime.infrastructure import (
+from warren.runtime.config import RuntimeConfig
+from warren.runtime.infrastructure import (
     RuntimeInfra,
     close_runtime_infrastructure,
     create_runtime_infrastructure,
 )
-from document_processing.distributed.warren.workers.runners import (
+from warren.workers.runners import (
     ConsumerManagerFactory,
     WorkerRunnerBase,
 )

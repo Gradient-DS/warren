@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 
 from pydantic import BaseModel
 
-from document_processing.distributed.warren.storage.exceptions import (
+from warren.storage.exceptions import (
     ResourceNotFoundError,
 )
 

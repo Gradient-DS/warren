@@ -13,12 +13,12 @@ from pathlib import Path
 
 from basics.logging import get_logger
 
-from document_processing.distributed.runtime_scripts.lib.pipeline import (
+from runtime_scripts.lib.pipeline import (
     load_config,
 )
-from document_processing.distributed.warren.exceptions import WarrenError
-from document_processing.distributed.warren.runtime.config import RuntimeConfig
-from document_processing.distributed.warren.workers.runners import WorkerRunnerBase
+from warren.exceptions import WarrenError
+from warren.runtime.config import RuntimeConfig
+from warren.workers.runners import WorkerRunnerBase
 
 
 module_logger: logging.Logger = get_logger(__name__)

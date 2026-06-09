@@ -9,12 +9,12 @@ from basics.base import Base
 from pymongo import AsyncMongoClient
 from pymongo.errors import DuplicateKeyError
 
-from document_processing.distributed.warren.storage.jobs.interface import (
+from warren.storage.jobs.interface import (
     JobCreationFailedError,
     JobNotFoundError,
     JobStoreInterface,
 )
-from document_processing.distributed.warren.storage.mongo_errors import (
+from warren.storage.mongo_errors import (
     classify_transient_methods,
 )
 

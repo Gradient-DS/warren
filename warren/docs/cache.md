@@ -215,7 +215,7 @@ async def get(self, key: str) -> Optional[T]:
 ## File Structure
 
 ```
-document_processing/distributed/storage/
+warren/storage/
 ├── cache/
 │   ├── __init__.py
 │   ├── interface.py      # CacheInterface protocol, CacheOperationError, get_or_set
@@ -234,14 +234,14 @@ document_processing/distributed/storage/
 
 ## Related Files
 
-- `document_processing/distributed/storage/document_store/interface.py` - Document store protocol
-- `document_processing/distributed/storage/document_store/mongodb.py` - Async MongoDB implementation
-- `document_processing/distributed/common.py` - Worker definitions
-- `document_processing/distributed/workers/workers.py` - Worker implementations
+- `warren/storage/document_store/interface.py` - Document store protocol
+- `warren/storage/document_store/mongodb.py` - Async MongoDB implementation
+- `warren/common.py` - Worker definitions
+- `warren/workers/workers.py` - Worker implementations
 
 ## Dependencies
 
-Already included in `document_processing/requirements.txt`:
+Declared in `pyproject.toml`:
 ```
 redis>=4.0.0       # includes redis.asyncio
 pymongo==4.10.1    # includes AsyncMongoClient

@@ -1,4 +1,4 @@
-from document_processing.distributed.warren.storage.jobs.interface import (
+from warren.storage.jobs.interface import (
     JobCreationFailedError,
     JobNotFoundError,
     JobStoreInterface,

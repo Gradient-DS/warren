@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel
 
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
+from warren.pubsub.rabbitmq.config import (
     RMQConnectionConfig,
     RMQConsumerConfig,
     RMQExchangeConfig,

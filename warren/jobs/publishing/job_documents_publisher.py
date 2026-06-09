@@ -15,11 +15,11 @@ from collections.abc import AsyncIterable
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.warren.pubsub.common import PublisherInterface
-from document_processing.distributed.warren.storage.jobs.interface import (
+from warren.pubsub.common import PublisherInterface
+from warren.storage.jobs.interface import (
     JobStoreInterface,
 )
-from document_processing.distributed.warren.storage.publishing_tracker.interface import (
+from warren.storage.publishing_tracker.interface import (
     PublishingTrackerInterface,
 )
 

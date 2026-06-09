@@ -3,7 +3,7 @@ from abc import ABCMeta, abstractmethod
 
 from basics.base import Base
 
-from document_processing.distributed.warren.common import (
+from warren.common import (
     AsyncMessageConsumerInterface,
     SyncMessageConsumerInterface,
 )

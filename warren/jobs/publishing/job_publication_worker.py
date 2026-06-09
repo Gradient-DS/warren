@@ -8,11 +8,11 @@ extracts document sources from the message data, and delegates to a
 
 from collections.abc import AsyncIterable, Callable, Iterable
 
-from document_processing.distributed.warren.common import HardFailureException
-from document_processing.distributed.warren.jobs.publishing.job_documents_publisher import (
+from warren.common import HardFailureException
+from warren.jobs.publishing.job_documents_publisher import (
     JobDocumentsPublisher,
 )
-from document_processing.distributed.warren.workers.workers import (
+from warren.workers.workers import (
     FilteringWorkerBase,
 )
 

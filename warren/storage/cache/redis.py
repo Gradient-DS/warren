@@ -7,7 +7,7 @@ from basics.base import Base
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from document_processing.distributed.warren.storage.cache.interface import (
+from warren.storage.cache.interface import (
     CacheInterface,
     CacheOperationError,
 )

@@ -16,50 +16,50 @@ from functools import partial
 from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.warren.common import MessageConsumerInterface
-from document_processing.distributed.warren.pubsub.common import (
+from warren.common import MessageConsumerInterface
+from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq import (
+from warren.pubsub.rabbitmq import (
     RMQConsumerManagerConfig,
     RMQQueueConfig,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika import (
+from warren.pubsub.rabbitmq.aio_pika import (
     RMQConsumerManager,
     RMQPublisher,
 )
-from document_processing.distributed.warren.runtime.config import RuntimeConfig
-from document_processing.distributed.warren.runtime.infrastructure import (
+from warren.runtime.config import RuntimeConfig
+from warren.runtime.infrastructure import (
     RuntimeInfra,
     close_runtime_infrastructure,
     create_runtime_infrastructure,
 )
-from document_processing.distributed.warren.runtime.spec import (
+from warren.runtime.spec import (
     WorkerFactoryContext,
     WorkerSpec,
 )
-from document_processing.distributed.warren.storage.document_store import (
+from warren.storage.document_store import (
     DocumentStoreInterface,
     MongoDBDocumentStore,
 )
-from document_processing.distributed.warren.storage.documents.factories import (
+from warren.storage.documents.factories import (
     create_cached_document_fetcher,
 )
-from document_processing.distributed.warren.storage.documents.interface import (
+from warren.storage.documents.interface import (
     GetDocumentFunc,
     ResolveDocumentFunc,
 )
-from document_processing.distributed.warren.storage.documents.resolvers import (
+from warren.storage.documents.resolvers import (
     resolve_path,
 )
-from document_processing.distributed.warren.storage.results import (
+from warren.storage.results import (
     ResultsStoreInterface,
 )
-from document_processing.distributed.warren.storage.results.factories import (
+from warren.storage.results.factories import (
     create_default_results_store,
 )
-from document_processing.distributed.warren.workers.runners import WorkerRunnerBase
+from warren.workers.runners import WorkerRunnerBase
 
 
 module_logger: logging.Logger = get_logger(__name__)
@@ -208,7 +208,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         try:
             from google.cloud.storage import Client as GCSClient
 
-            from document_processing.distributed.warren.storage.documents.resolve_gcs import (
+            from warren.storage.documents.resolve_gcs import (
                 resolve_gcs,
             )
 

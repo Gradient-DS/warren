@@ -14,22 +14,22 @@ Key components:
 - ``PipelineSpec`` / ``WorkerSpec`` — declarative pipeline composition.
 """
 
-from document_processing.distributed.warren.runtime.config import (
+from warren.runtime.config import (
     MongoDBConfig,
     RedisConfig,
     RuntimeConfig,
     RuntimeRetryConfig,
     RuntimeRMQConfig,
 )
-from document_processing.distributed.warren.runtime.infrastructure import (
+from warren.runtime.infrastructure import (
     RuntimeInfra,
     close_runtime_infrastructure,
     create_runtime_infrastructure,
 )
-from document_processing.distributed.warren.runtime.runner import (
+from warren.runtime.runner import (
     DefaultWorkerRunner,
 )
-from document_processing.distributed.warren.runtime.spec import (
+from warren.runtime.spec import (
     PipelineSpec,
     WorkerFactory,
     WorkerFactoryContext,

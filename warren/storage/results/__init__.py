@@ -1,7 +1,7 @@
-from document_processing.distributed.warren.storage.results.default import (
+from warren.storage.results.default import (
     DefaultResultsStore,
 )
-from document_processing.distributed.warren.storage.results.interface import (
+from warren.storage.results.interface import (
     DocumentProcessingResultsNotFound,
     ResultDoc,
     ResultNotFound,

@@ -9,10 +9,10 @@ escape to the bus.
 
 import asyncio
 
-from document_processing.distributed.warren.jobs.status.job_status_worker import (
+from warren.jobs.status.job_status_worker import (
     JobStatusWorker,
 )
-from document_processing.distributed.warren.storage.exceptions import (
+from warren.storage.exceptions import (
     TransientStoreError,
 )
 

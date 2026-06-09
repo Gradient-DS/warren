@@ -9,20 +9,20 @@ import json
 import aio_pika
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.warren.pubsub.base import BasePublisher
-from document_processing.distributed.warren.pubsub.common import (
+from warren.pubsub.base import BasePublisher
+from warren.pubsub.common import (
     PublishFailureException,
     PubSubSetupError,
     Route,
     RouteFunc,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
+from warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.topology import (
+from warren.pubsub.rabbitmq.aio_pika.topology import (
     declare_exchange,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
+from warren.pubsub.rabbitmq.config import (
     RMQExchangeConfig,
 )
 

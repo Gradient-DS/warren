@@ -13,10 +13,10 @@ from basics.logging_utils import summarize_exception_chain
 from pymongo import AsyncMongoClient
 from redis.asyncio import Redis
 
-from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
+from warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
-from document_processing.distributed.warren.runtime.config import RuntimeConfig
+from warren.runtime.config import RuntimeConfig
 
 
 module_logger: logging.Logger = get_logger(__name__)

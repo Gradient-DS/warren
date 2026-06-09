@@ -10,16 +10,16 @@ from collections.abc import Mapping
 
 from basics.base import Base
 
-from document_processing.distributed.warren.storage.cache.interface import (
+from warren.storage.cache.interface import (
     CacheInterface,
     get_or_set,
 )
-from document_processing.distributed.warren.storage.documents.interface import (
+from warren.storage.documents.interface import (
     DocumentResolutionError,
     ResolveDocumentFunc,
     UnknownLocationTypeError,
 )
-from document_processing.distributed.warren.storage.documents.location import (
+from warren.storage.documents.location import (
     DocumentLocation,
 )
 

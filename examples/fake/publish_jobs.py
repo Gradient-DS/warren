@@ -6,9 +6,9 @@ Creates a job entry, publishes synthetic documents via
 store-generated job ID to stdout for capture by the caller.
 
 Usage:
-    python -m document_processing.distributed.e2e_test.fake.publish_jobs \
+    python -m examples.fake.publish_jobs \
         --job-name e2e-test-001 \
-        --config-file document_processing/distributed/e2e_test/fake/config.yaml
+        --config-file examples/fake/config.yaml
 """
 
 import argparse
@@ -20,26 +20,26 @@ from pathlib import Path
 from basics.logging import get_logger
 from pymongo import AsyncMongoClient
 
-from document_processing.distributed.e2e_test.fake.data import FAKE_DOCUMENTS
-from document_processing.distributed.e2e_test.fake.e2e_publisher import (
+from examples.fake.data import FAKE_DOCUMENTS
+from examples.fake.e2e_publisher import (
     FakeE2EPublisher,
 )
-from document_processing.distributed.e2e_test.fake.pipeline_spec import PIPELINE
-from document_processing.distributed.runtime_scripts.lib.logging_setup import (
+from examples.fake.pipeline_spec import PIPELINE
+from runtime_scripts.lib.logging_setup import (
     configure_logging,
     resolve_log_level,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
+from warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.publisher import (
+from warren.pubsub.rabbitmq.aio_pika.publisher import (
     RMQPublisher,
 )
-from document_processing.distributed.warren.runtime.config import RuntimeConfig
-from document_processing.distributed.warren.storage.jobs.mongodb import (
+from warren.runtime.config import RuntimeConfig
+from warren.storage.jobs.mongodb import (
     MongoDBJobStore,
 )
-from document_processing.distributed.warren.storage.publishing_tracker.mongodb import (
+from warren.storage.publishing_tracker.mongodb import (
     MongoDBPublishingTracker,
 )
 

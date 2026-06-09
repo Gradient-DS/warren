@@ -16,8 +16,8 @@ from typing import Protocol
 
 from collections.abc import Awaitable, Callable
 
-from document_processing.distributed.warren.exceptions import WarrenError
-from document_processing.distributed.warren.storage.documents.location import (
+from warren.exceptions import WarrenError
+from warren.storage.documents.location import (
     DocumentLocation,
 )
 

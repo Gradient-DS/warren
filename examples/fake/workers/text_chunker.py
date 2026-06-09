@@ -6,10 +6,10 @@ splits by paragraph (double newline), stores each chunk, and
 publishes a text_chunks message.
 """
 
-from document_processing.distributed.warren.storage.results.interface import (
+from warren.storage.results.interface import (
     ResultsStoreInterface,
 )
-from document_processing.distributed.warren.workers.workers import (
+from warren.workers.workers import (
     FilteringWorkerBase,
 )
 

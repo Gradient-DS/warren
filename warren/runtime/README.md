@@ -33,7 +33,7 @@ the future.
 
 ```python
 # my_pipeline/pipeline_spec.py
-from document_processing.distributed.warren.runtime import (
+from warren.runtime import (
     PipelineSpec,
     WorkerSpec,
 )
@@ -95,7 +95,7 @@ retry:
 ### 3. Run a worker
 
 ```python
-from document_processing.distributed.warren.runtime import (
+from warren.runtime import (
     DefaultWorkerRunner,
     RuntimeConfig,
 )

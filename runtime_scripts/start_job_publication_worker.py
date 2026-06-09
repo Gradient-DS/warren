@@ -11,7 +11,7 @@ and worker name.
 
 Usage::
 
-    python -m document_processing.distributed.runtime_scripts.start_job_publication_worker \
+    python -m runtime_scripts.start_job_publication_worker \
         --config-file ./pipeline/config.yaml \
         --publisher-factory my_pipeline.publishers.factory:create_multi_type_publisher
 """
@@ -27,16 +27,16 @@ from pathlib import Path
 from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.runtime_scripts.lib.cli import (
+from runtime_scripts.lib.cli import (
     add_common_args,
 )
-from document_processing.distributed.runtime_scripts.lib.logging_setup import (
+from runtime_scripts.lib.logging_setup import (
     configure_logging,
     resolve_log_level,
 )
-from document_processing.distributed.runtime_scripts.lib.runner import run
-from document_processing.distributed.warren.exceptions import WarrenError
-from document_processing.distributed.warren.jobs.publishing.job_publication_worker_runner import (
+from runtime_scripts.lib.runner import run
+from warren.exceptions import WarrenError
+from warren.jobs.publishing.job_publication_worker_runner import (
     DocumentsPublisherFactoryFunc,
     JobPublicationWorkerRunner,
 )

@@ -12,10 +12,10 @@ import asyncio
 from google.api_core.exceptions import NotFound
 from google.cloud import storage
 
-from document_processing.distributed.warren.storage.documents.interface import (
+from warren.storage.documents.interface import (
     DocumentNotFoundError,
 )
-from document_processing.distributed.warren.storage.documents.location import (
+from warren.storage.documents.location import (
     DocumentCloudLocation,
     DocumentLocation,
 )

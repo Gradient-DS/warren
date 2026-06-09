@@ -101,7 +101,7 @@ on the exchange, self-selecting for `data_type: "soft-failure"` messages.
 
 ### 1. SoftFailureException
 
-**File:** `document_processing/distributed/common.py`
+**File:** `warren/common.py`
 
 Workers raise `SoftFailureException` to signal retry intent with optional parameters:
 
@@ -128,7 +128,7 @@ class SoftFailureException(Exception):
 
 ### 2. Message Identity Utilities
 
-**File:** `document_processing/distributed/workers/messages.py`
+**File:** `warren/workers/messages.py`
 
 Standalone utility functions shared by `DefaultResultsStore`, `RetryWorker`, `RMQConsumerManager`,
 and `RMQPublisher`.
@@ -155,7 +155,7 @@ def extract_message_identity(message: Dict) -> str:
 
 ### 3. RetryConfig
 
-**File:** `document_processing/distributed/pubsub/rabbitmq/consumer.py`
+**File:** `warren/pubsub/rabbitmq/aio_pika/consumer.py`
 
 Configuration for retry behavior, owned by the consumer manager:
 
@@ -172,7 +172,7 @@ class RetryConfig(BaseModel):
 
 ### 4. Consumer Manager Retry Handling
 
-**File:** `document_processing/distributed/pubsub/rabbitmq/consumer.py`
+**File:** `warren/pubsub/rabbitmq/aio_pika/consumer.py`
 
 The consumer manager's `_handle_soft_failure` method builds the retry envelope and publishes
 through the regular downstream publishers (not a separate retry publisher).
@@ -212,7 +212,7 @@ def _resolve_retry_max(self, error: SoftFailureException) -> int:
 
 ### 5. RetryWorker
 
-**File:** `document_processing/distributed/workers/retry_worker.py`
+**File:** `warren/retry_management/retry_worker.py`
 
 Consumes from the processing exchange, filters for `data_type: "soft-failure"` messages,
 persists them, and schedules delayed republishing.
@@ -277,7 +277,7 @@ recovery on next startup.
 
 ### 6. CachedDocumentStore
 
-**File:** `document_processing/distributed/storage/cached_document_store.py`
+**File:** `warren/storage/cached_document_store.py`
 
 Conforms to the `DocumentStoreInterface` protocol via structural typing (duck typing). Composes
 an injected `DocumentStoreInterface` (backing store) with a `CacheInterface[Dict]` (cache layer).
@@ -310,7 +310,7 @@ and fall through to the backing store. The system degrades gracefully if Redis i
 
 ### 7. RetryWorkerRunner
 
-**File:** `document_processing/distributed/workers/retry_worker_runner.py`
+**File:** `warren/retry_management/retry_worker_runner.py`
 
 Subclass of `WorkerRunnerBase` that wires up all retry infrastructure:
 
@@ -337,7 +337,7 @@ Teardown: calls `retry_worker.shutdown()` (cancel timers), then `publisher.teard
 
 ### 8. WorkerRunnerBase
 
-**File:** `document_processing/distributed/workers/runners.py`
+**File:** `warren/workers/runners.py`
 
 Generic lifecycle manager for workers. Refactored from an earlier version that had
 connection/factory methods specific to the E2E test. Now provides:

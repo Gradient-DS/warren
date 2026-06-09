@@ -1,7 +1,7 @@
-from document_processing.distributed.warren.retry_management.retry_worker import (
+from warren.retry_management.retry_worker import (
     RetryWorker,
 )
-from document_processing.distributed.warren.retry_management.retry_worker_runner import (
+from warren.retry_management.retry_worker_runner import (
     RetryWorkerRunner,
 )
 

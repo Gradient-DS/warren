@@ -14,8 +14,8 @@ from aio_pika.abc import (
     AbstractQueue,
 )
 
-from document_processing.distributed.warren.pubsub.common import PubSubSetupError
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
+from warren.pubsub.common import PubSubSetupError
+from warren.pubsub.rabbitmq.config import (
     RMQExchangeConfig,
     RMQQueueConfig,
 )

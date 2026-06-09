@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from basics.base import Base
 from pymongo import ASCENDING, AsyncMongoClient
 
-from document_processing.distributed.warren.storage.publishing_tracker.interface import (
+from warren.storage.publishing_tracker.interface import (
     PublishingTrackerInterface,
 )
 

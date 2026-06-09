@@ -5,17 +5,17 @@ Factory functions for creating ResultsStore instances.
 from pymongo import AsyncMongoClient
 from redis.asyncio import Redis
 
-from document_processing.distributed.warren.storage.cache.redis import (
+from warren.storage.cache.redis import (
     RedisBinaryCache,
     RedisDictCache,
 )
-from document_processing.distributed.warren.storage.document_store.mongodb import (
+from warren.storage.document_store.mongodb import (
     MongoDBDocumentStore,
 )
-from document_processing.distributed.warren.storage.results.binary import (
+from warren.storage.results.binary import (
     BinaryResultsStore,
 )
-from document_processing.distributed.warren.storage.results.default import (
+from warren.storage.results.default import (
     DefaultResultsStore,
 )
 

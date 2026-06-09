@@ -12,7 +12,7 @@ from pathlib import Path
 
 from basics.logging import get_logger
 
-from document_processing.distributed.warren.exceptions import (
+from warren.exceptions import (
     OptionalDependencyError,
 )
 

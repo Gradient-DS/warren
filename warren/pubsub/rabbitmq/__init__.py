@@ -13,14 +13,14 @@ Concrete client implementations live in sub-packages:
 To use the ``aio_pika`` implementation, import explicitly from that
 sub-package, e.g.::
 
-    from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika import (
+    from warren.pubsub.rabbitmq.aio_pika import (
         RMQConnectionManager,
         RMQConsumerManager,
         RMQPublisher,
     )
 """
 
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
+from warren.pubsub.rabbitmq.config import (
     RetryConfig,
     RMQConnectionConfig,
     RMQConsumerConfig,

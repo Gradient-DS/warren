@@ -13,7 +13,7 @@ from aio_pika.exceptions import ChannelNotFoundEntity
 from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
+from warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
 

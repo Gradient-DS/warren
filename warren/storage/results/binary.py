@@ -39,19 +39,19 @@ from collections.abc import AsyncGenerator
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.warren.storage.cache.interface import (
+from warren.storage.cache.interface import (
     CacheInterface,
 )
-from document_processing.distributed.warren.storage.document_store.interface import (
+from warren.storage.document_store.interface import (
     DocumentStoreInterface,
 )
-from document_processing.distributed.warren.storage.documents.fetcher import (
+from warren.storage.documents.fetcher import (
     build_document_cache_key,
 )
-from document_processing.distributed.warren.storage.results.interface import (
+from warren.storage.results.interface import (
     ResultNotFound,
 )
-from document_processing.distributed.warren.storage.utils import current_time_str
+from warren.storage.utils import current_time_str
 
 
 _PAYLOAD_FIELD: str = "payload"

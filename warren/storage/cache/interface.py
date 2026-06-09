@@ -2,7 +2,7 @@ from typing import Protocol, TypeVar
 
 from collections.abc import Awaitable, Callable
 
-from document_processing.distributed.warren.exceptions import WarrenError
+from warren.exceptions import WarrenError
 
 
 T = TypeVar("T")

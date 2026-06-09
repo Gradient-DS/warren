@@ -1,24 +1,22 @@
 """
-Fake pipeline spec for E2E testing.
+Fake pipeline spec for the minimal runnable example.
 
 Uses fake workers with pre-baked data — fast, deterministic, no
 external dependencies. 4 fake documents produce 18 chunks and
 18 embeddings.
 """
 
-from document_processing.distributed.e2e_test.failure_injection import FailureSpec
-from document_processing.distributed.e2e_test.fake.workers.document_parser import (
+from examples.fake.workers.document_parser import (
     DocumentParserWorker,
 )
-from document_processing.distributed.e2e_test.fake.workers.embedding_generator import (
+from examples.fake.workers.embedding_generator import (
     EmbeddingGeneratorWorker,
 )
-from document_processing.distributed.e2e_test.fake.workers.text_chunker import (
+from examples.fake.workers.text_chunker import (
     TextChunkerWorker,
 )
-from document_processing.distributed.e2e_test.spec import E2ETestWorkerSpec
-from document_processing.distributed.warren.common import MessageConsumerInterface
-from document_processing.distributed.warren.runtime.spec import (
+from warren.common import MessageConsumerInterface
+from warren.runtime.spec import (
     PipelineSpec,
     WorkerFactoryContext,
     WorkerSpec,
@@ -58,15 +56,9 @@ PIPELINE: PipelineSpec = PipelineSpec(
             collections={"write": "parsed_documents"},
             factory=_create_document_parser,
         ),
-        "text_chunker": E2ETestWorkerSpec(
+        "text_chunker": WorkerSpec(
             collections={"read": "parsed_documents", "write": "chunks"},
             factory=_create_text_chunker,
-            failure_spec=FailureSpec(
-                fail_at_attempts=[1, 2],
-                target_data_type="markdown_document",
-                retry_after=2,
-                retry_max=3,
-            ),
         ),
         "embedding_generator": WorkerSpec(
             collections={"read": "chunks", "write": "embeddings"},

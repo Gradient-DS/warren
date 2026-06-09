@@ -13,19 +13,19 @@ Message classification:
 
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.warren.storage.exceptions import (
+from warren.storage.exceptions import (
     TransientStoreError,
 )
-from document_processing.distributed.warren.storage.job_results.interface import (
+from warren.storage.job_results.interface import (
     JobResultsStoreInterface,
 )
-from document_processing.distributed.warren.storage.jobs.interface import (
+from warren.storage.jobs.interface import (
     JobStoreInterface,
 )
-from document_processing.distributed.warren.storage.retry import (
+from warren.storage.retry import (
     run_with_transient_retry,
 )
-from document_processing.distributed.warren.workers.workers import (
+from warren.workers.workers import (
     FilteringWorkerBase,
 )
 

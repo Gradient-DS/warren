@@ -11,7 +11,7 @@ classification of *what* is transient lives in the implementation (see
 import asyncio
 from collections.abc import Awaitable, Callable
 
-from document_processing.distributed.warren.storage.exceptions import (
+from warren.storage.exceptions import (
     TransientStoreError,
 )
 

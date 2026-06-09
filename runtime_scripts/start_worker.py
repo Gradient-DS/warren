@@ -7,26 +7,26 @@ runner class), and runs a single worker type until shutdown.
 Usage::
 
     # All defaults: ./pipeline/pipeline_spec.py:PIPELINE
-    python -m document_processing.distributed.runtime_scripts.start_worker \
+    python -m runtime_scripts.start_worker \
         --worker-type parser
 
     # Explicit directory
-    python -m document_processing.distributed.runtime_scripts.start_worker \
+    python -m runtime_scripts.start_worker \
         --pipeline-spec ./my_pipeline \
         --worker-type parser
 
     # Explicit file + variable
-    python -m document_processing.distributed.runtime_scripts.start_worker \
+    python -m runtime_scripts.start_worker \
         --pipeline-spec ./my_pipeline/alt_spec.py:EXPERIMENTAL \
         --worker-type parser
 
     # Installed Python module
-    python -m document_processing.distributed.runtime_scripts.start_worker \
+    python -m runtime_scripts.start_worker \
         --pipeline-spec gradient_pipelines.cool_pipeline \
         --worker-type parser
 
     # Installed Python module + variable
-    python -m document_processing.distributed.runtime_scripts.start_worker \
+    python -m runtime_scripts.start_worker \
         --pipeline-spec gradient_pipelines.cool_pipeline:EXPERIMENTAL \
         --worker-type parser
 """
@@ -42,22 +42,22 @@ from pathlib import Path
 from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.runtime_scripts.lib.cli import (
+from runtime_scripts.lib.cli import (
     add_common_args,
 )
-from document_processing.distributed.runtime_scripts.lib.logging_setup import (
+from runtime_scripts.lib.logging_setup import (
     configure_logging,
     resolve_log_level,
 )
-from document_processing.distributed.runtime_scripts.lib.pipeline import (
+from runtime_scripts.lib.pipeline import (
     DEFAULT_PIPELINE_DIR,
     DEFAULT_SPEC_VAR,
     load_pipeline,
     resolve_config_path,
 )
-from document_processing.distributed.runtime_scripts.lib.runner import run
-from document_processing.distributed.warren.exceptions import WarrenError
-from document_processing.distributed.warren.runtime.runner import (
+from runtime_scripts.lib.runner import run
+from warren.exceptions import WarrenError
+from warren.runtime.runner import (
     DefaultWorkerRunner,
 )
 

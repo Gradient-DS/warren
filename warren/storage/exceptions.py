@@ -6,7 +6,7 @@ exception handling across the framework. Callers can catch the base
 classes when they don't need to distinguish between storage domains.
 """
 
-from document_processing.distributed.warren.exceptions import WarrenError
+from warren.exceptions import WarrenError
 
 
 class ResourceNotFoundError(WarrenError):

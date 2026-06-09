@@ -8,8 +8,8 @@ separately by ``JobResultsStoreInterface``.
 
 from typing import Protocol
 
-from document_processing.distributed.warren.exceptions import WarrenError
-from document_processing.distributed.warren.storage.exceptions import (
+from warren.exceptions import WarrenError
+from warren.storage.exceptions import (
     ResourceNotFoundError,
 )
 

@@ -7,10 +7,10 @@ re-raises so the caller decides propagate-vs-drop.
 
 import asyncio
 
-from document_processing.distributed.warren.storage.exceptions import (
+from warren.storage.exceptions import (
     TransientStoreError,
 )
-from document_processing.distributed.warren.storage.retry import (
+from warren.storage.retry import (
     run_with_transient_retry,
 )
 

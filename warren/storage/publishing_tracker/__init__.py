@@ -1,4 +1,4 @@
-from document_processing.distributed.warren.storage.publishing_tracker.interface import (
+from warren.storage.publishing_tracker.interface import (
     PublishingTrackerInterface,
 )
 

@@ -9,7 +9,7 @@ from pymongo import AsyncMongoClient, ReturnDocument
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.errors import DuplicateKeyError
 
-from document_processing.distributed.warren.storage.document_store.interface import (
+from warren.storage.document_store.interface import (
     DocumentAlreadyExistsError,
     DocumentNotFoundError,
     DocumentStoreInterface,

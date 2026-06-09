@@ -6,7 +6,7 @@ fanout exchange and records per-document processing results.
 
 Usage::
 
-    python -m document_processing.distributed.runtime_scripts.start_job_status_worker \
+    python -m runtime_scripts.start_job_status_worker \
         --config-file ./pipeline/config.yaml
 """
 
@@ -19,15 +19,15 @@ from pathlib import Path
 from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.runtime_scripts.lib.cli import (
+from runtime_scripts.lib.cli import (
     add_common_args,
 )
-from document_processing.distributed.runtime_scripts.lib.logging_setup import (
+from runtime_scripts.lib.logging_setup import (
     configure_logging,
     resolve_log_level,
 )
-from document_processing.distributed.runtime_scripts.lib.runner import run
-from document_processing.distributed.warren.jobs.status.job_status_worker_runner import (
+from runtime_scripts.lib.runner import run
+from warren.jobs.status.job_status_worker_runner import (
     JobStatusWorkerRunner,
 )
 

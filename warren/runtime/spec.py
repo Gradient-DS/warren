@@ -18,14 +18,14 @@ from dataclasses import dataclass
 from pymongo import AsyncMongoClient
 from redis.asyncio import Redis
 
-from document_processing.distributed.warren.common import MessageConsumerInterface
-from document_processing.distributed.warren.storage.document_store.interface import (
+from warren.common import MessageConsumerInterface
+from warren.storage.document_store.interface import (
     DocumentStoreInterface,
 )
-from document_processing.distributed.warren.storage.documents.interface import (
+from warren.storage.documents.interface import (
     GetDocumentFunc,
 )
-from document_processing.distributed.warren.storage.results.interface import (
+from warren.storage.results.interface import (
     ResultsStoreInterface,
 )
 

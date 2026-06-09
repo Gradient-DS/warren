@@ -9,10 +9,10 @@ message for observability (job status tracking).
 import hashlib
 import struct
 
-from document_processing.distributed.warren.storage.results.interface import (
+from warren.storage.results.interface import (
     ResultsStoreInterface,
 )
-from document_processing.distributed.warren.workers.workers import (
+from warren.workers.workers import (
     FilteringWorkerBase,
 )
 

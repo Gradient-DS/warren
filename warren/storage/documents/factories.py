@@ -6,13 +6,13 @@ from collections.abc import Mapping
 
 from redis.asyncio import Redis
 
-from document_processing.distributed.warren.storage.cache.redis import (
+from warren.storage.cache.redis import (
     RedisBinaryCache,
 )
-from document_processing.distributed.warren.storage.documents.fetcher import (
+from warren.storage.documents.fetcher import (
     CachedDocumentFetcher,
 )
-from document_processing.distributed.warren.storage.documents.interface import (
+from warren.storage.documents.interface import (
     ResolveDocumentFunc,
 )
 

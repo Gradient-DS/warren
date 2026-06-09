@@ -11,29 +11,29 @@ from aio_pika.abc import (
 )
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.warren.common import (
+from warren.common import (
     HardFailureException,
     MessageConsumerInterface,
     SoftFailureException,
 )
-from document_processing.distributed.warren.pubsub.base import ConsumerManagerBase
-from document_processing.distributed.warren.pubsub.common import (
+from warren.pubsub.base import ConsumerManagerBase
+from warren.pubsub.common import (
     PublisherInterface,
     PublishFailureException,
     PubSubSetupError,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
+from warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.topology import (
+from warren.pubsub.rabbitmq.aio_pika.topology import (
     declare_exchange,
     declare_queue,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
+from warren.pubsub.rabbitmq.config import (
     RetryConfig,
     RMQConsumerManagerConfig,
 )
-from document_processing.distributed.warren.workers.messages import (
+from warren.workers.messages import (
     ExtractMessageIdentityFunc,
     extract_message_identity,
 )

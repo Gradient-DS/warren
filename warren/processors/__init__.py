@@ -1,6 +1,6 @@
 """Framework processor protocol."""
 
-from document_processing.distributed.warren.processors.base import (
+from warren.processors.base import (
     Processor,
 )
 

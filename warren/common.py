@@ -24,7 +24,7 @@ Protocol hierarchy:
 
 from typing import Protocol, Union
 
-from document_processing.distributed.warren.exceptions import WarrenError
+from warren.exceptions import WarrenError
 
 
 class SoftFailureException(WarrenError):

@@ -14,10 +14,10 @@ from collections.abc import AsyncGenerator
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.warren.storage.cache.interface import (
+from warren.storage.cache.interface import (
     CacheInterface,
 )
-from document_processing.distributed.warren.storage.document_store.interface import (
+from warren.storage.document_store.interface import (
     DocumentStoreInterface,
     IndexSpec,
 )

@@ -26,10 +26,10 @@ from typing import cast
 import asyncio
 from pathlib import Path
 
-from document_processing.distributed.warren.storage.documents.interface import (
+from warren.storage.documents.interface import (
     DocumentNotFoundError,
 )
-from document_processing.distributed.warren.storage.documents.location import (
+from warren.storage.documents.location import (
     DocumentLocation,
     DocumentPathLocation,
 )

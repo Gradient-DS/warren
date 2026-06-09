@@ -14,19 +14,19 @@ from collections.abc import Callable
 
 from basics.logging_utils import summarize_exception_chain
 
-from document_processing.distributed.warren.pubsub.common import (
+from warren.pubsub.common import (
     PublisherInterface,
     PublishFailureException,
 )
-from document_processing.distributed.warren.storage.document_store.interface import (
+from warren.storage.document_store.interface import (
     DocumentNotFoundError,
     DocumentStoreInterface,
 )
-from document_processing.distributed.warren.workers.messages import (
+from warren.workers.messages import (
     build_message_key,
     extract_message_identity,
 )
-from document_processing.distributed.warren.workers.workers import (
+from warren.workers.workers import (
     AsyncProcessingWorkerBase,
 )
 

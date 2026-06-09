@@ -9,7 +9,7 @@ from typing import Protocol
 
 from dataclasses import dataclass
 
-from document_processing.distributed.warren.exceptions import WarrenError
+from warren.exceptions import WarrenError
 
 
 class PublishFailureException(WarrenError):

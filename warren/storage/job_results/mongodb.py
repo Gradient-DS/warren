@@ -7,10 +7,10 @@ from datetime import UTC, datetime
 from basics.base import Base
 from pymongo import ASCENDING, AsyncMongoClient
 
-from document_processing.distributed.warren.storage.job_results.interface import (
+from warren.storage.job_results.interface import (
     JobResultsStoreInterface,
 )
-from document_processing.distributed.warren.storage.mongo_errors import (
+from warren.storage.mongo_errors import (
     classify_transient_methods,
 )
 

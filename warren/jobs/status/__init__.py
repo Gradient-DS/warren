@@ -1,7 +1,7 @@
-from document_processing.distributed.warren.jobs.status.job_status_worker import (
+from warren.jobs.status.job_status_worker import (
     JobStatusWorker,
 )
-from document_processing.distributed.warren.jobs.status.job_status_worker_runner import (
+from warren.jobs.status.job_status_worker_runner import (
     JobStatusWorkerRunner,
 )
 

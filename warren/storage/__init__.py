@@ -1,4 +1,4 @@
-from document_processing.distributed.warren.storage.results import (
+from warren.storage.results import (
     ResultsStoreInterface,
 )
 

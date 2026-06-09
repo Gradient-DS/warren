@@ -17,7 +17,7 @@ from collections.abc import Awaitable, Callable
 
 from pymongo.errors import ConnectionFailure
 
-from document_processing.distributed.warren.storage.exceptions import (
+from warren.storage.exceptions import (
     TransientStoreError,
 )
 

@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "warren"
+version = "1.0.0"
+description = "Message-driven document processing framework — self-selecting workers on a RabbitMQ fanout exchange with MongoDB/Redis-backed storage"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Gradient DS" }]
+dependencies = [
+    "visionscaper-pybase>=0.4.0",
+    "pymongo>=4.10",
+    "redis>=4.0",
+    "aio-pika>=9.5",
+    "pydantic>=2.11",
+    "PyYAML>=6",
+    "google-cloud-storage>=2.18",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff",
+]
+
+[project.urls]
+Repository = "https://github.com/Gradient-DS/warren"
+
+[project.scripts]
+warren-worker = "runtime_scripts.start_worker:main"
+warren-job-publication-worker = "runtime_scripts.start_job_publication_worker:main"
+warren-job-status-worker = "runtime_scripts.start_job_status_worker:main"
+warren-retry-worker = "runtime_scripts.start_retry_worker:main"
+warren-purge-queues = "runtime_scripts.purge_queues:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["warren", "runtime_scripts"]

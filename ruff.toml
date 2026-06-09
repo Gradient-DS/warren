@@ -1,0 +1,185 @@
+# ruff.toml
+#
+# Adapted from genai-utils' ruff.toml at extraction time (2026-06).
+# The per-file-ignores block that was scoped to
+# `document_processing/distributed/**/*.py` there now covers this whole repo.
+
+target-version = "py312"
+line-length = 88
+
+# ---------------------------------------------------------------------------
+# Lint
+# ---------------------------------------------------------------------------
+[lint]
+select = [
+    # --- Core ---
+    "E",       # pycodestyle errors
+    "W",       # pycodestyle warnings
+    "F",       # pyflakes: unused imports/vars, star imports, shadowing
+
+    # --- Type annotations ---
+    "ANN",     # flake8-annotations: all params/returns/attributes annotated
+    "TCH",     # flake8-type-checking: annotation-only imports to TYPE_CHECKING
+
+    # --- Import hygiene ---
+    "I",       # isort: sorted, typing first, stdlib > third-party > local
+    "TID252",  # ban relative imports
+
+    # --- Naming ---
+    "N",       # pep8-naming: PascalCase classes, snake_case functions, UPPER_SNAKE constants
+
+    # --- Bug prevention ---
+    "B",       # flake8-bugbear: mutable defaults, redundant operators, footguns
+    "BLE",     # flake8-blind-except: never catch Exception/BaseException unless re-raising
+
+    # --- Boolean parameters ---
+    "FBT",     # flake8-boolean-trap: booleans must be keyword-only
+
+    # --- Code simplification ---
+    "SIM",     # flake8-simplify: no else after return/raise/continue/break
+    "RET",     # flake8-return
+
+    # --- Dead code ---
+    "ERA",     # eradicate: commented-out code
+    "ARG",     # flake8-unused-arguments
+
+    # --- Modernization ---
+    "UP",      # pyupgrade: list[T] not List[T], X | None not Optional[X]
+
+    # --- Async ---
+    "ASYNC",   # flake8-async: no sync I/O in async, no asyncio.run() in async
+
+    # --- Security ---
+    "S",       # flake8-bandit: no hardcoded secrets, no eval, no insecure defaults
+
+    # --- File handling ---
+    "PTH",     # flake8-use-pathlib: pathlib over os.path
+
+    # --- Exception formatting ---
+    "EM",      # flake8-errmsg: no f-strings directly in exception constructors
+
+    # --- Pytest ---
+    "PT",      # flake8-pytest-style
+
+    # --- Ruff-specific ---
+    "RUF",     # various antipatterns, mutable class defaults, etc.
+]
+
+ignore = [
+    # --- Annotations ---
+    "ANN204",  # __init__ return type (always None, obvious)
+
+    # --- Boolean trap ---
+    "FBT003",  # too noisy: flags boolean args at call sites (stdlib, third-party)
+
+    # --- Simplification ---
+    "SIM108",  # ternary not always clearer than if/else
+
+    # --- Security ---
+    "S101",    # assert is fine (type narrowing, preconditions)
+    "S603",    # subprocess without shell=True is fine
+    "S607",    # partial executable path (noisy for CLI tools)
+
+    # --- Ruff ---
+    "RUF012",  # mutable class variable annotation: conflicts with dataclass patterns
+]
+
+# --- Auto-fix policy ---
+
+# Safe: deterministic, no behavior change
+fixable = [
+    "I",       # sort imports
+    "F401",    # remove unused imports
+    "UP",      # modernize syntax
+    "ERA",     # remove commented-out code
+    "TCH",     # move imports to TYPE_CHECKING
+    "PTH",     # os.path -> pathlib
+    "RUF",     # ruff auto-fixes
+    "W",       # whitespace
+]
+
+# Unsafe: could change behavior, require human review
+unfixable = [
+    "F841",    # unused variables (might be intentional unpacking)
+    "B",       # bugbear (semantics-changing fixes)
+    "RET",     # return statement refactoring
+    "FBT",     # boolean trap fixes can change API signatures
+]
+
+# ---------------------------------------------------------------------------
+# Import sorting
+# ---------------------------------------------------------------------------
+[lint.isort]
+known-first-party = ["warren", "runtime_scripts", "examples", "tests"]
+lines-after-imports = 2
+
+# Enforce: future > typing > stdlib > third-party > first-party > local
+section-order = [
+    "future",
+    "typing",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder",
+]
+
+[lint.isort.sections]
+"typing" = ["typing", "typing_extensions"]
+
+# ---------------------------------------------------------------------------
+# Plugin configuration
+# ---------------------------------------------------------------------------
+[lint.flake8-annotations]
+allow-star-arg-any = false
+suppress-none-returning = true
+
+[lint.flake8-unused-arguments]
+ignore-variadic-names = true
+
+[lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+
+[lint.flake8-bugbear]
+# Prevent false positives: these are immutable at call time
+extend-immutable-calls = [
+    "pydantic.Field",
+]
+
+# ---------------------------------------------------------------------------
+# Per-file overrides
+# ---------------------------------------------------------------------------
+[lint.per-file-ignores]
+# Tests: relax annotations, unused fixture args, assertions, boolean traps
+"tests/**/*.py" = ["ANN", "ARG", "S101", "FBT"]
+# Config files may have values that look like hardcoded secrets
+"**/config*.py" = ["S105", "S106"]
+"**/settings*.py" = ["S105", "S106"]
+
+# Warren framework + launchers + examples.
+# These rules flag intentional design or work explicitly deferred to the
+# hardening backlog — confirmed by sampling the sites, not blanket-suppressed.
+"{warren,runtime_scripts,examples}/**/*.py" = [
+    "BLE001",  # best-effort, logged catches (teardown/cleanup/validation fallback);
+               # the documented warren exception-handling pattern (always logged via
+               # summarize_exception_chain), not blind swallowing.
+    "ANN401",  # framework is intentionally application-agnostic — Any/dict params at
+               # generic boundaries (publisher source, adapter payloads) are by design.
+    "FBT001", "FBT002",  # boolean-param API change is deferred hardening (team lead's
+               # explicit backlog), not done in this PR.
+    "ARG001", "ARG002",  # unused args are interface/Protocol/signal-handler conformance.
+    "N818",    # exception class renames (...Exception -> ...Error) are a public-API
+               # change deferred to the hardening backlog.
+    "S311",    # non-cryptographic random is intentional (retry jitter, sampling).
+    "B004",    # consumer.py uses getattr(x, "__call__") to fetch the bound method for
+               # an iscoroutinefunction check (async __call__ detection); callable() is
+               # not an equivalent substitution here.
+    "E501",    # usage-example docstrings exceed 88 cols; wrapping is noisy.
+]
+
+# ---------------------------------------------------------------------------
+# Formatter
+# ---------------------------------------------------------------------------
+[format]
+quote-style = "double"
+indent-style = "space"

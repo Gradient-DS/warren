@@ -15,6 +15,7 @@ from basics.logging import get_logger
 from document_processing.distributed.warren.runtime.config import RuntimeConfig
 from document_processing.distributed.warren.runtime.spec import PipelineSpec
 
+
 module_logger: logging.Logger = get_logger(__name__)
 
 DEFAULT_PIPELINE_DIR: str = "./pipeline"
@@ -43,10 +44,12 @@ def import_file(file_path: Path) -> object:
     create the module spec raises ``ImportError`` here.
     """
     spec = importlib.util.spec_from_file_location(
-        file_path.stem, file_path,
+        file_path.stem,
+        file_path,
     )
     if spec is None or spec.loader is None:
-        raise ImportError(f"Cannot create module spec from {file_path}")
+        msg = f"Cannot create module spec from {file_path}"
+        raise ImportError(msg)
 
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -63,9 +66,8 @@ def resolve_pipeline_file(directory: Path) -> Path:
     candidate = directory / f"{DEFAULT_SPEC_MODULE}.py"
     if candidate.is_file():
         return candidate
-    raise FileNotFoundError(
-        f"No {DEFAULT_SPEC_MODULE}.py in directory: {directory}"
-    )
+    msg = f"No {DEFAULT_SPEC_MODULE}.py in directory: {directory}"
+    raise FileNotFoundError(msg)
 
 
 def load_pipeline(
@@ -108,33 +110,28 @@ def load_pipeline(
         resolved_dir = path
 
     elif path.is_file():
-        log.info(
-            f"Loading pipeline spec from file: {path} (var: {var_name})"
-        )
+        log.info(f"Loading pipeline spec from file: {path} (var: {var_name})")
         mod = import_file(path)
         resolved_dir = path.parent
 
     else:
-        log.info(
-            f"Loading pipeline spec from module: {location} "
-            f"(var: {var_name})"
-        )
+        log.info(f"Loading pipeline spec from module: {location} (var: {var_name})")
         mod = importlib.import_module(location)
 
     module_name = getattr(mod, "__name__", location)
 
     if not hasattr(mod, var_name):
-        raise AttributeError(
-            f"Module {module_name} has no attribute '{var_name}'"
-        )
+        msg = f"Module {module_name} has no attribute '{var_name}'"
+        raise AttributeError(msg)
 
     pipeline = getattr(mod, var_name)
 
     if not isinstance(pipeline, PipelineSpec):
-        raise TypeError(
+        msg = (
             f"{var_name} in {module_name} is "
             f"{type(pipeline).__name__}, expected PipelineSpec"
         )
+        raise TypeError(msg)
 
     return pipeline, resolved_dir
 
@@ -157,15 +154,17 @@ def resolve_config_path(
         candidate = pipeline_dir / DEFAULT_CONFIG_FILE
         if candidate.is_file():
             return candidate
-        raise FileNotFoundError(
+        msg = (
             f"No {DEFAULT_CONFIG_FILE} in pipeline directory {pipeline_dir} "
             f"and no --config-file specified"
         )
+        raise FileNotFoundError(msg)
 
-    raise ValueError(
+    msg = (
         "--config-file is required when pipeline spec is loaded "
         "from a Python module (no directory to infer config.yaml from)"
     )
+    raise ValueError(msg)
 
 
 def load_config(config_file: Path) -> RuntimeConfig:
@@ -174,5 +173,6 @@ def load_config(config_file: Path) -> RuntimeConfig:
     :raises FileNotFoundError: if the file does not exist.
     """
     if not config_file.is_file():
-        raise FileNotFoundError(f"Config file not found: {config_file}")
+        msg = f"Config file not found: {config_file}"
+        raise FileNotFoundError(msg)
     return RuntimeConfig.from_yaml(config_file)

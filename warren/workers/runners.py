@@ -79,7 +79,8 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
         """Start consuming and wait for shutdown signal
         (SIGINT/SIGTERM)."""
         if not self._setup_succeeded:
-            raise RuntimeError("Must call setup() successfully before run()")
+            msg = "Must call setup() successfully before run()"
+            raise RuntimeError(msg)
 
         shutdown_event = asyncio.Event()
 
@@ -151,4 +152,5 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
             yield
         except Exception as e:
             worker = getattr(self, "_worker_name", "?")
-            raise WarrenError(f"{description} failed for worker '{worker}'") from e
+            msg = f"{description} failed for worker '{worker}'"
+            raise WarrenError(msg) from e

@@ -47,5 +47,6 @@ class RMQConnectionManager(Base):
 
     async def create_channel(self) -> AbstractChannel:
         if not self._connection:
-            raise RuntimeError("Must call setup() first.")
+            msg = "Must call setup() first."
+            raise RuntimeError(msg)
         return await self._connection.channel()

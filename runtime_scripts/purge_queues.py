@@ -143,7 +143,8 @@ async def run_purge(
     try:
         config = load_config(resolved_config_path)
     except Exception as e:
-        raise WarrenError(f"Unable to load config from: {resolved_config_path}") from e
+        msg = f"Unable to load config from: {resolved_config_path}"
+        raise WarrenError(msg) from e
 
     if queues is not None:
         queue_names = queues
@@ -152,7 +153,8 @@ async def run_purge(
         try:
             pipeline, _ = load_pipeline(spec_str, log)
         except Exception as e:
-            raise WarrenError(f"Unable to load pipeline spec from: {spec_str}") from e
+            msg = f"Unable to load pipeline spec from: {spec_str}"
+            raise WarrenError(msg) from e
 
         exchange_name = config.rabbitmq.exchange.name
         queue_names = [f"{exchange_name}.{wt}" for wt in pipeline.workers]
@@ -173,16 +175,14 @@ async def run_purge(
             ),
         )
     except Exception as e:
-        raise WarrenError(
-            f"Unable to create RMQ manager for: {rmq_cfg.host}:{rmq_cfg.port}"
-        ) from e
+        msg = f"Unable to create RMQ manager for: {rmq_cfg.host}:{rmq_cfg.port}"
+        raise WarrenError(msg) from e
 
     try:
         await connection_manager.setup()
     except Exception as e:
-        raise WarrenError(
-            f"Unable to connect to RabbitMQ at: {rmq_cfg.host}:{rmq_cfg.port}"
-        ) from e
+        msg = f"Unable to connect to RabbitMQ at: {rmq_cfg.host}:{rmq_cfg.port}"
+        raise WarrenError(msg) from e
 
     try:
         await purge_queues(
@@ -191,9 +191,8 @@ async def run_purge(
             exchange_name=exchange_to_delete,
         )
     except Exception as e:
-        raise WarrenError(
-            f"Failed to purge queues: {queue_names}, exchange: {exchange_to_delete}"
-        ) from e
+        msg = f"Failed to purge queues: {queue_names}, exchange: {exchange_to_delete}"
+        raise WarrenError(msg) from e
     finally:
         await connection_manager.teardown()
 

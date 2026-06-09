@@ -15,10 +15,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
         "--config-file",
         type=Path,
         default=None,
-        help=(
-            "Path to RuntimeConfig YAML. "
-            "Default: ./pipeline/config.yaml"
-        ),
+        help=("Path to RuntimeConfig YAML. Default: ./pipeline/config.yaml"),
     )
     parser.add_argument(
         "--worker-name",

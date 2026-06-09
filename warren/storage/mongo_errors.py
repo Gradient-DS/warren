@@ -33,7 +33,7 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 
-def classify_transient(
+def classify_transient[**P, R](
     func: Callable[P, Awaitable[R]],
 ) -> Callable[P, Awaitable[R]]:
     """Re-raise transient pymongo errors from ``func`` as ``TransientStoreError``.
@@ -47,9 +47,8 @@ def classify_transient(
         try:
             return await func(*args, **kwargs)
         except _TRANSIENT_MONGO_ERRORS as e:
-            raise TransientStoreError(
-                f"Transient MongoDB error in '{func.__name__}'"
-            ) from e
+            msg = f"Transient MongoDB error in '{func.__name__}'"
+            raise TransientStoreError(msg) from e
 
     return wrapper
 

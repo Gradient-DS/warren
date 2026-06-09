@@ -43,7 +43,8 @@ class _FakeTracker:
 
     async def record_success(self, job_id: str, doc_id: str) -> None:
         if self._fail_success:
-            raise RuntimeError("tracker.record_success boom")
+            msg = "tracker.record_success boom"
+            raise RuntimeError(msg)
         self.successes.append((job_id, doc_id))
 
     async def record_failure(
@@ -55,7 +56,8 @@ class _FakeTracker:
         stage: str,
     ) -> None:
         if stage in self._fail_failure_stages:
-            raise RuntimeError("tracker.record_failure boom")
+            msg = "tracker.record_failure boom"
+            raise RuntimeError(msg)
         self.failures.append((job_id, doc_id, source_id, error, stage))
 
 
@@ -82,7 +84,8 @@ class _StubPublisher(JobDocumentsPublisher):
 
     async def _load_document(self, source: Any) -> Any:
         if source in self._fail_load_for:
-            raise RuntimeError(f"load boom for {source}")
+            msg = f"load boom for {source}"
+            raise RuntimeError(msg)
         return {"src": source}
 
     async def _register_document(self, job_id: str, doc_data: Any) -> str:

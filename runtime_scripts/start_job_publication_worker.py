@@ -83,13 +83,13 @@ def describe_config(
 def _load_publisher_factory(factory_path: str) -> DocumentsPublisherFactoryFunc:
     """Import a publisher factory from ``module.path:func_name``."""
     if ":" not in factory_path:
-        raise ValueError(
-            f"Publisher factory must be module.path:func_name, got: {factory_path}"
-        )
+        msg = f"Publisher factory must be module.path:func_name, got: {factory_path}"
+        raise ValueError(msg)
     module_path, func_name = factory_path.rsplit(":", 1)
     mod = importlib.import_module(module_path)
     if not hasattr(mod, func_name):
-        raise AttributeError(f"Module {module_path} has no attribute '{func_name}'")
+        msg = f"Module {module_path} has no attribute '{func_name}'"
+        raise AttributeError(msg)
     return getattr(mod, func_name)
 
 
@@ -124,9 +124,8 @@ async def start_job_publication_worker(
     try:
         pub_factory_func = _load_publisher_factory(publisher_factory)
     except Exception as e:
-        raise WarrenError(
-            f"Unable to load publisher factory: {publisher_factory}"
-        ) from e
+        msg = f"Unable to load publisher factory: {publisher_factory}"
+        raise WarrenError(msg) from e
 
     resolved_config = (
         Path(config_file) if config_file else Path("./pipeline/config.yaml")

@@ -38,11 +38,11 @@ def _default_source_generator(data: dict) -> AsyncIterable:
     """
     items = data.get("items")
     if items is None:
-        raise ValueError("Job message data has no 'items' field")
+        msg = "Job message data has no 'items' field"
+        raise ValueError(msg)
     if not hasattr(items, "__iter__"):
-        raise ValueError(
-            f"Job message data 'items' is not iterable: {type(items).__name__}"
-        )
+        msg = f"Job message data 'items' is not iterable: {type(items).__name__}"
+        raise ValueError(msg)
     return _items_as_async_iterable(items)
 
 
@@ -108,18 +108,18 @@ class JobPublicationWorker(FilteringWorkerBase):
 
         data: dict | None = message.get("data")
         if data is None:
-            raise HardFailureException(
-                f"Job {job_id}: message has no valid 'data' field"
-            )
+            msg = f"Job {job_id}: message has no valid 'data' field"
+            raise HardFailureException(msg)
 
         try:
             sources = self._create_source_generator(data)
         except Exception as e:
             data_repr = str(data)[:_MAX_DATA_REPR_LENGTH]
-            raise HardFailureException(
+            msg = (
                 f"Job {job_id}: failed to create source generator. "
                 f"Data: {data_repr} ..."
-            ) from e
+            )
+            raise HardFailureException(msg) from e
 
         job_parameters: dict = message.get("job_parameters") or {}
 

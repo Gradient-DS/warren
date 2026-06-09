@@ -143,7 +143,7 @@ class CacheInterface(Protocol[T]):
         ...
 
 
-async def get_or_set(
+async def get_or_set[T](
     cache: CacheInterface[T],
     key: str,
     factory: Callable[[], Awaitable[T]],

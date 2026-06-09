@@ -77,11 +77,12 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         if not await self._document_store.has_unique_index(
             ("doc_id", "job_id", "part_idx")
         ):
-            raise ValueError(
+            msg = (
                 "Document store must have a unique composite index on "
                 "(doc_id, job_id, part_idx). Without this index, duplicate "
                 "results may be created."
             )
+            raise ValueError(msg)
 
     async def store(
         self,
@@ -154,10 +155,11 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
             await self._cache_set(doc_id, normalized_part_idx, job_id, doc)
             return self._dict_to_result_doc(doc)
 
-        raise ResultNotFound(
+        msg = (
             f"Result not found for doc_id={doc_id}, part_idx={normalized_part_idx}, "
             f"job_id={job_id}"
         )
+        raise ResultNotFound(msg)
 
     async def stream_doc_processing_results(
         self,
@@ -195,9 +197,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
             yield self._dict_to_result_doc(doc)
 
         if not results_found:
-            raise DocumentProcessingResultsNotFound(
-                f"No results found for doc_id={doc_id}, job_id={job_id}"
-            )
+            msg = f"No results found for doc_id={doc_id}, job_id={job_id}"
+            raise DocumentProcessingResultsNotFound(msg)
 
     def _add_result_id(self, doc: dict) -> dict:
         """Add result_id to doc from the store's doc_id_field if not already present."""

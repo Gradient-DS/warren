@@ -36,9 +36,8 @@ async def declare_exchange(
             durable=config.durable,
         )
     except Exception as e:
-        raise PubSubSetupError(
-            f"Failed to declare exchange '{config.name}' (type={config.type})"
-        ) from e
+        msg = f"Failed to declare exchange '{config.name}' (type={config.type})"
+        raise PubSubSetupError(msg) from e
 
 
 async def declare_queue(
@@ -53,7 +52,8 @@ async def declare_queue(
     :raises PubSubSetupError: if the broker rejects the declaration or bind.
     """
     if config.routing_key and exchange_type == "fanout":
-        raise ValueError("Non-empty routing key is not supported for fanout exchanges.")
+        msg = "Non-empty routing key is not supported for fanout exchanges."
+        raise ValueError(msg)
 
     try:
         queue = await channel.declare_queue(
@@ -64,9 +64,10 @@ async def declare_queue(
         )
         await queue.bind(exchange.name, routing_key=config.routing_key or "")
     except Exception as e:
-        raise PubSubSetupError(
+        msg = (
             f"Failed to declare queue '{config.name}' bound to exchange "
             f"'{exchange.name}' (routing_key='{config.routing_key or ''}')"
-        ) from e
+        )
+        raise PubSubSetupError(msg) from e
 
     return queue

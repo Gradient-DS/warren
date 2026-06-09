@@ -22,7 +22,8 @@ def test_retries_transient_until_success() -> None:
     async def op() -> str:
         calls["n"] += 1
         if calls["n"] < 3:
-            raise TransientStoreError("blip")
+            msg = "blip"
+            raise TransientStoreError(msg)
         return "ok"
 
     result = asyncio.run(
@@ -44,7 +45,8 @@ def test_raises_after_exhausting_attempts() -> None:
 
     async def op() -> str:
         calls["n"] += 1
-        raise TransientStoreError("always")
+        msg = "always"
+        raise TransientStoreError(msg)
 
     raised = False
     try:
@@ -61,7 +63,8 @@ def test_permanent_error_propagates_immediately() -> None:
 
     async def op() -> str:
         calls["n"] += 1
-        raise ValueError("permanent")
+        msg = "permanent"
+        raise ValueError(msg)
 
     raised = False
     try:

@@ -29,9 +29,8 @@ class BasePublisher(Base, PublisherInterface, metaclass=ABCMeta):
         has_route_func = route_func is not None
 
         if has_static and has_route_func:
-            raise ValueError(
-                "Cannot specify both 'route' and 'route_func'. Use one or the other."
-            )
+            msg = "Cannot specify both 'route' and 'route_func'. Use one or the other."
+            raise ValueError(msg)
 
         self._route = route
         self._route_func = route_func

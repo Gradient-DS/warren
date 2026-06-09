@@ -145,7 +145,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
 
             values = await self._client.mget(keys)
             result: dict[str, T] = {}
-            for full_key, data in zip(keys, values):
+            for full_key, data in zip(keys, values, strict=False):
                 if data is not None:
                     result[self._strip_base_key(full_key)] = self._deserialize(data)
 

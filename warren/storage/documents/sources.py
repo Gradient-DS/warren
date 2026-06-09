@@ -30,11 +30,13 @@ def discover_local_pdfs(pdf_dir: Path, max_docs: int = 0) -> Sequence[Path]:
     :raises ValueError: if no PDFs are found.
     """
     if not pdf_dir.is_dir():
-        raise FileNotFoundError(f"PDF directory not found: {pdf_dir}")
+        msg = f"PDF directory not found: {pdf_dir}"
+        raise FileNotFoundError(msg)
 
     pdfs = sorted(pdf_dir.glob("*.pdf"))
     if not pdfs:
-        raise ValueError(f"No PDF files found in {pdf_dir}")
+        msg = f"No PDF files found in {pdf_dir}"
+        raise ValueError(msg)
 
     if max_docs > 0:
         pdfs = pdfs[:max_docs]
@@ -61,8 +63,9 @@ def discover_gcs_pdfs(
     try:
         from google.cloud import storage
     except ImportError as e:
+        msg = "google-cloud-storage"
         raise OptionalDependencyError(
-            "google-cloud-storage",
+            msg,
             install_hint="pip install google-cloud-storage",
         ) from e
 
@@ -71,7 +74,8 @@ def discover_gcs_pdfs(
     keys = sorted(blob.name for blob in blobs if blob.name.lower().endswith(".pdf"))
 
     if not keys:
-        raise ValueError(f"No PDF objects found in gs://{bucket_name}/{prefix}")
+        msg = f"No PDF objects found in gs://{bucket_name}/{prefix}"
+        raise ValueError(msg)
 
     if max_docs > 0:
         keys = keys[:max_docs]

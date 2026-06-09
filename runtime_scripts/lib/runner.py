@@ -13,13 +13,13 @@ from pathlib import Path
 
 from basics.logging import get_logger
 
+from document_processing.distributed.runtime_scripts.lib.pipeline import (
+    load_config,
+)
 from document_processing.distributed.warren.exceptions import WarrenError
 from document_processing.distributed.warren.runtime.config import RuntimeConfig
 from document_processing.distributed.warren.workers.runners import WorkerRunnerBase
 
-from document_processing.distributed.runtime_scripts.lib.pipeline import (
-    load_config,
-)
 
 module_logger: logging.Logger = get_logger(__name__)
 
@@ -57,36 +57,30 @@ async def run(
     try:
         config = load_config(config_file)
     except Exception as e:
-        raise WarrenError(
-            f"Unable to load config from: {config_file}"
-        ) from e
+        msg = f"Unable to load config from: {config_file}"
+        raise WarrenError(msg) from e
 
     log.info(f"Loaded config from: {config_file}")
 
-    resolved_worker_name = (
-        worker_name or f"{worker_name_prefix}-{uuid.uuid4().hex[:8]}"
-    )
+    resolved_worker_name = worker_name or f"{worker_name_prefix}-{uuid.uuid4().hex[:8]}"
 
     try:
         runner = runner_factory_func(config, resolved_worker_name)
     except Exception as e:
-        raise WarrenError(
-            f"Unable to create runner for: {resolved_worker_name}"
-        ) from e
+        msg = f"Unable to create runner for: {resolved_worker_name}"
+        raise WarrenError(msg) from e
 
     try:
         try:
             await runner.setup()
         except Exception as e:
-            raise WarrenError(
-                f"Worker setup failed for: {resolved_worker_name}"
-            ) from e
+            msg = f"Worker setup failed for: {resolved_worker_name}"
+            raise WarrenError(msg) from e
 
         try:
             await runner.run()
         except Exception as e:
-            raise WarrenError(
-                f"Worker run failed for: {resolved_worker_name}"
-            ) from e
+            msg = f"Worker run failed for: {resolved_worker_name}"
+            raise WarrenError(msg) from e
     finally:
         await runner.teardown()

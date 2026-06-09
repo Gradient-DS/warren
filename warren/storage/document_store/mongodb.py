@@ -18,7 +18,7 @@ from document_processing.distributed.warren.storage.document_store.interface imp
 
 
 # Type alias for MongoDB document IDs (either ObjectId or string)
-DocId = Union[ObjectId, str]
+DocId = Union[ObjectId, str]  # noqa: UP007  # runtime type alias
 
 
 class MongoDBDocumentStore(Base, DocumentStoreInterface):
@@ -109,10 +109,11 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
             try:
                 await self._collection.insert_one(doc_copy)
             except DuplicateKeyError as e:
-                raise DocumentAlreadyExistsError(
+                msg = (
                     f"Document with id '{self._normalize_doc_id(doc_copy[self._doc_id_field])}' "
                     "already exists"
-                ) from e
+                )
+                raise DocumentAlreadyExistsError(msg) from e
 
         return self._normalize_doc_id(doc_copy[self._doc_id_field])
 
@@ -133,7 +134,8 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         query = {self._doc_id_field: self._denormalize_doc_id(doc_id)}
         result = await self._collection.update_one(query, {"$set": updates})
         if result.matched_count == 0:
-            raise DocumentNotFoundError(f"Document with id '{doc_id}' not found")
+            msg = f"Document with id '{doc_id}' not found"
+            raise DocumentNotFoundError(msg)
 
     async def exists(
         self,
@@ -187,7 +189,8 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         query = {self._doc_id_field: self._denormalize_doc_id(doc_id)}
         doc = await self._collection.find_one(query)
         if doc is None:
-            raise DocumentNotFoundError(f"Document with id '{doc_id}' not found")
+            msg = f"Document with id '{doc_id}' not found"
+            raise DocumentNotFoundError(msg)
         return self._prepare_doc_for_return(doc)
 
     async def query(
@@ -278,9 +281,8 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         :raises RuntimeError: If no unique indexes are configured.
         """
         if not self._unique_indexes:
-            raise RuntimeError(
-                "Cannot upsert by unique index: no unique_indexes configured"
-            )
+            msg = "Cannot upsert by unique index: no unique_indexes configured"
+            raise RuntimeError(msg)
 
         upsert_fields = self._unique_indexes[0]
         if isinstance(upsert_fields, str):
@@ -329,11 +331,13 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         :raises ValueError: If doc_id is None, empty, or invalid format.
         """
         if doc_id is None or doc_id == "":
-            raise ValueError("doc_id cannot be None or empty")
+            msg = "doc_id cannot be None or empty"
+            raise ValueError(msg)
 
         if self._doc_id_field == "_id":
             if not ObjectId.is_valid(doc_id):
-                raise ValueError(f"Invalid ObjectId format: '{doc_id}'")
+                msg = f"Invalid ObjectId format: '{doc_id}'"
+                raise ValueError(msg)
             return ObjectId(doc_id)
 
         return doc_id

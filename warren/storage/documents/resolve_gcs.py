@@ -43,7 +43,8 @@ async def resolve_gcs(
     try:
         return await asyncio.to_thread(blob.download_as_bytes)
     except NotFound as e:
-        raise DocumentNotFoundError(
+        msg = (
             f"Document not found in GCS: "
             f"gs://{cloud_location.bucket}/{cloud_location.key}"
-        ) from e
+        )
+        raise DocumentNotFoundError(msg) from e

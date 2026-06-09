@@ -95,8 +95,9 @@ class CachedDocumentFetcher(Base):
         location_type = document_location.location_type
         resolver = self._resolvers.get(location_type)
         if resolver is None:
+            msg = f"No resolver registered for location type: '{location_type}'"
             raise UnknownLocationTypeError(
-                f"No resolver registered for location type: '{location_type}'",
+                msg,
                 doc_id=doc_id,
             )
 
@@ -105,9 +106,12 @@ class CachedDocumentFetcher(Base):
         except DocumentResolutionError:
             raise
         except Exception as e:
-            raise DocumentResolutionError(
+            msg = (
                 f"Failed to resolve document '{doc_id}' "
-                f"from {location_type} location: {e}",
+                f"from {location_type} location: {e}"
+            )
+            raise DocumentResolutionError(
+                msg,
                 doc_id=doc_id,
             ) from e
 

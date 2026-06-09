@@ -69,16 +69,23 @@ class RetryWorker(AsyncProcessingWorkerBase):
 
         doc_id_field = retry_store.get_doc_id_field()
         if doc_id_field != self.REQUIRED_DOC_ID_FIELD:
-            raise ValueError(
+            msg = (
                 f"retry_store doc_id_field must be "
                 f"'{self.REQUIRED_DOC_ID_FIELD}', "
                 f"got '{doc_id_field}'"
             )
+            raise ValueError(msg)
 
         self._retry_store = retry_store
         self._republish_publisher = republish_publisher
         self._message_key_func = message_key_func or self._default_message_key
         self._pending_timers: dict[str, asyncio.TimerHandle] = {}
+
+        # Strong references to in-flight republish tasks. Without this,
+        # asyncio only holds a weak reference to a bare create_task()
+        # result, so the task can be garbage-collected mid-flight. Tasks
+        # remove themselves on completion via add_done_callback.
+        self._republish_tasks: set[asyncio.Task[None]] = set()
 
         # Monotonic generation counter per retry key. Incremented each
         # time __call__ stores a new envelope for the same key. Passed
@@ -176,7 +183,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
                 continue
 
             if fire_at <= now:
-                asyncio.create_task(self._republish(retry_key))
+                self._spawn_republish(retry_key)
                 immediate_count += 1
             else:
                 remaining = fire_at - now
@@ -243,7 +250,21 @@ class RetryWorker(AsyncProcessingWorkerBase):
         """Synchronous callback for ``call_later`` -- creates async
         republish task."""
         self._pending_timers.pop(retry_key, None)
-        asyncio.create_task(self._republish(retry_key, expected_generation))
+        self._spawn_republish(retry_key, expected_generation)
+
+    def _spawn_republish(
+        self,
+        retry_key: str,
+        expected_generation: int | None = None,
+    ) -> None:
+        """Create a tracked ``_republish`` task.
+
+        Keeps a strong reference in ``_republish_tasks`` until the task
+        completes so the event loop cannot collect it mid-flight.
+        """
+        task = asyncio.create_task(self._republish(retry_key, expected_generation))
+        self._republish_tasks.add(task)
+        task.add_done_callback(self._republish_tasks.discard)
 
     async def _republish(
         self,

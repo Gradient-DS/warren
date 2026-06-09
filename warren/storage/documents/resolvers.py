@@ -56,4 +56,5 @@ async def resolve_path(
     try:
         return await asyncio.to_thread(path.read_bytes)
     except FileNotFoundError as e:
-        raise DocumentNotFoundError(f"Document not found at path: {path}") from e
+        msg = f"Document not found at path: {path}"
+        raise DocumentNotFoundError(msg) from e

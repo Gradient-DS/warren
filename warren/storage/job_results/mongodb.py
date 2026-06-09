@@ -1,10 +1,11 @@
 """MongoDB implementation of JobResultsStoreInterface."""
 
+from typing import TYPE_CHECKING
+
 from datetime import UTC, datetime
 
 from basics.base import Base
 from pymongo import ASCENDING, AsyncMongoClient
-from pymongo.asynchronous.collection import AsyncCollection
 
 from document_processing.distributed.warren.storage.job_results.interface import (
     JobResultsStoreInterface,
@@ -12,6 +13,10 @@ from document_processing.distributed.warren.storage.job_results.interface import
 from document_processing.distributed.warren.storage.mongo_errors import (
     classify_transient_methods,
 )
+
+
+if TYPE_CHECKING:
+    from pymongo.asynchronous.collection import AsyncCollection
 
 
 @classify_transient_methods

@@ -114,13 +114,13 @@ def _load_runner_class(runner_path: str) -> type:
     :raises AttributeError: if the class is not found in the module.
     """
     if ":" not in runner_path:
-        raise ValueError(
-            f"Runner path must be module.path:ClassName, got: {runner_path}"
-        )
+        msg = f"Runner path must be module.path:ClassName, got: {runner_path}"
+        raise ValueError(msg)
     module_path, class_name = runner_path.rsplit(":", 1)
     mod = importlib.import_module(module_path)
     if not hasattr(mod, class_name):
-        raise AttributeError(f"Module {module_path} has no attribute '{class_name}'")
+        msg = f"Module {module_path} has no attribute '{class_name}'"
+        raise AttributeError(msg)
     return getattr(mod, class_name)
 
 
@@ -192,7 +192,8 @@ async def start_worker(
     try:
         pipeline, pipeline_dir = load_pipeline(spec_str, log)
     except Exception as e:
-        raise WarrenError(f"Unable to load pipeline spec from: {spec_str}") from e
+        msg = f"Unable to load pipeline spec from: {spec_str}"
+        raise WarrenError(msg) from e
 
     if list_workers:
         worker_names = "\n  ".join(pipeline.workers.keys())
@@ -201,24 +202,25 @@ async def start_worker(
 
     if worker_type not in pipeline.workers:
         valid_types = ", ".join(pipeline.workers.keys())
-        raise WarrenError(
-            f"Unknown worker type '{worker_type}'. Valid types: {valid_types}"
-        )
+        msg = f"Unknown worker type '{worker_type}'. Valid types: {valid_types}"
+        raise WarrenError(msg)
 
     runner_class = DefaultWorkerRunner
     if runner is not None:
         try:
             runner_class = _load_runner_class(runner)
         except Exception as e:
-            raise WarrenError(f"Unable to load runner class: {runner}") from e
+            msg = f"Unable to load runner class: {runner}"
+            raise WarrenError(msg) from e
 
     try:
         resolved_config_path = resolve_config_path(config_file, pipeline_dir)
     except Exception as e:
-        raise WarrenError(
+        msg = (
             f"Unable to resolve config path from: "
             f"config_file={config_file}, pipeline_dir={pipeline_dir}"
-        ) from e
+        )
+        raise WarrenError(msg) from e
 
     runner_factory_func = partial(
         runner_class,

@@ -21,7 +21,7 @@ from document_processing.distributed.warren.storage.exceptions import (
 R = TypeVar("R")
 
 
-async def run_with_transient_retry(
+async def run_with_transient_retry[R](
     operation: Callable[[], Awaitable[R]],
     *,
     attempts: int = 5,
@@ -64,6 +64,5 @@ async def run_with_transient_retry(
             delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
             await asyncio.sleep(delay)
 
-    raise TransientStoreError(
-        f"run_with_transient_retry requires attempts >= 1, got {attempts}"
-    )
+    msg = f"run_with_transient_retry requires attempts >= 1, got {attempts}"
+    raise TransientStoreError(msg)

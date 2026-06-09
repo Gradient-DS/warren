@@ -96,10 +96,11 @@ class BinaryResultsStore(Base):
         if not await self._document_store.has_unique_index(
             ("doc_id", "job_id", "part_idx")
         ):
-            raise ValueError(
+            msg = (
                 "Document store must have a unique composite index on "
                 "(doc_id, job_id, part_idx)."
             )
+            raise ValueError(msg)
 
     async def store_bytes(
         self,
@@ -156,18 +157,20 @@ class BinaryResultsStore(Base):
         ):
             payload = found.get(_PAYLOAD_FIELD)
             if not isinstance(payload, (bytes, bytearray)):
-                raise ResultNotFound(
+                msg = (
                     f"Stored record for doc_id={doc_id}, job_id={job_id}, "
                     f"part_idx={part_idx} has no {_PAYLOAD_FIELD!r} bytes."
                 )
+                raise ResultNotFound(msg)
             payload_bytes = bytes(payload)
             await self._safe_cache_set(doc_id, payload_bytes)
             return payload_bytes
 
-        raise ResultNotFound(
+        msg = (
             f"No binary result for doc_id={doc_id}, job_id={job_id}, "
             f"part_idx={part_idx}."
         )
+        raise ResultNotFound(msg)
 
     async def query_metadata(
         self,

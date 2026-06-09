@@ -9,7 +9,7 @@ from document_processing.distributed.warren.storage.exceptions import (
 
 
 # Type alias for index specification (single field or composite)
-IndexSpec = Union[str, tuple[str, ...]]
+IndexSpec = Union[str, tuple[str, ...]]  # noqa: UP007  # runtime type alias
 
 
 class DocumentNotFoundError(ResourceNotFoundError):

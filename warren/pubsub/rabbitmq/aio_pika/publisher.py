@@ -2,12 +2,11 @@
 RabbitMQ publisher implementation.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import json
 
 import aio_pika
-from aio_pika.abc import AbstractChannel, AbstractExchange
 from basics.logging_utils import summarize_exception_chain
 
 from document_processing.distributed.warren.pubsub.base import BasePublisher
@@ -26,6 +25,10 @@ from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.topology im
 from document_processing.distributed.warren.pubsub.rabbitmq.config import (
     RMQExchangeConfig,
 )
+
+
+if TYPE_CHECKING:
+    from aio_pika.abc import AbstractChannel, AbstractExchange
 
 
 class RMQPublisher(BasePublisher):
@@ -57,15 +60,16 @@ class RMQPublisher(BasePublisher):
         has_route_func = route_func is not None
 
         if has_static and has_route_func:
-            raise ValueError(
-                "Cannot specify both 'route' and 'route_func'. Use one or the other."
-            )
+            msg = "Cannot specify both 'route' and 'route_func'. Use one or the other."
+            raise ValueError(msg)
 
         if exchange_config.type == "topic" and not has_static and not has_route_func:
-            raise ValueError("Topic exchanges require a route or route_func.")
+            msg = "Topic exchanges require a route or route_func."
+            raise ValueError(msg)
 
         if exchange_config.type == "fanout" and has_static:
-            raise ValueError("Fanout exchanges do not use a routing key.")
+            msg = "Fanout exchanges do not use a routing key."
+            raise ValueError(msg)
 
         self._connection_manager = connection_manager
         self._exchange_config = exchange_config
@@ -91,10 +95,11 @@ class RMQPublisher(BasePublisher):
                 self._channel, self._exchange_config
             )
         except Exception as e:
-            raise PubSubSetupError(
+            msg = (
                 f"{self}: Publisher setup failed for exchange "
                 f"'{self._exchange_config.name}'"
-            ) from e
+            )
+            raise PubSubSetupError(msg) from e
 
     async def teardown(self) -> None:
         if self._channel is not None and not self._channel.is_closed:
@@ -107,7 +112,8 @@ class RMQPublisher(BasePublisher):
 
     async def __call__(self, message: dict[str, Any]) -> None:
         if self._channel is None:
-            raise RuntimeError("Must call setup() before publishing.")
+            msg = "Must call setup() before publishing."
+            raise RuntimeError(msg)
 
         body = json.dumps(message).encode()
         amqp_message = aio_pika.Message(
@@ -137,7 +143,8 @@ class RMQPublisher(BasePublisher):
     ) -> None:
         """Publish to a specific exchange with a routing key. If no routing key is provided (fan-out), RMQ requires passing an empty string (which is ignored in fanout exchanges)."""
         if self._exchange is None:
-            raise RuntimeError("Must call setup() before publishing.")
+            msg = "Must call setup() before publishing."
+            raise RuntimeError(msg)
 
         try:
             if routing_key is None:
@@ -145,7 +152,8 @@ class RMQPublisher(BasePublisher):
             else:
                 await self._exchange.publish(amqp_message, routing_key=routing_key)
         except Exception as e:
-            raise PublishFailureException(
+            msg = (
                 f"Failed to publish to exchange '{self._exchange}' "
                 f"with routing key '{routing_key}': {e}"
-            ) from e
+            )
+            raise PublishFailureException(msg) from e

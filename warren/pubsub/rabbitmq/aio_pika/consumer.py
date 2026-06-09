@@ -104,17 +104,19 @@ class RMQConsumerManager(ConsumerManagerBase):
         try:
             channel = await self._connection_manager.create_channel()
         except Exception as e:
-            raise PubSubSetupError("Failed to create consumer channel") from e
+            msg = "Failed to create consumer channel"
+            raise PubSubSetupError(msg) from e
         self._channel = channel
 
         try:
             # TODO: Couple this to the worker's concurrency level?
             await channel.set_qos(prefetch_count=self._config.consumer.prefetch_count)
         except Exception as e:
-            raise PubSubSetupError(
+            msg = (
                 f"Failed to set consumer QoS "
                 f"(prefetch_count={self._config.consumer.prefetch_count})"
-            ) from e
+            )
+            raise PubSubSetupError(msg) from e
 
         # declare_exchange / declare_queue self-contextualise (exchange/queue
         # identity), so they are left unwrapped.
@@ -138,7 +140,8 @@ class RMQConsumerManager(ConsumerManagerBase):
         up to prefetch_count limit.
         """
         if self._queue is None:
-            raise RuntimeError("Must call setup() before start_consuming()")
+            msg = "Must call setup() before start_consuming()"
+            raise RuntimeError(msg)
 
         self._consumer_tag = await self._queue.consume(
             self._on_message,

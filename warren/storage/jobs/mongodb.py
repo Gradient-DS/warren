@@ -1,11 +1,12 @@
 """MongoDB implementation of JobStoreInterface."""
 
+from typing import TYPE_CHECKING
+
 import uuid
 from datetime import UTC, datetime
 
 from basics.base import Base
 from pymongo import AsyncMongoClient
-from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.errors import DuplicateKeyError
 
 from document_processing.distributed.warren.storage.jobs.interface import (
@@ -16,6 +17,10 @@ from document_processing.distributed.warren.storage.jobs.interface import (
 from document_processing.distributed.warren.storage.mongo_errors import (
     classify_transient_methods,
 )
+
+
+if TYPE_CHECKING:
+    from pymongo.asynchronous.collection import AsyncCollection
 
 
 @classify_transient_methods
@@ -73,15 +78,15 @@ class MongoDBJobStore(Base, JobStoreInterface):
         try:
             await self._collection.insert_one(doc)
         except DuplicateKeyError as e:
-            raise JobCreationFailedError(
-                f"Failed to create job '{job_id}': duplicate key"
-            ) from e
+            msg = f"Failed to create job '{job_id}': duplicate key"
+            raise JobCreationFailedError(msg) from e
         return job_id
 
     async def get_job(self, job_id: str) -> dict:
         doc = await self._collection.find_one({"job_id": job_id})
         if doc is None:
-            raise JobNotFoundError(f"Job '{job_id}' not found")
+            msg = f"Job '{job_id}' not found"
+            raise JobNotFoundError(msg)
         doc.pop("_id", None)
         return doc
 
@@ -100,7 +105,8 @@ class MongoDBJobStore(Base, JobStoreInterface):
             },
         )
         if result.matched_count == 0:
-            raise JobNotFoundError(f"Job '{job_id}' not found")
+            msg = f"Job '{job_id}' not found"
+            raise JobNotFoundError(msg)
 
     async def increment_num_documents(
         self,
@@ -116,7 +122,8 @@ class MongoDBJobStore(Base, JobStoreInterface):
             return_document=True,
         )
         if result is None:
-            raise JobNotFoundError(f"Job '{job_id}' not found")
+            msg = f"Job '{job_id}' not found"
+            raise JobNotFoundError(msg)
         return result["num_documents"]
 
     async def update_completion(
@@ -139,7 +146,8 @@ class MongoDBJobStore(Base, JobStoreInterface):
             update,
         )
         if result.matched_count == 0:
-            raise JobNotFoundError(f"Job '{job_id}' not found")
+            msg = f"Job '{job_id}' not found"
+            raise JobNotFoundError(msg)
 
     async def get_status(self, job_id: str) -> dict:
         doc = await self._collection.find_one(
@@ -147,7 +155,8 @@ class MongoDBJobStore(Base, JobStoreInterface):
             projection={"status": 1, "_id": 0},
         )
         if doc is None:
-            raise JobNotFoundError(f"Job '{job_id}' not found")
+            msg = f"Job '{job_id}' not found"
+            raise JobNotFoundError(msg)
         return doc["status"]
 
     async def update_vector_db_state(
@@ -165,7 +174,8 @@ class MongoDBJobStore(Base, JobStoreInterface):
             {"$set": set_fields},
         )
         if result.matched_count == 0:
-            raise JobNotFoundError(f"Job '{job_id}' not found")
+            msg = f"Job '{job_id}' not found"
+            raise JobNotFoundError(msg)
 
     def _generate_job_id(self) -> str:
         """Generate a unique job ID with date prefix.

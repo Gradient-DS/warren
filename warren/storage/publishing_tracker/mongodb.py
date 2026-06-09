@@ -1,14 +1,19 @@
 """MongoDB implementation of PublishingTrackerInterface."""
 
+from typing import TYPE_CHECKING
+
 from datetime import UTC, datetime
 
 from basics.base import Base
 from pymongo import ASCENDING, AsyncMongoClient
-from pymongo.asynchronous.collection import AsyncCollection
 
 from document_processing.distributed.warren.storage.publishing_tracker.interface import (
     PublishingTrackerInterface,
 )
+
+
+if TYPE_CHECKING:
+    from pymongo.asynchronous.collection import AsyncCollection
 
 
 class MongoDBPublishingTracker(Base, PublishingTrackerInterface):

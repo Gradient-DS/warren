@@ -217,7 +217,7 @@ class SyncMessageConsumerInterface(MessageConsumerIdentity, Protocol):
         ...
 
 
-MessageConsumerInterface = Union[
+MessageConsumerInterface = Union[  # noqa: UP007  # runtime type alias; keep explicit Union
     AsyncMessageConsumerInterface,
     SyncMessageConsumerInterface,
 ]

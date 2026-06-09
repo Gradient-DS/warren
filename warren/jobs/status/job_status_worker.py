@@ -11,21 +11,19 @@ Message classification:
 - Any other with valid ``job_id`` → record success
 """
 
-from typing import Optional, Dict
-
 from basics.logging_utils import summarize_exception_chain
 
 from document_processing.distributed.warren.storage.exceptions import (
     TransientStoreError,
 )
-from document_processing.distributed.warren.storage.retry import (
-    run_with_transient_retry,
+from document_processing.distributed.warren.storage.job_results.interface import (
+    JobResultsStoreInterface,
 )
 from document_processing.distributed.warren.storage.jobs.interface import (
     JobStoreInterface,
 )
-from document_processing.distributed.warren.storage.job_results.interface import (
-    JobResultsStoreInterface,
+from document_processing.distributed.warren.storage.retry import (
+    run_with_transient_retry,
 )
 from document_processing.distributed.warren.workers.workers import (
     FilteringWorkerBase,
@@ -54,7 +52,7 @@ class JobStatusWorker(FilteringWorkerBase):
         *,
         job_store: JobStoreInterface,
         job_results_store: JobResultsStoreInterface,
-        worker_type: Optional[str] = None,
+        worker_type: str | None = None,
         store_retry_attempts: int = 5,
         store_retry_base_delay: float = 1.0,
     ) -> None:
@@ -64,7 +62,7 @@ class JobStatusWorker(FilteringWorkerBase):
         self._store_retry_attempts = store_retry_attempts
         self._store_retry_base_delay = store_retry_base_delay
 
-    def should_process(self, message: Dict) -> bool:
+    def should_process(self, message: dict) -> bool:
         """Process everything with a job_id, except own completion
         signals and job publication triggers.
 
@@ -80,7 +78,7 @@ class JobStatusWorker(FilteringWorkerBase):
             return False
         return message.get("job_id") is not None
 
-    async def process(self, message: Dict) -> Optional[Dict]:
+    async def process(self, message: dict) -> dict | None:
         """Classify the message, record the result, and check completion.
 
         Store interactions run under a bounded local retry on
@@ -97,9 +95,7 @@ class JobStatusWorker(FilteringWorkerBase):
         job_id = message["job_id"]
 
         if not data_type:
-            self._log.error(
-                f"Message for job {job_id} has no data_type, skipping"
-            )
+            self._log.error(f"Message for job {job_id} has no data_type, skipping")
             return None
 
         try:
@@ -125,8 +121,8 @@ class JobStatusWorker(FilteringWorkerBase):
         self,
         data_type: str,
         job_id: str,
-        message: Dict,
-    ) -> Optional[Dict]:
+        message: dict,
+    ) -> dict | None:
         """Record the observation for ``message`` and check job completion.
 
         Store operations are idempotent (deterministic upserts keyed on
@@ -148,7 +144,7 @@ class JobStatusWorker(FilteringWorkerBase):
     async def _handle_success(
         self,
         job_id: str,
-        message: Dict,
+        message: dict,
     ) -> None:
         origin = message.get("origin", {})
         doc_id = message.get("data", {}).get("doc_id")
@@ -171,8 +167,8 @@ class JobStatusWorker(FilteringWorkerBase):
     async def _handle_soft_failure(
         self,
         job_id: str,
-        inner: Dict,
-        envelope: Dict,
+        inner: dict,
+        envelope: dict,
     ) -> None:
         """Record a soft failure from the inner message and envelope."""
         inner_origin = inner.get("origin", {})
@@ -202,8 +198,8 @@ class JobStatusWorker(FilteringWorkerBase):
     async def _handle_hard_failure(
         self,
         job_id: str,
-        inner: Dict,
-        envelope: Dict,
+        inner: dict,
+        envelope: dict,
     ) -> None:
         """Record a hard failure from the inner message and envelope."""
         inner_origin = inner.get("origin", {})
@@ -228,7 +224,7 @@ class JobStatusWorker(FilteringWorkerBase):
             error=envelope.get("error", ""),
         )
 
-    async def _check_completion(self, job_id: str) -> Optional[Dict]:
+    async def _check_completion(self, job_id: str) -> dict | None:
         """Check if a job is complete and return a completion signal if so."""
         job = await self._job_store.get_job(job_id)
 
@@ -244,9 +240,7 @@ class JobStatusWorker(FilteringWorkerBase):
         completed_count = await self._job_results_store.count_completed_docs(
             job_id, final_data_type
         )
-        hard_failed_count = await self._job_results_store.count_hard_failed_docs(
-            job_id
-        )
+        hard_failed_count = await self._job_results_store.count_hard_failed_docs(job_id)
         total_resolved = completed_count + hard_failed_count
 
         if total_resolved < num_documents:

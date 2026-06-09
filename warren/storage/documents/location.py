@@ -12,7 +12,7 @@ Deserialization from a dict uses the ``location_type`` discriminator::
     location = adapter.validate_python({"location_type": "path", "relative_path": "data/test.pdf"})
 """
 
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -61,11 +61,11 @@ class DocumentCloudLocation(DocumentLocation):
     provider: Literal["s3", "gcs"]
     bucket: str
     key: str
-    region: Optional[str] = None
+    region: str | None = None
 
 
 AnyDocumentLocation = Annotated[
-    Union[DocumentPathLocation, DocumentURLLocation, DocumentCloudLocation],
+    DocumentPathLocation | DocumentURLLocation | DocumentCloudLocation,
     Field(discriminator="location_type"),
 ]
 """Discriminated union type for deserializing any DocumentLocation from a dict."""

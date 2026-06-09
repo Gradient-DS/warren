@@ -8,7 +8,7 @@ querying granular per-document outcomes, rather than managing job
 definitions and high-level status.
 """
 
-from typing import Protocol, Optional, List, Dict
+from typing import Protocol
 
 
 class JobResultsStoreInterface(Protocol):
@@ -112,7 +112,7 @@ class JobResultsStoreInterface(Protocol):
 
     # --- Queries ---
 
-    async def get_stage_counts(self, job_id: str) -> List[Dict]:
+    async def get_stage_counts(self, job_id: str) -> list[dict]:
         """Get per-stage counts for progress display.
 
         :return: List of dicts, each containing:
@@ -124,7 +124,7 @@ class JobResultsStoreInterface(Protocol):
         self,
         job_id: str,
         doc_id: str,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """Get all stage records for a specific document.
 
         :return: List of status records across all stages.
@@ -134,8 +134,8 @@ class JobResultsStoreInterface(Protocol):
     async def get_failures(
         self,
         job_id: str,
-        data_type: Optional[str] = None,
-    ) -> List[Dict]:
+        data_type: str | None = None,
+    ) -> list[dict]:
         """Get all failure records for a job, optionally filtered by stage.
 
         :param data_type: If provided, only return failures for this
@@ -147,8 +147,8 @@ class JobResultsStoreInterface(Protocol):
     async def get_unique_errors(
         self,
         job_id: str,
-        data_type: Optional[str] = None,
-    ) -> List[Dict]:
+        data_type: str | None = None,
+    ) -> list[dict]:
         """Get deduplicated error messages with occurrence counts.
 
         Groups identical errors so operators see aggregated counts

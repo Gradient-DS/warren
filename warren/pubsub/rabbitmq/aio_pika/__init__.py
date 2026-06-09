@@ -22,6 +22,7 @@ from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.topology im
     declare_queue,
 )
 
+
 __all__ = [
     "RMQConnectionManager",
     "RMQConsumerManager",

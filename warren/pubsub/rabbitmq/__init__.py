@@ -29,11 +29,12 @@ from document_processing.distributed.warren.pubsub.rabbitmq.config import (
     RMQQueueConfig,
 )
 
+
 __all__ = [
-    "RetryConfig",
     "RMQConnectionConfig",
     "RMQConsumerConfig",
     "RMQConsumerManagerConfig",
     "RMQExchangeConfig",
     "RMQQueueConfig",
+    "RetryConfig",
 ]

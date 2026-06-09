@@ -5,20 +5,18 @@ Framework-level utility for cleaning up RabbitMQ state between runs.
 Queue/exchange names are caller-provided — no hardcoded topology knowledge.
 """
 
-from typing import Awaitable, Callable
-
 import logging
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 
 from aio_pika.abc import AbstractChannel
 from aio_pika.exceptions import ChannelNotFoundEntity
-
 from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
 
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
+
 
 module_logger: logging.Logger = get_logger(__name__)
 

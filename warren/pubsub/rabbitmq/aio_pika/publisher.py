@@ -2,31 +2,29 @@
 RabbitMQ publisher implementation.
 """
 
-from typing import Optional, Dict, Any
+from typing import Any
 
 import json
 
 import aio_pika
 from aio_pika.abc import AbstractChannel, AbstractExchange
-
 from basics.logging_utils import summarize_exception_chain
 
+from document_processing.distributed.warren.pubsub.base import BasePublisher
 from document_processing.distributed.warren.pubsub.common import (
-    Route,
-    RouteFunc,
     PublishFailureException,
     PubSubSetupError,
-)
-from document_processing.distributed.warren.pubsub.base import BasePublisher
-
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
-    RMQExchangeConfig,
+    Route,
+    RouteFunc,
 )
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.topology import (
     declare_exchange,
+)
+from document_processing.distributed.warren.pubsub.rabbitmq.config import (
+    RMQExchangeConfig,
 )
 
 
@@ -47,11 +45,11 @@ class RMQPublisher(BasePublisher):
         connection_manager: RMQConnectionManager,
         exchange_config: RMQExchangeConfig,
         *,
-        route: Optional[Route] = None,
-        route_func: Optional[RouteFunc] = None,
+        route: Route | None = None,
+        route_func: RouteFunc | None = None,
         delivery_mode: int = 2,
         content_type: str = "application/json",
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> None:
         super().__init__(route=route, route_func=route_func, name=name)
 
@@ -75,8 +73,8 @@ class RMQPublisher(BasePublisher):
         self._content_type = content_type
 
         # Instantiate channel after setup is called.
-        self._channel: Optional[AbstractChannel] = None
-        self._exchange: Optional[AbstractExchange] = None
+        self._channel: AbstractChannel | None = None
+        self._exchange: AbstractExchange | None = None
 
     async def setup(self) -> None:
         """Open a channel and declare the publisher's exchange.
@@ -107,7 +105,7 @@ class RMQPublisher(BasePublisher):
                     f"Error closing publisher channel: {summarize_exception_chain(e)}"
                 )
 
-    async def __call__(self, message: Dict[str, Any]) -> None:
+    async def __call__(self, message: dict[str, Any]) -> None:
         if self._channel is None:
             raise RuntimeError("Must call setup() before publishing.")
 
@@ -135,7 +133,7 @@ class RMQPublisher(BasePublisher):
         self,
         amqp_message: aio_pika.Message,
         *,
-        routing_key: Optional[str] = None,
+        routing_key: str | None = None,
     ) -> None:
         """Publish to a specific exchange with a routing key. If no routing key is provided (fan-out), RMQ requires passing an empty string (which is ignored in fanout exchanges)."""
         if self._exchange is None:

@@ -10,7 +10,7 @@ connections, declaring exchanges and queues — lives in
 ``connection.py``, ``topology.py``, ``consumer.py``, and ``publisher.py``.
 """
 
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, SecretStr
 
@@ -24,10 +24,10 @@ class RMQConnectionConfig(BaseModel):
     password: SecretStr = SecretStr("guest")
     virtualhost: str = "/"
     ssl: bool = False
-    ssl_options: Optional[Dict[str, Any]] = None
-    ssl_context: Optional[Any] = None  # ssl.SSLContext
-    timeout: Optional[float] = None
-    client_properties: Optional[Dict[str, Any]] = None
+    ssl_options: dict[str, Any] | None = None
+    ssl_context: Any | None = None  # ssl.SSLContext
+    timeout: float | None = None
+    client_properties: dict[str, Any] | None = None
 
 
 class RMQExchangeConfig(BaseModel):

@@ -8,16 +8,15 @@ delay. On startup, ``schedule_pending`` loads persisted messages and
 reschedules remaining delays.
 """
 
-from typing import Dict, Optional, Callable
-
 import asyncio
 import time
+from collections.abc import Callable
 
 from basics.logging_utils import summarize_exception_chain
 
 from document_processing.distributed.warren.pubsub.common import (
-    PublishFailureException,
     PublisherInterface,
+    PublishFailureException,
 )
 from document_processing.distributed.warren.storage.document_store.interface import (
     DocumentNotFoundError,
@@ -64,7 +63,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
         *,
         retry_store: DocumentStoreInterface,
         republish_publisher: PublisherInterface,
-        message_key_func: Optional[Callable[[Dict], str]] = None,
+        message_key_func: Callable[[dict], str] | None = None,
     ) -> None:
         super().__init__(worker_name)
 
@@ -79,7 +78,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
         self._retry_store = retry_store
         self._republish_publisher = republish_publisher
         self._message_key_func = message_key_func or self._default_message_key
-        self._pending_timers: Dict[str, asyncio.TimerHandle] = {}
+        self._pending_timers: dict[str, asyncio.TimerHandle] = {}
 
         # Monotonic generation counter per retry key. Incremented each
         # time __call__ stores a new envelope for the same key. Passed
@@ -89,7 +88,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
         # Integer comparison is immune to float-precision issues that
         # would affect comparing fire_at timestamps after a JSON/BSON
         # round-trip.
-        self._envelope_generation: Dict[str, int] = {}
+        self._envelope_generation: dict[str, int] = {}
 
         # Single lock serializing store mutations and republish for all
         # keys. Prevents the TOCTOU race where _republish (fetch →
@@ -108,7 +107,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
         # Upgrade to per-key if retry volume proves this a bottleneck.
         self._retry_lock: asyncio.Lock = asyncio.Lock()
 
-    async def __call__(self, message: Dict) -> Optional[Dict]:
+    async def __call__(self, message: dict) -> dict | None:
         """Unwrap soft-failure envelope, persist, and schedule.
 
         :param message: Soft-failure wrapper with
@@ -120,7 +119,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
         if message.get("data_type") != "soft-failure":
             return None
 
-        failed_message: Dict = message["data"]
+        failed_message: dict = message["data"]
         retry_info = failed_message.get("retry", {})
         retry_key = self._message_key_func(failed_message)
         delay_seconds = retry_info.get("after", 30)
@@ -209,7 +208,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
         self,
         retry_key: str,
         delay_seconds: float,
-        expected_generation: Optional[int] = None,
+        expected_generation: int | None = None,
     ) -> None:
         """Schedule a republish callback via ``asyncio.call_later``.
 
@@ -239,7 +238,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
     def _on_timer_fire(
         self,
         retry_key: str,
-        expected_generation: Optional[int],
+        expected_generation: int | None,
     ) -> None:
         """Synchronous callback for ``call_later`` -- creates async
         republish task."""
@@ -249,7 +248,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
     async def _republish(
         self,
         retry_key: str,
-        expected_generation: Optional[int] = None,
+        expected_generation: int | None = None,
     ) -> None:
         """Fetch message from store, republish, and delete from store.
 
@@ -307,7 +306,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
                 f"(attempt {retry_info.get('count', '?')})"
             )
 
-    def _default_message_key(self, message: Dict) -> str:
+    def _default_message_key(self, message: dict) -> str:
         """Build message key from standard identity fields."""
         job_id = message.get("job_id")
         doc_id = message.get("data", {}).get("doc_id")

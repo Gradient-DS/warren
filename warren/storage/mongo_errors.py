@@ -9,10 +9,11 @@ Permanent errors (``OperationFailure``, ``DuplicateKeyError``, …) are not
 translated; they propagate unchanged so they fail loud immediately.
 """
 
-from typing import Awaitable, Callable, ParamSpec, TypeVar
+from typing import ParamSpec, TypeVar
 
 import functools
 import inspect
+from collections.abc import Awaitable, Callable
 
 from pymongo.errors import ConnectionFailure
 

@@ -2,6 +2,7 @@ from document_processing.distributed.warren.storage.publishing_tracker.interface
     PublishingTrackerInterface,
 )
 
+
 __all__ = [
     "PublishingTrackerInterface",
 ]

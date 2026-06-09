@@ -12,7 +12,9 @@ Exception hierarchy for error handling in workers::
     └── UnknownLocationTypeError     # hard failure (no resolver registered)
 """
 
-from typing import Awaitable, Callable, Optional, Protocol
+from typing import Protocol
+
+from collections.abc import Awaitable, Callable
 
 from document_processing.distributed.warren.exceptions import WarrenError
 from document_processing.distributed.warren.storage.documents.location import (
@@ -34,7 +36,7 @@ class DocumentResolutionError(WarrenError):
         self,
         message: str,
         *,
-        doc_id: Optional[str] = None,
+        doc_id: str | None = None,
     ) -> None:
         self.doc_id = doc_id
         super().__init__(message)
@@ -70,7 +72,6 @@ Resolvers should raise:
 
 
 class GetDocumentFunc(Protocol):
-
     async def __call__(
         self,
         doc_id: str,

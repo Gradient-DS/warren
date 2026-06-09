@@ -2,7 +2,7 @@
 Factory functions for document fetching components.
 """
 
-from typing import Mapping
+from collections.abc import Mapping
 
 from redis.asyncio import Redis
 
@@ -15,6 +15,7 @@ from document_processing.distributed.warren.storage.documents.fetcher import (
 from document_processing.distributed.warren.storage.documents.interface import (
     ResolveDocumentFunc,
 )
+
 
 DEFAULT_TTL_SECONDS: int = 86400  # 24 hours
 

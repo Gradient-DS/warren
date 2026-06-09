@@ -8,6 +8,7 @@ from document_processing.distributed.warren.storage.document_store.mongodb impor
     MongoDBDocumentStore,
 )
 
+
 __all__ = [
     "DocumentAlreadyExistsError",
     "DocumentNotFoundError",

@@ -5,8 +5,6 @@ Receives pdf_document messages, looks up fake markdown content,
 stores the result, and publishes a markdown_document message.
 """
 
-from typing import Dict, Optional
-
 from document_processing.distributed.e2e_test.fake.data import FAKE_DOCUMENTS
 from document_processing.distributed.warren.storage.results.interface import (
     ResultsStoreInterface,
@@ -28,10 +26,10 @@ class DocumentParserWorker(FilteringWorkerBase):
         super().__init__(worker_name)
         self._write_store = write_store
 
-    def should_process(self, message: Dict) -> bool:
+    def should_process(self, message: dict) -> bool:
         return message.get("data_type") == "pdf_document"
 
-    async def process(self, message: Dict) -> Optional[Dict]:
+    async def process(self, message: dict) -> dict | None:
         doc_id: str = message["data"]["doc_id"]
         job_id: str = message["job_id"]
 

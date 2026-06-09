@@ -9,7 +9,7 @@ Accepts ``RuntimeConfig`` and manages its own infrastructure. Custom
 components can be injected to override the defaults (e.g. for testing).
 """
 
-from typing import Dict, Optional, Callable
+from collections.abc import Callable
 
 from basics.logging_utils import summarize_exception_chain
 
@@ -18,17 +18,17 @@ from document_processing.distributed.warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
-    RMQConsumerConfig,
-    RMQConsumerManagerConfig,
-    RMQExchangeConfig,
-    RMQQueueConfig,
-)
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.consumer import (
     RMQConsumerManager,
 )
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.publisher import (
     RMQPublisher,
+)
+from document_processing.distributed.warren.pubsub.rabbitmq.config import (
+    RMQConsumerConfig,
+    RMQConsumerManagerConfig,
+    RMQExchangeConfig,
+    RMQQueueConfig,
 )
 from document_processing.distributed.warren.retry_management.retry_worker import (
     RetryWorker,
@@ -53,6 +53,7 @@ from document_processing.distributed.warren.workers.runners import (
     ConsumerManagerFactory,
     WorkerRunnerBase,
 )
+
 
 RETRY_WORKER_TYPE: str = "retry_worker"
 
@@ -86,7 +87,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
         retry_store: DocumentStoreInterface | None = None,
         republish_publisher: PublisherInterface | None = None,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
-        message_key_func: Optional[Callable[[Dict], str]] = None,
+        message_key_func: Callable[[dict], str] | None = None,
     ) -> None:
         super().__init__(name=worker_name)
         self._worker_name = worker_name
@@ -148,8 +149,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
                 await self._retry_worker.shutdown()
             except Exception as exc:
                 self._log.warning(
-                    f"Retry worker shutdown failed: "
-                    f"{summarize_exception_chain(exc)}"
+                    f"Retry worker shutdown failed: {summarize_exception_chain(exc)}"
                 )
 
         if self._republish_publisher is not None:
@@ -165,8 +165,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
                 await close_runtime_infrastructure(self._infra)
             except Exception as exc:
                 self._log.warning(
-                    f"Infrastructure teardown failed: "
-                    f"{summarize_exception_chain(exc)}"
+                    f"Infrastructure teardown failed: {summarize_exception_chain(exc)}"
                 )
 
     async def _create_default_retry_store(self) -> DocumentStoreInterface:

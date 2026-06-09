@@ -1,12 +1,10 @@
 """MongoDB implementation of PublishingTrackerInterface."""
 
-from typing import Optional, List, Dict
-from datetime import datetime, timezone
-
-from pymongo import AsyncMongoClient, ASCENDING
-from pymongo.asynchronous.collection import AsyncCollection
+from datetime import UTC, datetime
 
 from basics.base import Base
+from pymongo import ASCENDING, AsyncMongoClient
+from pymongo.asynchronous.collection import AsyncCollection
 
 from document_processing.distributed.warren.storage.publishing_tracker.interface import (
     PublishingTrackerInterface,
@@ -31,7 +29,7 @@ class MongoDBPublishingTracker(Base, PublishingTrackerInterface):
         *,
         database_name: str,
         collection_name: str = "job_publishing_results",
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> None:
         super().__init__(pybase_logger_name=name)
         self._client = client
@@ -63,7 +61,7 @@ class MongoDBPublishingTracker(Base, PublishingTrackerInterface):
         job_id: str,
         doc_id: str,
     ) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         await self._collection.update_one(
             {"job_id": job_id, "doc_id": doc_id},
             {
@@ -78,12 +76,12 @@ class MongoDBPublishingTracker(Base, PublishingTrackerInterface):
     async def record_failure(
         self,
         job_id: str,
-        doc_id: Optional[str],
+        doc_id: str | None,
         source: str,
         error: str,
         stage: str,
     ) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         doc = {
             "job_id": job_id,
             "doc_id": doc_id,
@@ -104,14 +102,14 @@ class MongoDBPublishingTracker(Base, PublishingTrackerInterface):
                 upsert=True,
             )
 
-    async def get_results(self, job_id: str) -> List[Dict]:
+    async def get_results(self, job_id: str) -> list[dict]:
         cursor = self._collection.find(
             {"job_id": job_id},
             projection={"_id": 0},
         )
         return await cursor.to_list()
 
-    async def get_failures(self, job_id: str) -> List[Dict]:
+    async def get_failures(self, job_id: str) -> list[dict]:
         cursor = self._collection.find(
             {"job_id": job_id, "success": False},
             projection={"_id": 0},

@@ -67,6 +67,6 @@ class RuntimeConfig(BaseModel):
         :return: Populated RuntimeConfig instance.
         :raises FileNotFoundError: If the config file doesn't exist.
         """
-        with open(path, "r") as f:
+        with open(path) as f:
             data = yaml.safe_load(f)
         return cls.model_validate(data)

@@ -11,11 +11,10 @@ Usage:
         --config-file document_processing/distributed/e2e_test/fake/config.yaml
 """
 
-from typing import AsyncIterable, Tuple
-
 import argparse
 import asyncio
 import logging
+from collections.abc import AsyncIterable
 from pathlib import Path
 
 from basics.logging import get_logger
@@ -30,19 +29,20 @@ from document_processing.distributed.runtime_scripts.lib.logging_setup import (
     configure_logging,
     resolve_log_level,
 )
-from document_processing.distributed.warren.runtime.config import RuntimeConfig
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.publisher import (
     RMQPublisher,
 )
+from document_processing.distributed.warren.runtime.config import RuntimeConfig
 from document_processing.distributed.warren.storage.jobs.mongodb import (
     MongoDBJobStore,
 )
 from document_processing.distributed.warren.storage.publishing_tracker.mongodb import (
     MongoDBPublishingTracker,
 )
+
 
 module_logger: logging.Logger = get_logger(__name__)
 
@@ -51,7 +51,7 @@ DEFAULT_CONFIG_PATH: Path = Path(__file__).parent / "config.yaml"
 
 async def _as_async_iterable(
     items: dict,
-) -> AsyncIterable[Tuple[str, str]]:
+) -> AsyncIterable[tuple[str, str]]:
     """Wrap FAKE_DOCUMENTS dict as an async iterable of (doc_id, content)."""
     for doc_id, content in items.items():
         yield (doc_id, content)

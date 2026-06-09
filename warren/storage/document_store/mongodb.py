@@ -1,13 +1,13 @@
-from typing import Dict, AsyncGenerator, List, Optional, Tuple, Union
+from typing import Union
 
 import uuid
+from collections.abc import AsyncGenerator
 
+from basics.base import Base
 from bson import ObjectId
 from pymongo import AsyncMongoClient, ReturnDocument
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.errors import DuplicateKeyError
-
-from basics.base import Base
 
 from document_processing.distributed.warren.storage.document_store.interface import (
     DocumentAlreadyExistsError,
@@ -15,6 +15,7 @@ from document_processing.distributed.warren.storage.document_store.interface imp
     DocumentStoreInterface,
     IndexSpec,
 )
+
 
 # Type alias for MongoDB document IDs (either ObjectId or string)
 DocId = Union[ObjectId, str]
@@ -39,9 +40,9 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         database_name: str,
         collection_name: str,
         doc_id_field: str = "_id",
-        fields_to_index: Optional[List[IndexSpec]] = None,
-        unique_indexes: Optional[List[IndexSpec]] = None,
-        name: Optional[str] = None,
+        fields_to_index: list[IndexSpec] | None = None,
+        unique_indexes: list[IndexSpec] | None = None,
+        name: str | None = None,
     ) -> None:
         """
         Initialize the MongoDB document store.
@@ -79,7 +80,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
 
     async def insert(
         self,
-        doc: Dict,
+        doc: dict,
         overwrite_existing: bool = False,
     ) -> str:
         """
@@ -118,7 +119,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
     async def update(
         self,
         doc_id: str,
-        updates: Dict,
+        updates: dict,
     ) -> None:
         """
         Update a document with the given updates.
@@ -172,7 +173,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
     async def get_document(
         self,
         doc_id: str,
-    ) -> Dict:
+    ) -> dict:
         """
         Retrieve a document by its ID.
 
@@ -191,8 +192,8 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
 
     async def query(
         self,
-        params: Dict,
-    ) -> AsyncGenerator[Dict, None]:
+        params: dict,
+    ) -> AsyncGenerator[dict, None]:
         """
         Query documents matching the given parameters.
 
@@ -256,13 +257,13 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         if self._doc_id_field != "_id":
             await self._collection.create_index(self._doc_id_field, unique=True)
 
-    def _index_spec_to_keys(self, index_spec: IndexSpec) -> List[Tuple[str, int]]:
+    def _index_spec_to_keys(self, index_spec: IndexSpec) -> list[tuple[str, int]]:
         """Convert an index specification to MongoDB index keys format."""
         if isinstance(index_spec, str):
             return [(index_spec, 1)]
         return [(field, 1) for field in index_spec]
 
-    async def _upsert_by_unique_index(self, doc: Dict) -> None:
+    async def _upsert_by_unique_index(self, doc: dict) -> None:
         """
         Upsert a document using the first unique index as the query key.
 
@@ -337,7 +338,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
 
         return doc_id
 
-    def _ensure_doc_id(self, doc: Dict) -> DocId:
+    def _ensure_doc_id(self, doc: dict) -> DocId:
         """
         Ensure document has an ID, generating one if needed.
 
@@ -354,7 +355,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         doc[self._doc_id_field] = doc_id
         return doc_id
 
-    def _prepare_doc_for_return(self, doc: Dict) -> Dict:
+    def _prepare_doc_for_return(self, doc: dict) -> dict:
         """
         Prepare a document for return by cleaning up internal fields.
 

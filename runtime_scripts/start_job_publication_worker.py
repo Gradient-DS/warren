@@ -41,6 +41,7 @@ from document_processing.distributed.warren.jobs.publishing.job_publication_work
     JobPublicationWorkerRunner,
 )
 
+
 module_logger: logging.Logger = get_logger(__name__)
 
 
@@ -83,15 +84,12 @@ def _load_publisher_factory(factory_path: str) -> DocumentsPublisherFactoryFunc:
     """Import a publisher factory from ``module.path:func_name``."""
     if ":" not in factory_path:
         raise ValueError(
-            f"Publisher factory must be module.path:func_name, "
-            f"got: {factory_path}"
+            f"Publisher factory must be module.path:func_name, got: {factory_path}"
         )
     module_path, func_name = factory_path.rsplit(":", 1)
     mod = importlib.import_module(module_path)
     if not hasattr(mod, func_name):
-        raise AttributeError(
-            f"Module {module_path} has no attribute '{func_name}'"
-        )
+        raise AttributeError(f"Module {module_path} has no attribute '{func_name}'")
     return getattr(mod, func_name)
 
 
@@ -153,18 +151,13 @@ def main() -> None:
     global module_logger
     args = _parse_args()
     configure_logging(debug=args.debug)
-    module_logger = get_logger(
-        __name__, log_level=resolve_log_level(debug=args.debug)
-    )
+    module_logger = get_logger(__name__, log_level=resolve_log_level(debug=args.debug))
 
     try:
-        asyncio.run(
-            start_job_publication_worker(**vars(args), logger=module_logger)
-        )
+        asyncio.run(start_job_publication_worker(**vars(args), logger=module_logger))
     except Exception as e:
         module_logger.error(
-            f"Start job publication worker failed: "
-            f"{summarize_exception_chain(e)}"
+            f"Start job publication worker failed: {summarize_exception_chain(e)}"
         )
         sys.exit(1)
 

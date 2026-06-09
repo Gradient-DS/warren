@@ -16,6 +16,7 @@ from document_processing.distributed.warren.exceptions import (
     OptionalDependencyError,
 )
 
+
 module_logger: logging.Logger = get_logger(__name__)
 
 
@@ -67,14 +68,10 @@ def discover_gcs_pdfs(
 
     client = storage.Client()
     blobs = client.list_blobs(bucket_name, prefix=prefix)
-    keys = sorted(
-        blob.name for blob in blobs if blob.name.lower().endswith(".pdf")
-    )
+    keys = sorted(blob.name for blob in blobs if blob.name.lower().endswith(".pdf"))
 
     if not keys:
-        raise ValueError(
-            f"No PDF objects found in gs://{bucket_name}/{prefix}"
-        )
+        raise ValueError(f"No PDF objects found in gs://{bucket_name}/{prefix}")
 
     if max_docs > 0:
         keys = keys[:max_docs]

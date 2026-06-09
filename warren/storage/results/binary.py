@@ -32,8 +32,9 @@ Widening ``GetDocumentFunc`` to include ``job_id`` would close this;
 deferred until operational pressure appears.
 """
 
-from collections.abc import AsyncGenerator
 from typing import Any
+
+from collections.abc import AsyncGenerator
 
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain

@@ -8,10 +8,7 @@ so the text chunker can split on them.
 Expected chunk counts: doc-001=4, doc-002=6, doc-003=3, doc-004=5. Total=18.
 """
 
-from typing import Dict
-
-
-FAKE_DOCUMENTS: Dict[str, str] = {
+FAKE_DOCUMENTS: dict[str, str] = {
     "doc-001": (
         "# Annual Report 2024\n\n"
         "This is the executive summary of the annual report for fiscal year 2024. "

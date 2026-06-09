@@ -142,9 +142,7 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
         except Exception as e:
             chain = summarize_exception_chain(e)
             self._log.error(f"Failed to register {source_id}: {chain}")
-            await self._record_failure_safe(
-                job_id, None, source_id, chain, "register"
-            )
+            await self._record_failure_safe(job_id, None, source_id, chain, "register")
             return None
 
         try:
@@ -158,9 +156,7 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
         except Exception as e:
             chain = summarize_exception_chain(e)
             self._log.error(f"Failed to publish {source_id}: {chain}")
-            await self._record_failure_safe(
-                job_id, doc_id, source_id, chain, "publish"
-            )
+            await self._record_failure_safe(job_id, doc_id, source_id, chain, "publish")
             return None
 
         # Publish succeeded. Recording success is best-effort and lives
@@ -184,9 +180,7 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
         tracking record — so it is logged and swallowed.
         """
         try:
-            await self._tracker.record_failure(
-                job_id, doc_id, source_id, error, stage
-            )
+            await self._tracker.record_failure(job_id, doc_id, source_id, error, stage)
         except Exception as e:
             self._log.warning(
                 f"Failed to record '{stage}' failure for {source_id}: "

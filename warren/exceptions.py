@@ -25,8 +25,6 @@ class OptionalDependencyError(WarrenError):
         install_hint: str = "",
     ) -> None:
         hint = f" — install with: {install_hint}" if install_hint else ""
-        super().__init__(
-            f"Optional dependency '{package_name}' is not installed{hint}"
-        )
+        super().__init__(f"Optional dependency '{package_name}' is not installed{hint}")
         self.package_name = package_name
         self.install_hint = install_hint

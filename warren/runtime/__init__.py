@@ -36,6 +36,7 @@ from document_processing.distributed.warren.runtime.spec import (
     WorkerSpec,
 )
 
+
 __all__ = [
     "DefaultWorkerRunner",
     "MongoDBConfig",
@@ -43,8 +44,8 @@ __all__ = [
     "RedisConfig",
     "RuntimeConfig",
     "RuntimeInfra",
-    "RuntimeRetryConfig",
     "RuntimeRMQConfig",
+    "RuntimeRetryConfig",
     "WorkerFactory",
     "WorkerFactoryContext",
     "WorkerSpec",

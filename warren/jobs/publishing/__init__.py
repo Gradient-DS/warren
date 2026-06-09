@@ -9,6 +9,7 @@ from document_processing.distributed.warren.jobs.publishing.job_publication_work
     JobPublicationWorkerRunner,
 )
 
+
 __all__ = [
     "DocumentsPublisherFactoryFunc",
     "JobDocumentsPublisher",

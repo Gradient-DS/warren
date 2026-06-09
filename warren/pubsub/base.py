@@ -1,5 +1,4 @@
 from abc import ABCMeta, abstractmethod
-from typing import Optional, List, Dict
 
 from basics.base import Base
 
@@ -17,10 +16,10 @@ class BasePublisher(Base, PublisherInterface, metaclass=ABCMeta):
 
     def __init__(
         self,
-        route: Optional[Route] = None,
-        route_func: Optional[RouteFunc] = None,
+        route: Route | None = None,
+        route_func: RouteFunc | None = None,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> None:
         classname = type(self).__name__
         logger_name = f"[{classname}] {name}" if name else None
@@ -48,7 +47,7 @@ class BasePublisher(Base, PublisherInterface, metaclass=ABCMeta):
         ...
 
     @abstractmethod
-    async def __call__(self, message: Dict) -> None:
+    async def __call__(self, message: dict) -> None:
         """
         Publish a message. Routing is determined internally by the publisher.
 
@@ -62,14 +61,14 @@ class ConsumerManagerBase(Base, ConsumerManagerInterface, metaclass=ABCMeta):
         self,
         consumer: MessageConsumerInterface,
         *,
-        publishers: Optional[List[PublisherInterface]] = None,
+        publishers: list[PublisherInterface] | None = None,
     ) -> None:
         classname = type(self).__name__
         logger_name = f"[{classname}] {consumer.name}" if consumer.name else None
         super().__init__(pybase_logger_name=logger_name)
 
         self._consumer = consumer
-        self._publishers: List[PublisherInterface] = publishers or []
+        self._publishers: list[PublisherInterface] = publishers or []
 
     @abstractmethod
     async def setup(self) -> None:

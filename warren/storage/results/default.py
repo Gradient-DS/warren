@@ -1,4 +1,4 @@
-from typing import Dict, AsyncGenerator, Optional
+from collections.abc import AsyncGenerator
 
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
@@ -40,9 +40,9 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
     def __init__(
         self,
         document_store: DocumentStoreInterface,
-        cache: Optional[CacheInterface[Dict]] = None,
-        result_type: Optional[str] = None,
-        name: Optional[str] = None,
+        cache: CacheInterface[dict] | None = None,
+        result_type: str | None = None,
+        name: str | None = None,
     ) -> None:
         """
         Initialize the results store.
@@ -85,11 +85,11 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
 
     async def store(
         self,
-        result: Dict,
+        result: dict,
         doc_id: str,
-        part_idx: Optional[int] = None,
-        job_id: Optional[str] = None,
-        result_metadata: Optional[Dict] = None,
+        part_idx: int | None = None,
+        job_id: str | None = None,
+        result_metadata: dict | None = None,
         do_cache: bool = True,
         overwrite_existing: bool = True,
     ) -> str:
@@ -128,8 +128,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
     async def get_result(
         self,
         doc_id: str,
-        part_idx: Optional[int] = None,
-        job_id: Optional[str] = None,
+        part_idx: int | None = None,
+        job_id: str | None = None,
     ) -> ResultDoc:
         """
         Retrieve a processing result by business keys.
@@ -162,7 +162,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
     async def stream_doc_processing_results(
         self,
         doc_id: str,
-        job_id: Optional[str] = None,
+        job_id: str | None = None,
         try_cache: bool = True,
     ) -> AsyncGenerator[ResultDoc, None]:
         """
@@ -199,7 +199,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
                 f"No results found for doc_id={doc_id}, job_id={job_id}"
             )
 
-    def _add_result_id(self, doc: Dict) -> Dict:
+    def _add_result_id(self, doc: dict) -> dict:
         """Add result_id to doc from the store's doc_id_field if not already present."""
         if "result_id" in doc:
             return doc
@@ -208,7 +208,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
             doc["result_id"] = result_id
         return doc
 
-    def _dict_to_result_doc(self, doc: Dict) -> ResultDoc:
+    def _dict_to_result_doc(self, doc: dict) -> ResultDoc:
         """Convert a dict to ResultDoc."""
         return ResultDoc(
             doc_id=doc["doc_id"],
@@ -224,8 +224,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         self,
         doc_id: str,
         part_idx: int,
-        job_id: Optional[str],
-        doc: Dict,
+        job_id: str | None,
+        doc: dict,
     ) -> None:
         """Set a value in cache, silently ignoring failures."""
         if self._cache is None:
@@ -246,8 +246,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         self,
         doc_id: str,
         part_idx: int,
-        job_id: Optional[str],
-    ) -> Optional[Dict]:
+        job_id: str | None,
+    ) -> dict | None:
         """Get a value from cache, returning None on failure."""
         if self._cache is None:
             return None
@@ -267,8 +267,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
     async def _cache_get_by_prefix(
         self,
         doc_id: str,
-        job_id: Optional[str],
-    ) -> Dict[str, Dict]:
+        job_id: str | None,
+    ) -> dict[str, dict]:
         """Get values from cache by prefix, returning empty dict on failure."""
         if self._cache is None:
             return {}
@@ -289,7 +289,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         self,
         doc_id: str,
         part_idx: int,
-        job_id: Optional[str],
+        job_id: str | None,
     ) -> str:
         """Build a cache key from business keys."""
         return build_message_key(job_id=job_id, doc_id=doc_id, part_idx=part_idx)
@@ -297,7 +297,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
     def _build_cache_prefix(
         self,
         doc_id: str,
-        job_id: Optional[str],
+        job_id: str | None,
     ) -> str:
         """Build a cache prefix for streaming queries."""
         return build_message_key_prefix(doc_id=doc_id, job_id=job_id)
@@ -305,9 +305,9 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
     def _build_query(
         self,
         doc_id: str,
-        part_idx: Optional[int] = None,
-        job_id: Optional[str] = None,
-    ) -> Dict:
+        part_idx: int | None = None,
+        job_id: str | None = None,
+    ) -> dict:
         """Build a query dict for the document store.
 
         :param doc_id: Document ID.
@@ -317,7 +317,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
 
         :return: Query dictionary.
         """
-        query: Dict = {"doc_id": doc_id}
+        query: dict = {"doc_id": doc_id}
         if part_idx is not None:
             query["part_idx"] = part_idx
         query["job_id"] = job_id

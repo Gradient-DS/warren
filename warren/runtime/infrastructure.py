@@ -3,15 +3,15 @@ Runtime infrastructure: create and close MongoDB, Redis, and RabbitMQ
 connections from a ``RuntimeConfig``.
 """
 
-from typing import Awaitable, Callable, NamedTuple
+from typing import NamedTuple
 
 import logging
-
-from pymongo import AsyncMongoClient
-from redis.asyncio import Redis
+from collections.abc import Awaitable, Callable
 
 from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
+from pymongo import AsyncMongoClient
+from redis.asyncio import Redis
 
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
@@ -85,8 +85,6 @@ async def _close_connection(
     try:
         await close()
     except Exception as e:
-        module_logger.warning(
-            f"Error closing {what}: {summarize_exception_chain(e)}"
-        )
+        module_logger.warning(f"Error closing {what}: {summarize_exception_chain(e)}")
     else:
         module_logger.debug(f"Closed {what}")

@@ -1,4 +1,6 @@
-from typing import Dict, AsyncGenerator, Optional, Protocol
+from typing import Protocol
+
+from collections.abc import AsyncGenerator
 
 from pydantic import BaseModel
 
@@ -12,11 +14,11 @@ class ResultDoc(BaseModel):
 
     doc_id: str
     part_idx: int = 0
-    job_id: Optional[str] = None
-    result: Dict
-    result_metadata: Optional[Dict] = None
-    created_at: Optional[str] = None
-    result_id: Optional[str] = None
+    job_id: str | None = None
+    result: dict
+    result_metadata: dict | None = None
+    created_at: str | None = None
+    result_id: str | None = None
 
 
 class ResultNotFound(ResourceNotFoundError):
@@ -45,11 +47,11 @@ class ResultsStoreInterface(Protocol):
 
     async def store(
         self,
-        result: Dict,
+        result: dict,
         doc_id: str,
-        part_idx: Optional[int] = None,
-        job_id: Optional[str] = None,
-        result_metadata: Optional[Dict] = None,
+        part_idx: int | None = None,
+        job_id: str | None = None,
+        result_metadata: dict | None = None,
         do_cache: bool = True,
         overwrite_existing: bool = True,
     ) -> str:
@@ -71,8 +73,8 @@ class ResultsStoreInterface(Protocol):
     async def get_result(
         self,
         doc_id: str,
-        part_idx: Optional[int] = None,
-        job_id: Optional[str] = None,
+        part_idx: int | None = None,
+        job_id: str | None = None,
     ) -> ResultDoc:
         """
         Retrieves the document processing result for given business keys.
@@ -89,7 +91,7 @@ class ResultsStoreInterface(Protocol):
     def stream_doc_processing_results(
         self,
         doc_id: str,
-        job_id: Optional[str] = None,
+        job_id: str | None = None,
         try_cache: bool = True,
     ) -> AsyncGenerator[ResultDoc, None]:
         """

@@ -11,12 +11,11 @@ Lifecycle: setup() -> run() -> teardown()
 - teardown() cleans up resources
 """
 
-from typing import Callable, Iterator, Optional
-
-from abc import ABCMeta, abstractmethod
 import asyncio
-from contextlib import contextmanager
 import signal
+from abc import ABCMeta, abstractmethod
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
@@ -62,9 +61,9 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
         await runner.teardown() # cleanup
     """
 
-    def __init__(self, *, name: Optional[str] = None) -> None:
+    def __init__(self, *, name: str | None = None) -> None:
         super().__init__(pybase_logger_name=name)
-        self._consumer_manager: Optional[ConsumerManagerInterface] = None
+        self._consumer_manager: ConsumerManagerInterface | None = None
         self._setup_succeeded: bool = False
 
     @abstractmethod
@@ -114,9 +113,7 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
         try:
             await self._on_teardown()
         except Exception as e:
-            self._log.warning(
-                f"Error during teardown: {summarize_exception_chain(e)}"
-            )
+            self._log.warning(f"Error during teardown: {summarize_exception_chain(e)}")
 
         self._consumer_manager = None
         self._setup_succeeded = False
@@ -154,6 +151,4 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
             yield
         except Exception as e:
             worker = getattr(self, "_worker_name", "?")
-            raise WarrenError(
-                f"{description} failed for worker '{worker}'"
-            ) from e
+            raise WarrenError(f"{description} failed for worker '{worker}'") from e

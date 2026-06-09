@@ -8,9 +8,10 @@ classification of *what* is transient lives in the implementation (see
 ``mongo_errors.py``); this is only the retry *policy* mechanism.
 """
 
-from typing import Awaitable, Callable, TypeVar
+from typing import TypeVar
 
 import asyncio
+from collections.abc import Awaitable, Callable
 
 from document_processing.distributed.warren.storage.exceptions import (
     TransientStoreError,

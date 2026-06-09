@@ -61,6 +61,7 @@ from document_processing.distributed.warren.runtime.runner import (
     DefaultWorkerRunner,
 )
 
+
 module_logger: logging.Logger = get_logger(__name__)
 
 
@@ -119,9 +120,7 @@ def _load_runner_class(runner_path: str) -> type:
     module_path, class_name = runner_path.rsplit(":", 1)
     mod = importlib.import_module(module_path)
     if not hasattr(mod, class_name):
-        raise AttributeError(
-            f"Module {module_path} has no attribute '{class_name}'"
-        )
+        raise AttributeError(f"Module {module_path} has no attribute '{class_name}'")
     return getattr(mod, class_name)
 
 
@@ -193,9 +192,7 @@ async def start_worker(
     try:
         pipeline, pipeline_dir = load_pipeline(spec_str, log)
     except Exception as e:
-        raise WarrenError(
-            f"Unable to load pipeline spec from: {spec_str}"
-        ) from e
+        raise WarrenError(f"Unable to load pipeline spec from: {spec_str}") from e
 
     if list_workers:
         worker_names = "\n  ".join(pipeline.workers.keys())
@@ -205,8 +202,7 @@ async def start_worker(
     if worker_type not in pipeline.workers:
         valid_types = ", ".join(pipeline.workers.keys())
         raise WarrenError(
-            f"Unknown worker type '{worker_type}'. "
-            f"Valid types: {valid_types}"
+            f"Unknown worker type '{worker_type}'. Valid types: {valid_types}"
         )
 
     runner_class = DefaultWorkerRunner
@@ -214,9 +210,7 @@ async def start_worker(
         try:
             runner_class = _load_runner_class(runner)
         except Exception as e:
-            raise WarrenError(
-                f"Unable to load runner class: {runner}"
-            ) from e
+            raise WarrenError(f"Unable to load runner class: {runner}") from e
 
     try:
         resolved_config_path = resolve_config_path(config_file, pipeline_dir)
@@ -246,16 +240,12 @@ def main() -> None:
     global module_logger
     args = _parse_args()
     configure_logging(debug=args.debug)
-    module_logger = get_logger(
-        __name__, log_level=resolve_log_level(debug=args.debug)
-    )
+    module_logger = get_logger(__name__, log_level=resolve_log_level(debug=args.debug))
 
     try:
         asyncio.run(start_worker(**vars(args), logger=module_logger))
     except Exception as e:
-        module_logger.error(
-            f"Start worker failed: {summarize_exception_chain(e)}"
-        )
+        module_logger.error(f"Start worker failed: {summarize_exception_chain(e)}")
         sys.exit(1)
 
 

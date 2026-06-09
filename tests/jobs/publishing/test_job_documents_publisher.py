@@ -8,8 +8,9 @@ reported as a failure just because its success-tracking write failed
 that raises.
 """
 
-import asyncio
 from typing import Any
+
+import asyncio
 
 from document_processing.distributed.warren.jobs.publishing.job_documents_publisher import (
     JobDocumentsPublisher,

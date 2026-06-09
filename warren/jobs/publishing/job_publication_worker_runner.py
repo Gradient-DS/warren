@@ -12,9 +12,8 @@ so the application can build its stores from the same MongoDB client
 and publish through the same RMQ channel.
 """
 
-from typing import Optional, Dict, Callable, AsyncIterable
-
 from abc import abstractmethod
+from collections.abc import AsyncIterable, Callable
 
 from basics.logging_utils import summarize_exception_chain
 
@@ -29,17 +28,17 @@ from document_processing.distributed.warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
-    RMQConsumerConfig,
-    RMQConsumerManagerConfig,
-    RMQExchangeConfig,
-    RMQQueueConfig,
-)
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.consumer import (
     RMQConsumerManager,
 )
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.publisher import (
     RMQPublisher,
+)
+from document_processing.distributed.warren.pubsub.rabbitmq.config import (
+    RMQConsumerConfig,
+    RMQConsumerManagerConfig,
+    RMQExchangeConfig,
+    RMQQueueConfig,
 )
 from document_processing.distributed.warren.runtime.config import RuntimeConfig
 from document_processing.distributed.warren.runtime.infrastructure import (
@@ -51,6 +50,7 @@ from document_processing.distributed.warren.workers.runners import (
     ConsumerManagerFactory,
     WorkerRunnerBase,
 )
+
 
 PUBLICATION_WORKER_TYPE: str = "publication"
 
@@ -116,9 +116,7 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         *,
         documents_publisher_factory: DocumentsPublisherFactoryFunc,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
-        create_source_generator: Optional[
-            Callable[[Dict], AsyncIterable]
-        ] = None,
+        create_source_generator: Callable[[dict], AsyncIterable] | None = None,
     ) -> None:
         super().__init__(name=worker_name)
         self._worker_name = worker_name
@@ -146,13 +144,14 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
 
         with self._exception_wrapping("Documents publisher creation"):
             self._documents_publisher = await self._documents_publisher_factory(
-                self._publisher, self._infra, self._config, self._worker_name,
+                self._publisher,
+                self._infra,
+                self._config,
+                self._worker_name,
             )
 
         if self._consumer_manager_factory is None:
-            self._consumer_manager_factory = (
-                self._create_default_consumer_factory()
-            )
+            self._consumer_manager_factory = self._create_default_consumer_factory()
 
         worker = JobPublicationWorker(
             self._worker_name,
@@ -179,8 +178,7 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
                 await close_runtime_infrastructure(self._infra)
             except Exception as exc:
                 self._log.warning(
-                    f"Infrastructure teardown failed: "
-                    f"{summarize_exception_chain(exc)}"
+                    f"Infrastructure teardown failed: {summarize_exception_chain(exc)}"
                 )
 
     def _create_default_publisher(self) -> PublisherInterface:

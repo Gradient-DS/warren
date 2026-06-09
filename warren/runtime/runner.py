@@ -29,6 +29,16 @@ from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika import (
     RMQConsumerManager,
     RMQPublisher,
 )
+from document_processing.distributed.warren.runtime.config import RuntimeConfig
+from document_processing.distributed.warren.runtime.infrastructure import (
+    RuntimeInfra,
+    close_runtime_infrastructure,
+    create_runtime_infrastructure,
+)
+from document_processing.distributed.warren.runtime.spec import (
+    WorkerFactoryContext,
+    WorkerSpec,
+)
 from document_processing.distributed.warren.storage.document_store import (
     DocumentStoreInterface,
     MongoDBDocumentStore,
@@ -50,16 +60,6 @@ from document_processing.distributed.warren.storage.results.factories import (
     create_default_results_store,
 )
 from document_processing.distributed.warren.workers.runners import WorkerRunnerBase
-from document_processing.distributed.warren.runtime.config import RuntimeConfig
-from document_processing.distributed.warren.runtime.infrastructure import (
-    RuntimeInfra,
-    close_runtime_infrastructure,
-    create_runtime_infrastructure,
-)
-from document_processing.distributed.warren.runtime.spec import (
-    WorkerFactoryContext,
-    WorkerSpec,
-)
 
 
 module_logger: logging.Logger = get_logger(__name__)
@@ -175,8 +175,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
                 await close_runtime_infrastructure(self._infra)
             except Exception as exc:
                 self._log.warning(
-                    f"Infrastructure teardown failed: "
-                    f"{summarize_exception_chain(exc)}"
+                    f"Infrastructure teardown failed: {summarize_exception_chain(exc)}"
                 )
 
     def _wrap_worker(

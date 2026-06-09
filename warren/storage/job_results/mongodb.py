@@ -1,12 +1,10 @@
 """MongoDB implementation of JobResultsStoreInterface."""
 
-from typing import Optional, List, Dict
-from datetime import datetime, timezone
-
-from pymongo import AsyncMongoClient, ASCENDING
-from pymongo.asynchronous.collection import AsyncCollection
+from datetime import UTC, datetime
 
 from basics.base import Base
+from pymongo import ASCENDING, AsyncMongoClient
+from pymongo.asynchronous.collection import AsyncCollection
 
 from document_processing.distributed.warren.storage.job_results.interface import (
     JobResultsStoreInterface,
@@ -34,7 +32,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
         *,
         database_name: str,
         collection_name: str = "job_results",
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> None:
         super().__init__(pybase_logger_name=name)
         self._client = client
@@ -79,7 +77,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
         origin_type: str,
         origin_name: str,
     ) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         await self._collection.update_one(
             {
                 "job_id": job_id,
@@ -117,7 +115,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
         retry_count: int,
         error_reason: str,
     ) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         await self._collection.update_one(
             {
                 "job_id": job_id,
@@ -157,7 +155,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
         consumer_name: str,
         error: str,
     ) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         await self._collection.update_one(
             {
                 "job_id": job_id,
@@ -190,11 +188,13 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
         job_id: str,
         final_data_type: str,
     ) -> int:
-        return await self._collection.count_documents({
-            "job_id": job_id,
-            "data_type": final_data_type,
-            "success": True,
-        })
+        return await self._collection.count_documents(
+            {
+                "job_id": job_id,
+                "data_type": final_data_type,
+                "success": True,
+            }
+        )
 
     async def count_hard_failed_docs(self, job_id: str) -> int:
         pipeline = [
@@ -220,7 +220,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
 
     # --- Queries ---
 
-    async def get_stage_counts(self, job_id: str) -> List[Dict]:
+    async def get_stage_counts(self, job_id: str) -> list[dict]:
         pipeline = [
             {"$match": {"job_id": job_id}},
             {
@@ -236,7 +236,12 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
                                 {
                                     "$and": [
                                         {"$not": "$success"},
-                                        {"$gt": [{"$type": "$soft_failures"}, "missing"]},
+                                        {
+                                            "$gt": [
+                                                {"$type": "$soft_failures"},
+                                                "missing",
+                                            ]
+                                        },
                                     ],
                                 },
                                 1,
@@ -272,7 +277,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
         self,
         job_id: str,
         doc_id: str,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         cursor = self._collection.find(
             {"job_id": job_id, "doc_id": doc_id},
             projection={"_id": 0, "job_id": 0},
@@ -282,9 +287,9 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
     async def get_failures(
         self,
         job_id: str,
-        data_type: Optional[str] = None,
-    ) -> List[Dict]:
-        query: Dict = {"job_id": job_id, "success": False}
+        data_type: str | None = None,
+    ) -> list[dict]:
+        query: dict = {"job_id": job_id, "success": False}
         if data_type is not None:
             query["data_type"] = data_type
         cursor = self._collection.find(
@@ -296,9 +301,9 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
     async def get_unique_errors(
         self,
         job_id: str,
-        data_type: Optional[str] = None,
-    ) -> List[Dict]:
-        match_stage: Dict = {"job_id": job_id, "success": False}
+        data_type: str | None = None,
+    ) -> list[dict]:
+        match_stage: dict = {"job_id": job_id, "success": False}
         if data_type is not None:
             match_stage["data_type"] = data_type
 
@@ -339,7 +344,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
         ]
         return await self._run_pipeline(pipeline)
 
-    async def _run_pipeline(self, pipeline: List[Dict]) -> List[Dict]:
+    async def _run_pipeline(self, pipeline: list[dict]) -> list[dict]:
         """Execute an aggregation pipeline and return the results."""
         cursor = await self._collection.aggregate(pipeline)
         return await cursor.to_list()

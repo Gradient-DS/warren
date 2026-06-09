@@ -9,7 +9,7 @@ Not specific to any use case (retry, results, etc.) — usable anywhere
 persistence with fast cached retrieval is needed.
 """
 
-from typing import Dict, Optional, AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
@@ -42,10 +42,10 @@ class CachedDocumentStore(Base):
     def __init__(
         self,
         store: DocumentStoreInterface,
-        cache: CacheInterface[Dict],
+        cache: CacheInterface[dict],
         *,
-        cache_ttl_seconds: Optional[int] = None,
-        name: Optional[str] = None,
+        cache_ttl_seconds: int | None = None,
+        name: str | None = None,
     ) -> None:
         super().__init__(pybase_logger_name=name)
         self._store = store
@@ -54,7 +54,7 @@ class CachedDocumentStore(Base):
 
     async def insert(
         self,
-        doc: Dict,
+        doc: dict,
         overwrite_existing: bool = False,
     ) -> str:
         """Insert document into store and cache.
@@ -74,7 +74,7 @@ class CachedDocumentStore(Base):
     async def update(
         self,
         doc_id: str,
-        updates: Dict,
+        updates: dict,
     ) -> None:
         """Update document in store and invalidate cache.
 
@@ -123,7 +123,7 @@ class CachedDocumentStore(Base):
     async def get_document(
         self,
         doc_id: str,
-    ) -> Dict:
+    ) -> dict:
         """Get document, trying cache first (read-through).
 
         :param doc_id: Document ID.
@@ -147,8 +147,8 @@ class CachedDocumentStore(Base):
 
     def query(
         self,
-        params: Dict,
-    ) -> AsyncGenerator[Dict, None]:
+        params: dict,
+    ) -> AsyncGenerator[dict, None]:
         """Query document store (cache is bypassed).
 
         :param params: Query parameters.
@@ -169,7 +169,7 @@ class CachedDocumentStore(Base):
         """Check unique index on underlying store."""
         return await self._store.has_unique_index(index_spec)
 
-    async def _safe_cache_set(self, key: str, value: Dict) -> None:
+    async def _safe_cache_set(self, key: str, value: dict) -> None:
         """Set cache entry, logging failures as warnings."""
         try:
             await self._cache.set(key, value, self._cache_ttl)

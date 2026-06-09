@@ -53,9 +53,7 @@ async def declare_queue(
     :raises PubSubSetupError: if the broker rejects the declaration or bind.
     """
     if config.routing_key and exchange_type == "fanout":
-        raise ValueError(
-            "Non-empty routing key is not supported for fanout exchanges."
-        )
+        raise ValueError("Non-empty routing key is not supported for fanout exchanges.")
 
     try:
         queue = await channel.declare_queue(

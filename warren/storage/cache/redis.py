@@ -1,17 +1,17 @@
-from typing import TypeVar, Optional, Dict, List
+from typing import TypeVar
 
-from abc import ABC, abstractmethod
 import json
-
-from redis.asyncio import Redis
-from redis.exceptions import RedisError
+from abc import ABC, abstractmethod
 
 from basics.base import Base
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 from document_processing.distributed.warren.storage.cache.interface import (
     CacheInterface,
     CacheOperationError,
 )
+
 
 T = TypeVar("T")
 
@@ -30,9 +30,9 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
         client: Redis,
         *,
         base_key: str,
-        default_ttl_seconds: Optional[int] = None,
+        default_ttl_seconds: int | None = None,
         key_separator: str = ":",
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> None:
         """
         Initialize the Redis cache.
@@ -53,7 +53,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
         self._default_ttl_seconds = default_ttl_seconds
         self._key_separator = key_separator
 
-    async def get(self, key: str) -> Optional[T]:
+    async def get(self, key: str) -> T | None:
         """
         Retrieve value from cache.
 
@@ -71,7 +71,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
         except (RedisError, ValueError, TypeError) as e:
             raise CacheOperationError(operation="get") from e
 
-    async def set(self, key: str, value: T, ttl_seconds: Optional[int] = None) -> None:
+    async def set(self, key: str, value: T, ttl_seconds: int | None = None) -> None:
         """
         Store value in cache.
 
@@ -120,7 +120,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
         except RedisError as e:
             raise CacheOperationError(operation="exists") from e
 
-    async def get_by_key_prefix(self, key_prefix: str) -> Dict[str, T]:
+    async def get_by_key_prefix(self, key_prefix: str) -> dict[str, T]:
         """
         Get all items where key starts with key_prefix.
 
@@ -144,7 +144,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
                 return {}
 
             values = await self._client.mget(keys)
-            result: Dict[str, T] = {}
+            result: dict[str, T] = {}
             for full_key, data in zip(keys, values):
                 if data is not None:
                     result[self._strip_base_key(full_key)] = self._deserialize(data)
@@ -154,7 +154,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
             raise CacheOperationError(operation="get_by_key_prefix") from e
 
     async def set_many(
-        self, items: Dict[str, T], ttl_seconds: Optional[int] = None
+        self, items: dict[str, T], ttl_seconds: int | None = None
     ) -> None:
         """
         Store multiple key-value pairs.
@@ -245,13 +245,13 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
 
         return full_key
 
-    def _get_ttl(self, ttl_seconds: Optional[int]) -> Optional[int]:
+    def _get_ttl(self, ttl_seconds: int | None) -> int | None:
         """Return TTL to use: explicit value or default."""
         if ttl_seconds is not None:
             return ttl_seconds
         return self._default_ttl_seconds
 
-    async def _scan_keys(self, pattern: str) -> List[str]:
+    async def _scan_keys(self, pattern: str) -> list[str]:
         """
         Scan for keys matching pattern.
 
@@ -260,7 +260,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
         - ? matches a single character
         - [abc] matches any character in the set
         """
-        keys: List[str] = []
+        keys: list[str] = []
         cursor = 0
         while True:
             cursor, batch = await self._client.scan(cursor=cursor, match=pattern)
@@ -270,7 +270,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
         return keys
 
 
-class RedisDictCache(RedisCacheBase[Dict]):
+class RedisDictCache(RedisCacheBase[dict]):
     """
     Async Redis cache for Dict values using JSON serialization.
 
@@ -278,11 +278,11 @@ class RedisDictCache(RedisCacheBase[Dict]):
     and other JSON-serializable data.
     """
 
-    def _serialize(self, value: Dict) -> bytes:
+    def _serialize(self, value: dict) -> bytes:
         """Serialize Dict to JSON bytes."""
         return json.dumps(value).encode("utf-8")
 
-    def _deserialize(self, data: bytes) -> Dict:
+    def _deserialize(self, data: bytes) -> dict:
         """Deserialize JSON bytes to Dict."""
         return json.loads(data.decode("utf-8"))
 

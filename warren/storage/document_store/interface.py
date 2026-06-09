@@ -1,12 +1,15 @@
-from typing import Protocol, Dict, AsyncGenerator, Tuple, Union
+from typing import Protocol, Union
+
+from collections.abc import AsyncGenerator
 
 from document_processing.distributed.warren.storage.exceptions import (
     ResourceAlreadyExistsError,
     ResourceNotFoundError,
 )
 
+
 # Type alias for index specification (single field or composite)
-IndexSpec = Union[str, Tuple[str, ...]]
+IndexSpec = Union[str, tuple[str, ...]]
 
 
 class DocumentNotFoundError(ResourceNotFoundError):
@@ -28,7 +31,7 @@ class DocumentStoreInterface(Protocol):
     they return stored config values with no I/O.
     """
 
-    async def insert(self, doc: Dict, overwrite_existing: bool = False) -> str:
+    async def insert(self, doc: dict, overwrite_existing: bool = False) -> str:
         """
         Insert a document into the document store and return its ID.
 
@@ -42,7 +45,7 @@ class DocumentStoreInterface(Protocol):
         """
         ...
 
-    async def update(self, doc_id: str, updates: Dict) -> None:
+    async def update(self, doc_id: str, updates: dict) -> None:
         """
         Update document with document id with given updates.
 
@@ -69,7 +72,7 @@ class DocumentStoreInterface(Protocol):
     async def get_document(
         self,
         doc_id: str,
-    ) -> Dict:
+    ) -> dict:
         """
         Get document with document id.
 
@@ -81,7 +84,7 @@ class DocumentStoreInterface(Protocol):
         """
         ...
 
-    def query(self, params: Dict) -> AsyncGenerator[Dict, None]:
+    def query(self, params: dict) -> AsyncGenerator[dict, None]:
         """
         Query document store.
 

@@ -19,17 +19,17 @@ from document_processing.distributed.warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
-    RMQConsumerConfig,
-    RMQConsumerManagerConfig,
-    RMQExchangeConfig,
-    RMQQueueConfig,
-)
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.consumer import (
     RMQConsumerManager,
 )
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.publisher import (
     RMQPublisher,
+)
+from document_processing.distributed.warren.pubsub.rabbitmq.config import (
+    RMQConsumerConfig,
+    RMQConsumerManagerConfig,
+    RMQExchangeConfig,
+    RMQQueueConfig,
 )
 from document_processing.distributed.warren.runtime.config import RuntimeConfig
 from document_processing.distributed.warren.runtime.infrastructure import (
@@ -53,6 +53,7 @@ from document_processing.distributed.warren.workers.runners import (
     ConsumerManagerFactory,
     WorkerRunnerBase,
 )
+
 
 JOB_STATUS_WORKER_TYPE: str = "job_status"
 
@@ -111,15 +112,11 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
 
         if self._job_results_store is None:
             with self._exception_wrapping("Job results store creation"):
-                self._job_results_store = (
-                    await self._create_default_job_results_store()
-                )
+                self._job_results_store = await self._create_default_job_results_store()
 
         if self._consumer_manager_factory is None:
             self._publisher = self._create_default_publisher()
-            self._consumer_manager_factory = (
-                self._create_default_consumer_factory()
-            )
+            self._consumer_manager_factory = self._create_default_consumer_factory()
 
         worker = JobStatusWorker(
             worker_name=self._worker_name,
@@ -146,8 +143,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
                 await close_runtime_infrastructure(self._infra)
             except Exception as exc:
                 self._log.warning(
-                    f"Infrastructure teardown failed: "
-                    f"{summarize_exception_chain(exc)}"
+                    f"Infrastructure teardown failed: {summarize_exception_chain(exc)}"
                 )
 
     async def _create_default_job_store(self) -> JobStoreInterface:

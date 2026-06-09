@@ -1,8 +1,5 @@
-from typing import Optional
-
 import aio_pika
-from aio_pika.abc import AbstractRobustConnection, AbstractChannel
-
+from aio_pika.abc import AbstractChannel, AbstractRobustConnection
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
 
@@ -16,14 +13,14 @@ class RMQConnectionManager(Base):
         self,
         config: RMQConnectionConfig,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> None:
         classname = type(self).__name__
         logger_name = f"[{classname}] {name}" if name else None
         super().__init__(pybase_logger_name=logger_name)
 
         self._config = config
-        self._connection: Optional[AbstractRobustConnection] = None
+        self._connection: AbstractRobustConnection | None = None
 
     async def setup(self) -> None:
         self._connection = await aio_pika.connect_robust(

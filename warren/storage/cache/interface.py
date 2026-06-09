@@ -1,6 +1,9 @@
-from typing import TypeVar, Protocol, Optional, Dict, Callable, Awaitable
+from typing import Protocol, TypeVar
+
+from collections.abc import Awaitable, Callable
 
 from document_processing.distributed.warren.exceptions import WarrenError
+
 
 T = TypeVar("T")
 
@@ -16,8 +19,8 @@ class CacheOperationError(WarrenError):
 
     def __init__(
         self,
-        message: Optional[str] = None,
-        operation: Optional[str] = None,
+        message: str | None = None,
+        operation: str | None = None,
     ) -> None:
         self.operation = operation
 
@@ -56,7 +59,7 @@ class CacheInterface(Protocol[T]):
         - "doc123:" matches: doc123:0, doc123:1 only (sub-keys only)
     """
 
-    async def get(self, key: str) -> Optional[T]:
+    async def get(self, key: str) -> T | None:
         """
         Retrieve value from cache.
 
@@ -66,7 +69,7 @@ class CacheInterface(Protocol[T]):
         """
         ...
 
-    async def set(self, key: str, value: T, ttl_seconds: Optional[int] = None) -> None:
+    async def set(self, key: str, value: T, ttl_seconds: int | None = None) -> None:
         """
         Store value in cache.
 
@@ -96,7 +99,7 @@ class CacheInterface(Protocol[T]):
         """
         ...
 
-    async def get_by_key_prefix(self, key_prefix: str) -> Dict[str, T]:
+    async def get_by_key_prefix(self, key_prefix: str) -> dict[str, T]:
         """
         Get all items where key starts with key_prefix.
 
@@ -111,7 +114,7 @@ class CacheInterface(Protocol[T]):
         ...
 
     async def set_many(
-        self, items: Dict[str, T], ttl_seconds: Optional[int] = None
+        self, items: dict[str, T], ttl_seconds: int | None = None
     ) -> None:
         """
         Store multiple key-value pairs.
@@ -144,7 +147,7 @@ async def get_or_set(
     cache: CacheInterface[T],
     key: str,
     factory: Callable[[], Awaitable[T]],
-    ttl_seconds: Optional[int] = None,
+    ttl_seconds: int | None = None,
 ) -> T:
     """
     Return cached value, or compute via async factory, cache it, and return.

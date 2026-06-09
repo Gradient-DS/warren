@@ -36,7 +36,7 @@ async def resolve_gcs(
 
     :raises DocumentNotFoundError: If the object does not exist.
     """
-    cloud_location = cast(DocumentCloudLocation, location)
+    cloud_location = cast("DocumentCloudLocation", location)
     bucket = client.bucket(cloud_location.bucket)
     blob = bucket.blob(cloud_location.key)
 

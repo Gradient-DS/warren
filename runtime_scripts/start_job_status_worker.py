@@ -31,6 +31,7 @@ from document_processing.distributed.warren.jobs.status.job_status_worker_runner
     JobStatusWorkerRunner,
 )
 
+
 module_logger: logging.Logger = get_logger(__name__)
 
 
@@ -78,7 +79,9 @@ async def start_job_status_worker(
         logger=log,
     )
 
-    resolved_config = Path(config_file) if config_file else Path("./pipeline/config.yaml")
+    resolved_config = (
+        Path(config_file) if config_file else Path("./pipeline/config.yaml")
+    )
 
     await run(
         runner_factory_func=JobStatusWorkerRunner,
@@ -94,9 +97,7 @@ def main() -> None:
     global module_logger
     args = _parse_args()
     configure_logging(debug=args.debug)
-    module_logger = get_logger(
-        __name__, log_level=resolve_log_level(debug=args.debug)
-    )
+    module_logger = get_logger(__name__, log_level=resolve_log_level(debug=args.debug))
 
     try:
         asyncio.run(start_job_status_worker(**vars(args), logger=module_logger))

@@ -6,7 +6,7 @@ Independent from ``JobResultsStoreInterface``, which tracks what
 happened *after* messages reached the exchange.
 """
 
-from typing import Protocol, Optional, List, Dict
+from typing import Protocol
 
 
 class PublishingTrackerInterface(Protocol):
@@ -27,7 +27,7 @@ class PublishingTrackerInterface(Protocol):
     async def record_failure(
         self,
         job_id: str,
-        doc_id: Optional[str],
+        doc_id: str | None,
         source: str,
         error: str,
         stage: str,
@@ -44,7 +44,7 @@ class PublishingTrackerInterface(Protocol):
         """
         ...
 
-    async def get_results(self, job_id: str) -> List[Dict]:
+    async def get_results(self, job_id: str) -> list[dict]:
         """Get all publishing results for a job.
 
         :return: List of result records, each containing at least
@@ -53,7 +53,7 @@ class PublishingTrackerInterface(Protocol):
         """
         ...
 
-    async def get_failures(self, job_id: str) -> List[Dict]:
+    async def get_failures(self, job_id: str) -> list[dict]:
         """Get only publishing failures for a job.
 
         :return: List of failure records (``success=False``).

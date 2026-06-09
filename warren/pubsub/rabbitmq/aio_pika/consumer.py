@@ -22,16 +22,16 @@ from document_processing.distributed.warren.pubsub.common import (
     PublishFailureException,
     PubSubSetupError,
 )
-from document_processing.distributed.warren.pubsub.rabbitmq.config import (
-    RetryConfig,
-    RMQConsumerManagerConfig,
-)
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
 from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.topology import (
     declare_exchange,
     declare_queue,
+)
+from document_processing.distributed.warren.pubsub.rabbitmq.config import (
+    RetryConfig,
+    RMQConsumerManagerConfig,
 )
 from document_processing.distributed.warren.workers.messages import (
     ExtractMessageIdentityFunc,
@@ -109,9 +109,7 @@ class RMQConsumerManager(ConsumerManagerBase):
 
         try:
             # TODO: Couple this to the worker's concurrency level?
-            await channel.set_qos(
-                prefetch_count=self._config.consumer.prefetch_count
-            )
+            await channel.set_qos(prefetch_count=self._config.consumer.prefetch_count)
         except Exception as e:
             raise PubSubSetupError(
                 f"Failed to set consumer QoS "

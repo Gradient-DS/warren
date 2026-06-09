@@ -6,12 +6,10 @@ splits by paragraph (double newline), stores each chunk, and
 publishes a text_chunks message.
 """
 
-from typing import Dict, Optional
-
-from document_processing.distributed.framework.storage.results.interface import (
+from document_processing.distributed.warren.storage.results.interface import (
     ResultsStoreInterface,
 )
-from document_processing.distributed.framework.workers.workers import (
+from document_processing.distributed.warren.workers.workers import (
     FilteringWorkerBase,
 )
 
@@ -21,19 +19,19 @@ class TextChunkerWorker(FilteringWorkerBase):
 
     def __init__(
         self,
-        worker_id: str,
+        worker_name: str,
         *,
         read_store: ResultsStoreInterface,
         write_store: ResultsStoreInterface,
     ) -> None:
-        super().__init__(worker_id)
+        super().__init__(worker_name)
         self._read_store = read_store
         self._write_store = write_store
 
-    def should_process(self, message: Dict) -> bool:
+    def should_process(self, message: dict) -> bool:
         return message.get("data_type") == "markdown_document"
 
-    async def process(self, message: Dict) -> Optional[Dict]:
+    async def process(self, message: dict) -> dict | None:
         doc_id: str = message["data"]["doc_id"]
         job_id: str = message["job_id"]
 
@@ -62,5 +60,5 @@ class TextChunkerWorker(FilteringWorkerBase):
                 "num_chunks": len(chunks),
             },
             "job_id": job_id,
-            "origin": {"type": "text_chunker", "name": self._worker_id},
+            "origin": {"type": self.type, "name": self.name},
         }

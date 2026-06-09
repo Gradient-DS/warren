@@ -5,13 +5,11 @@ Receives pdf_document messages, looks up fake markdown content,
 stores the result, and publishes a markdown_document message.
 """
 
-from typing import Dict, Optional
-
 from document_processing.distributed.e2e_test.fake.data import FAKE_DOCUMENTS
-from document_processing.distributed.framework.storage.results.interface import (
+from document_processing.distributed.warren.storage.results.interface import (
     ResultsStoreInterface,
 )
-from document_processing.distributed.framework.workers.workers import (
+from document_processing.distributed.warren.workers.workers import (
     FilteringWorkerBase,
 )
 
@@ -21,17 +19,17 @@ class DocumentParserWorker(FilteringWorkerBase):
 
     def __init__(
         self,
-        worker_id: str,
+        worker_name: str,
         *,
         write_store: ResultsStoreInterface,
     ) -> None:
-        super().__init__(worker_id)
+        super().__init__(worker_name)
         self._write_store = write_store
 
-    def should_process(self, message: Dict) -> bool:
+    def should_process(self, message: dict) -> bool:
         return message.get("data_type") == "pdf_document"
 
-    async def process(self, message: Dict) -> Optional[Dict]:
+    async def process(self, message: dict) -> dict | None:
         doc_id: str = message["data"]["doc_id"]
         job_id: str = message["job_id"]
 
@@ -49,5 +47,5 @@ class DocumentParserWorker(FilteringWorkerBase):
             "data_type": "markdown_document",
             "data": {"doc_id": doc_id},
             "job_id": job_id,
-            "origin": {"type": "document_parser", "name": self._worker_id},
+            "origin": {"type": self.type, "name": self.name},
         }

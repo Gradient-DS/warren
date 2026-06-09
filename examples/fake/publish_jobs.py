@@ -1,96 +1,92 @@
 """
-Publish initial pdf_document messages for the fake E2E scenario.
+Publish fake documents for the fake E2E scenario.
 
-Publishes one message per fake document to the fanout exchange.
+Creates a job entry, publishes synthetic documents via
+``FakeE2EPublisher``, and reports the outcome. Prints the
+store-generated job ID to stdout for capture by the caller.
 
 Usage:
     python -m document_processing.distributed.e2e_test.fake.publish_jobs \
-        --job-id e2e-test-001 \
+        --job-name e2e-test-001 \
         --config-file document_processing/distributed/e2e_test/fake/config.yaml
 """
-
-from typing import Dict, List
 
 import argparse
 import asyncio
 import logging
-import uuid
+from collections.abc import AsyncIterable
 from pathlib import Path
 
 from basics.logging import get_logger
-from pydantic import SecretStr
+from pymongo import AsyncMongoClient
 
-from document_processing.distributed.e2e_test.config import (
-    E2EConfig,
+from document_processing.distributed.e2e_test.fake.data import FAKE_DOCUMENTS
+from document_processing.distributed.e2e_test.fake.e2e_publisher import (
+    FakeE2EPublisher,
+)
+from document_processing.distributed.e2e_test.fake.pipeline_spec import PIPELINE
+from document_processing.distributed.runtime_scripts.lib.logging_setup import (
     configure_logging,
     resolve_log_level,
 )
-from document_processing.distributed.e2e_test.fake.data import FAKE_DOCUMENTS
-from document_processing.distributed.framework.pubsub.rabbitmq.connection import (
-    RMQConnectionConfig,
+from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
-from document_processing.distributed.framework.pubsub.rabbitmq.consumer import (
-    RMQExchangeConfig,
-)
-from document_processing.distributed.framework.pubsub.rabbitmq.publisher import (
+from document_processing.distributed.warren.pubsub.rabbitmq.aio_pika.publisher import (
     RMQPublisher,
 )
+from document_processing.distributed.warren.runtime.config import RuntimeConfig
+from document_processing.distributed.warren.storage.jobs.mongodb import (
+    MongoDBJobStore,
+)
+from document_processing.distributed.warren.storage.publishing_tracker.mongodb import (
+    MongoDBPublishingTracker,
+)
+
 
 module_logger: logging.Logger = get_logger(__name__)
 
 DEFAULT_CONFIG_PATH: Path = Path(__file__).parent / "config.yaml"
 
 
-def _build_messages(job_id: str) -> List[Dict]:
-    """Build pdf_document messages for all fake documents.
+async def _as_async_iterable(
+    items: dict,
+) -> AsyncIterable[tuple[str, str]]:
+    """Wrap FAKE_DOCUMENTS dict as an async iterable of (doc_id, content)."""
+    for doc_id, content in items.items():
+        yield (doc_id, content)
 
-    :param job_id: Job identifier to attach to each message.
-    :return: List of message dicts ready for publishing.
+
+async def _publish(config: RuntimeConfig, job_name: str) -> str:
+    """Create job, publish fake documents, report results.
+
+    :return: The store-generated job ID.
     """
-    messages: List[Dict] = []
+    mongo_cfg = config.mongodb
+    mongo_client = AsyncMongoClient(host=mongo_cfg.host, port=mongo_cfg.port)
 
-    for doc_id in FAKE_DOCUMENTS:
-        messages.append(
-            {
-                "data_type": "pdf_document",
-                "data": {
-                    "doc_id": doc_id,
-                    "path": f"/fake/path/{doc_id}.pdf",
-                },
-                "job_id": job_id,
-                "origin": {
-                    "type": "test_publisher",
-                    "name": "e2e-publisher",
-                },
-            }
-        )
+    job_store = MongoDBJobStore(
+        client=mongo_client,
+        database_name=mongo_cfg.database,
+    )
+    await job_store.setup()
 
-    return messages
+    tracker = MongoDBPublishingTracker(
+        client=mongo_client,
+        database_name=mongo_cfg.database,
+    )
+    await tracker.setup()
 
-
-async def _publish(config: E2EConfig, job_id: str) -> None:
-    """Connect to RabbitMQ and publish all test messages.
-
-    :param config: E2E configuration.
-    :param job_id: Job identifier.
-    """
-    rmq_conn_cfg = config.rabbitmq.connection
-    connection_manager = RMQConnectionManager(
-        RMQConnectionConfig(
-            host=rmq_conn_cfg.host,
-            port=rmq_conn_cfg.port,
-            login=rmq_conn_cfg.login,
-            password=SecretStr(rmq_conn_cfg.password),
-        )
+    # job_name allows tracking across scripts (publish, check)
+    # without scraping the store-generated job_id from logs,
+    # which is fragile.
+    job_id = await job_store.create_job(
+        final_data_type=PIPELINE.final_data_type,
+        metadata={"job_name": job_name},
     )
 
-    exchange_cfg = config.rabbitmq.exchange
-    exchange_config = RMQExchangeConfig(
-        name=exchange_cfg.name,
-        type=exchange_cfg.type,
-        durable=exchange_cfg.durable,
-    )
+    connection_manager = RMQConnectionManager(config.rabbitmq.connection)
+    exchange_config = config.rabbitmq.exchange
 
     publisher = RMQPublisher(
         connection_manager=connection_manager,
@@ -101,26 +97,42 @@ async def _publish(config: E2EConfig, job_id: str) -> None:
         await connection_manager.setup()
         await publisher.setup()
 
-        messages = _build_messages(job_id)
-        for msg in messages:
-            await publisher(msg)
-            module_logger.info(f"Published {msg['data']['doc_id']} (job={job_id})")
+        e2e_publisher = FakeE2EPublisher(
+            publisher=publisher,
+            tracker=tracker,
+            job_store=job_store,
+            name="fake-e2e-publisher",
+        )
 
-        module_logger.info(f"Published {len(messages)} messages for job {job_id}")
+        result = await e2e_publisher.publish_job(
+            job_id=job_id,
+            sources=_as_async_iterable(FAKE_DOCUMENTS),
+        )
+
+        module_logger.info(
+            f"Job {job_id}: published={result['published']}, "
+            f"failed={result['failed']}, total={result['total']}"
+        )
 
     finally:
         await publisher.teardown()
         await connection_manager.teardown()
+        await mongo_client.close()
+
+    return job_id
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Publish fake E2E test messages to RabbitMQ",
     )
+    # job_name is stored in metadata so callers (check_completion)
+    # can look up the job without scraping the store-generated
+    # job_id from logs.
     parser.add_argument(
-        "--job-id",
-        default=None,
-        help="Job ID (default: auto-generated e2e-<uuid>).",
+        "--job-name",
+        required=True,
+        help="Human-readable job name (stored in metadata).",
     )
     parser.add_argument(
         "--config-file",
@@ -144,11 +156,9 @@ def main() -> None:
     configure_logging(debug=args.debug)
     module_logger = get_logger(__name__, log_level=log_level)
 
-    config = E2EConfig.from_yaml(args.config_file)
-    job_id = args.job_id or f"e2e-{uuid.uuid4().hex[:8]}"
+    config = RuntimeConfig.from_yaml(args.config_file)
 
-    module_logger.info(f"Job ID: {job_id}")
-    asyncio.run(_publish(config, job_id))
+    asyncio.run(_publish(config, args.job_name))
 
 
 if __name__ == "__main__":

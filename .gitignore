@@ -20,3 +20,6 @@ venv/
 # Local env files
 .env
 *.local
+
+# Thoughts files
+thoughts/

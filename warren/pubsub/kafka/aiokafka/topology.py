@@ -84,10 +84,34 @@ def _raise_on_topic_errors(response: "Response") -> None:
     response body rather than raising, so the error codes are checked
     here. "Topic already exists" is tolerated (idempotent create).
 
-    :raises PubSubSetupError: for any other per-topic error.
+    Fails loud if the response shape is not what we expect: a response
+    lacking ``topic_errors``, or an entry that does not unpack to
+    ``(topic_name, error_code, ...)``, means aiokafka's internal
+    response format has drifted — assuming success there would silently
+    skip the per-topic error check.
+
+    :raises PubSubSetupError: for any per-topic error, or if the
+        response shape is unexpected.
     """
-    for entry in getattr(response, "topic_errors", []):
-        topic_name, error_code, *rest = entry
+    topic_errors = getattr(response, "topic_errors", None)
+    if topic_errors is None:
+        msg = (
+            f"Unexpected create_topics response shape: "
+            f"{type(response).__name__} has no 'topic_errors' attribute"
+        )
+        raise PubSubSetupError(msg)
+
+    for entry in topic_errors:
+        try:
+            topic_name, error_code, *rest = entry
+        except (TypeError, ValueError) as e:
+            msg = (
+                f"Unexpected create_topics response shape: topic_errors "
+                f"entry {entry!r} does not unpack to "
+                f"(topic_name, error_code, ...)"
+            )
+            raise PubSubSetupError(msg) from e
+
         if error_code in (0, TopicAlreadyExistsError.errno):
             continue
         error_message = rest[0] if rest else None

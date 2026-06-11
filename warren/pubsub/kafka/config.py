@@ -24,6 +24,16 @@ class KafkaConnectionConfig(BaseModel):
     The SSL fields are file *paths* only — the ``ssl.SSLContext`` is
     built in the ``aiokafka`` implementation sub-package, keeping this
     model pure-data.
+
+    :param bootstrap_servers: Broker addresses to seed cluster discovery.
+    :param security_protocol: ``"PLAINTEXT"`` or ``"SSL"``.
+    :param ssl_cafile: Path to the CA-certificate file (SSL only).
+    :param ssl_certfile: Path to the client-certificate file (SSL,
+        mutual-TLS only).
+    :param ssl_keyfile: Path to the client private-key file (SSL,
+        mutual-TLS only).
+    :param client_id: Client identifier reported to the broker; when
+        None, aiokafka uses its own default.
     """
 
     bootstrap_servers: list[str] = Field(default_factory=lambda: ["localhost:9092"])
@@ -58,7 +68,10 @@ class KafkaConsumerConfig(BaseModel):
         manager derives ``"<topic>.<worker_type>"`` — one group per
         worker type on the topic (fanout parity). Set explicitly on
         platforms with pre-assigned group names.
-    :param auto_offset_reset: Where a *new* group starts reading.
+    :param auto_offset_reset: Where a *new* group starts reading. Defaults
+        to ``"earliest"`` so a freshly created group drains the existing
+        backlog instead of skipping it (Kafka's own default is
+        ``"latest"``).
     :param max_poll_interval_ms: Max time between polls before the
         broker evicts the consumer from the group.
     :param session_timeout_ms: Heartbeat session timeout.
@@ -74,5 +87,11 @@ class KafkaConsumerConfig(BaseModel):
 
 
 class KafkaConsumerManagerConfig(BaseModel):
+    """Bundle of the topic and consumer config for one consumer manager.
+
+    :param topic: The topic to consume from (and optionally create).
+    :param consumer: Consumer-group parameters for this manager.
+    """
+
     topic: KafkaTopicConfig
     consumer: KafkaConsumerConfig

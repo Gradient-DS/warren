@@ -762,6 +762,61 @@ def test_shutdown_timeout_leaves_offset_uncommitted() -> None:
     assert conn.kafka_consumer.stopped
 
 
+def test_poll_loop_survives_transient_fetch_error() -> None:
+    """A getone() that raises a transient error must not kill the loop.
+
+    The loop logs, backs off, and goes on to process the next message —
+    the fetch-error-is-recoverable policy.
+    """
+    worker = _FakeWorker(result=None)
+    manager, conn = _manager(worker)
+
+    # One transient fetch failure, then a normal message.
+    real_getone = conn.kafka_consumer.getone
+    raised = {"done": False}
+
+    async def flaky_getone() -> _FakeKafkaMessage:
+        if not raised["done"]:
+            raised["done"] = True
+            msg = "transient KafkaError during metadata refresh"
+            raise RuntimeError(msg)
+        return await real_getone()
+
+    conn.kafka_consumer.getone = flaky_getone  # type: ignore[method-assign]
+
+    async def scenario() -> None:
+        conn.kafka_consumer.feed(_msg(_BODY, offset=7))
+        await manager.setup()
+        manager._fetch_error_backoff = 0.0  # keep the test fast
+        await manager.start_consuming()
+        await _eventually(lambda: len(conn.kafka_consumer.commits) == 1)
+        await manager.stop_consuming()
+
+    asyncio.run(scenario())
+
+    assert raised["done"]  # the transient fetch error did fire
+    # The loop survived the fetch error and processed the next message —
+    # proven by the commit landing after the error fired.
+    assert conn.kafka_consumer.commits == [{TP: 8}]
+
+
+def test_poll_loop_stops_on_cancellation() -> None:
+    """CancelledError still stops the loop — only cancellation does."""
+    worker = _FakeWorker(result=None)
+    manager, conn = _manager(worker)
+
+    async def scenario() -> None:
+        await manager.setup()
+        await manager.start_consuming()
+        # The loop is parked in getone(); stop_consuming cancels it.
+        await manager.stop_consuming()
+
+    asyncio.run(scenario())
+
+    assert manager._poll_task.done()
+    assert conn.kafka_consumer.stopped
+
+
 def test_shutdown_tears_down_publishers_best_effort() -> None:
     class _ExplodingPublisher(_FakePublisher):
         async def teardown(self) -> None:

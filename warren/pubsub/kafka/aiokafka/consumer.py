@@ -39,6 +39,13 @@ if TYPE_CHECKING:
     from aiokafka import AIOKafkaConsumer
 
 
+# Backoff applied after a transient fetch error before the poll loop
+# retries getone(). A small constant — fetch errors are recoverable, so
+# the loop pauses briefly (avoiding a hot retry loop during a broker blip
+# or metadata refresh) rather than dying.
+_FETCH_ERROR_BACKOFF_SECONDS = 5.0
+
+
 class KafkaConsumerManager(ConsumerManagerBase):
     """
     Kafka consumer manager that bridges message queue operations with application workers.
@@ -89,6 +96,11 @@ class KafkaConsumerManager(ConsumerManagerBase):
         # Processing is sequential, so there is at most one.
         self._in_flight_task: asyncio.Task | None = None
         self._shutting_down: bool = False
+
+        # Backoff between a failed fetch and the next retry. Not a config
+        # field — fetch errors are an implementation-internal recovery
+        # detail; tests shrink this attribute to stay fast.
+        self._fetch_error_backoff: float = _FETCH_ERROR_BACKOFF_SECONDS
 
     async def setup(self) -> None:
         """
@@ -167,6 +179,14 @@ class KafkaConsumerManager(ConsumerManagerBase):
 
         Any offset left uncommitted is redelivered to the group after the
         rebalance — at-least-once, matching nack-on-shutdown on RabbitMQ.
+
+        On drain timeout: an async worker is awaited and its task simply
+        outlives the timeout, but a *sync* worker dispatched via the
+        executor runs in a thread that cannot be force-cancelled — the
+        thread keeps running after we give up waiting. Either way the
+        offset stays uncommitted, so the message redelivers to the group
+        after the rebalance (at-least-once). We do not attempt to kill the
+        worker; we only stop waiting for it.
         """
         self._shutting_down = True
 
@@ -229,14 +249,41 @@ class KafkaConsumerManager(ConsumerManagerBase):
         Processing runs in its own, shielded task so that cancelling the
         poll loop (shutdown) does not cancel the in-flight message —
         stop_consuming() drains it separately.
+
+        Fetch errors are treated as recoverable: a getone() raising
+        anything other than CancelledError (a transient KafkaError during
+        metadata refresh, a broker blip) is logged, backed off, and
+        retried — it must not escape and kill the loop. Only cancellation
+        stops the loop.
         """
         assert self._kafka_consumer is not None
 
         while not self._shutting_down:
-            message = await self._kafka_consumer.getone()
+            try:
+                message = await self._kafka_consumer.getone()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                # Recoverable fetch error — log, back off, and retry so a
+                # transient broker condition cannot permanently kill the
+                # consumer while the process stays alive.
+                self._log.error(
+                    f"Error fetching message, retrying after "
+                    f"{self._fetch_error_backoff}s: {summarize_exception_chain(e)}"
+                )
+                await asyncio.sleep(self._fetch_error_backoff)
+                continue
 
             task = asyncio.create_task(self._process_message(message))
             self._in_flight_task = task
+            # Clear the in-flight handle once the message task actually
+            # resolves, so a later shutdown does not drain a stale,
+            # already-completed task. A done-callback (not a finally) so
+            # the clear is tied to the *task* completing, not to the poll
+            # loop being cancelled out of the shield() await below —
+            # stop_consuming() cancels the poll task while the message is
+            # still in flight and must still find it to drain it.
+            task.add_done_callback(self._clear_in_flight_task)
             try:
                 # shield: cancelling the poll task must not cancel the
                 # in-flight message (awaiting a task propagates
@@ -250,6 +297,16 @@ class KafkaConsumerManager(ConsumerManagerBase):
                 self._log.error(
                     f"Error finalising message offsets: {summarize_exception_chain(e)}"
                 )
+
+    def _clear_in_flight_task(self, task: asyncio.Task) -> None:
+        """Drop the in-flight handle when its message task completes.
+
+        Guarded against clobbering a newer in-flight task: the poll loop
+        is sequential, so by the time this fires the next message may
+        already be in flight; only clear if we still point at ``task``.
+        """
+        if self._in_flight_task is task:
+            self._in_flight_task = None
 
     def _on_poll_loop_done(self, task: asyncio.Task) -> None:
         """Log unexpected poll-loop termination — never let it die silently."""
@@ -301,7 +358,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
             if is_async:
                 result = await self._consumer(body)
             else:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 result = await loop.run_in_executor(
                     None,
                     self._consumer,

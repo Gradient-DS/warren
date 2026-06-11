@@ -146,6 +146,14 @@ async def run_purge(
         msg = f"Unable to load config from: {resolved_config_path}"
         raise WarrenError(msg) from e
 
+    if config.backend == "kafka":
+        msg = (
+            "Purge is RabbitMQ-only. To reset Kafka state, delete the topic "
+            "and its consumer groups (kafka-topics --delete / "
+            "kafka-consumer-groups --delete) or recreate the local broker."
+        )
+        raise WarrenError(msg)
+
     if queues is not None:
         queue_names = queues
     else:

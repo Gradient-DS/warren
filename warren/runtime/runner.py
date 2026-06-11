@@ -1,9 +1,13 @@
 """
 Default worker runner for the distributed processing framework.
 
-``DefaultWorkerRunner`` wires RabbitMQ, MongoDB, and Redis for any
-worker type defined in a ``PipelineSpec``. All worker-specific decisions
-are driven by the ``WorkerSpec`` — no branching on worker type name.
+``DefaultWorkerRunner`` wires the configured pubsub backend (RabbitMQ or
+Kafka), MongoDB, and Redis for any worker type defined in a
+``PipelineSpec``. The backend is selected by ``config.backend`` and the
+publisher / consumer manager are built through
+:mod:`warren.runtime.backends`, so the runner never branches on backend.
+All worker-specific decisions are driven by the ``WorkerSpec`` — no
+branching on worker type name.
 
 Subclasses can override ``_wrap_worker()`` to intercept the worker
 after factory creation (e.g. for failure injection in tests), or
@@ -21,14 +25,7 @@ from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
-from warren.pubsub.rabbitmq import (
-    RMQConsumerManagerConfig,
-    RMQQueueConfig,
-)
-from warren.pubsub.rabbitmq.aio_pika import (
-    RMQConsumerManager,
-    RMQPublisher,
-)
+from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import (
     RuntimeInfra,
@@ -66,10 +63,12 @@ module_logger: logging.Logger = get_logger(__name__)
 
 
 class DefaultWorkerRunner(WorkerRunnerBase):
-    """Concrete runner that wires RMQ + MongoDB + Redis for a worker.
+    """Concrete runner that wires pubsub + MongoDB + Redis for a worker.
 
-    All worker-specific decisions are driven by the ``WorkerSpec`` —
-    no branching on worker type name.
+    The pubsub backend (RabbitMQ or Kafka) is selected by
+    ``config.backend`` via :mod:`warren.runtime.backends`. All
+    worker-specific decisions are driven by the ``WorkerSpec`` — no
+    branching on worker type or backend name.
 
     Creates infrastructure from ``RuntimeConfig`` and builds default
     components in ``setup()``. Inject custom components to override
@@ -77,7 +76,8 @@ class DefaultWorkerRunner(WorkerRunnerBase):
 
     :param config: runtime infrastructure configuration.
     :param worker_name: unique worker instance identifier.
-    :param worker_type: name of the worker type (used for queue naming).
+    :param worker_type: name of the worker type (used for queue/group
+        naming).
     :param worker_spec: spec defining collections, factory, and flags.
     :param document_fetcher: optional override for the document fetcher.
         Default: ``CachedDocumentFetcher`` with path + GCS resolvers
@@ -116,7 +116,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
     async def setup(self) -> None:
         """Wire connections, stores, worker, publishers, and consumer.
 
-        1. Set up infrastructure (MongoDB, Redis, RabbitMQ)
+        1. Set up infrastructure (MongoDB, Redis, pubsub backend)
         2. Build default stores/fetcher for any not injected
         3. Create worker via spec's factory (async)
         4. Wrap worker (subclass hook, e.g. for failure injection)
@@ -124,7 +124,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         6. Create publishers for downstream routing
         7. Create and set up the consumer manager
         """
-        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
+        with self._exception_wrapping("Infrastructure setup (pubsub/MongoDB/Redis)"):
             self._infra = await create_runtime_infrastructure(self._config)
 
         if self._results_stores is None:
@@ -284,9 +284,9 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             return []
 
         return [
-            RMQPublisher(
-                connection_manager=self._infra.rmq_connection_manager,
-                exchange_config=self._config.rabbitmq.exchange,
+            backends.create_publisher(
+                self._config,
+                self._infra.pubsub_connection_manager,
             )
         ]
 
@@ -295,23 +295,10 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         consumer: MessageConsumerInterface,
         publishers: list[PublisherInterface],
     ) -> ConsumerManagerInterface:
-        exchange_config = self._config.rabbitmq.exchange
-        queue_name = f"{exchange_config.name}.{self._worker_type}"
-
-        queue_config = RMQQueueConfig(
-            name=queue_name,
-            durable=True,
-        )
-
-        manager_config = RMQConsumerManagerConfig(
-            exchange=exchange_config,
-            queue=queue_config,
-            consumer=self._config.rabbitmq.consumer,
-        )
-
-        return RMQConsumerManager(
-            config=manager_config,
-            connection_manager=self._infra.rmq_connection_manager,
+        return backends.create_consumer_manager(
+            self._config,
+            self._infra.pubsub_connection_manager,
+            worker_type=self._worker_type,
             consumer=consumer,
             publishers=publishers,
         )

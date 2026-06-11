@@ -1,9 +1,13 @@
 """
-Runtime infrastructure: create and close MongoDB, Redis, and RabbitMQ
+Runtime infrastructure: create and close MongoDB, Redis, and pubsub
 connections from a ``RuntimeConfig``.
+
+The pubsub connection manager is backend-selectable (RabbitMQ or Kafka):
+it is built via :func:`warren.runtime.backends.create_connection_manager`,
+which switches on ``config.backend`` and imports the transport lazily.
 """
 
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import logging
 from collections.abc import Awaitable, Callable
@@ -13,9 +17,7 @@ from basics.logging_utils import summarize_exception_chain
 from pymongo import AsyncMongoClient
 from redis.asyncio import Redis
 
-from warren.pubsub.rabbitmq.aio_pika.connection import (
-    RMQConnectionManager,
-)
+from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
 
 
@@ -27,7 +29,8 @@ class RuntimeInfra(NamedTuple):
 
     mongo_client: AsyncMongoClient
     redis_client: Redis
-    rmq_connection_manager: RMQConnectionManager
+    # RMQConnectionManager or KafkaConnectionManager, per config.backend.
+    pubsub_connection_manager: Any
 
 
 async def create_runtime_infrastructure(config: RuntimeConfig) -> RuntimeInfra:
@@ -49,13 +52,13 @@ async def create_runtime_infrastructure(config: RuntimeConfig) -> RuntimeInfra:
         port=config.redis.port,
     )
 
-    rmq_connection_manager = RMQConnectionManager(config.rabbitmq.connection)
-    await rmq_connection_manager.setup()
+    pubsub_connection_manager = backends.create_connection_manager(config)
+    await pubsub_connection_manager.setup()
 
     return RuntimeInfra(
         mongo_client=mongo_client,
         redis_client=redis_client,
-        rmq_connection_manager=rmq_connection_manager,
+        pubsub_connection_manager=pubsub_connection_manager,
     )
 
 
@@ -65,7 +68,7 @@ async def close_runtime_infrastructure(infra: RuntimeInfra) -> None:
     :param infra: Infrastructure to close.
     """
     await _close_connection(
-        infra.rmq_connection_manager.teardown, "RabbitMQ connection"
+        infra.pubsub_connection_manager.teardown, "pubsub connection"
     )
     await _close_connection(infra.redis_client.aclose, "Redis client")
     await _close_connection(infra.mongo_client.close, "MongoDB client")

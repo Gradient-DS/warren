@@ -29,12 +29,7 @@ from runtime_scripts.lib.logging_setup import (
     configure_logging,
     resolve_log_level,
 )
-from warren.pubsub.rabbitmq.aio_pika.connection import (
-    RMQConnectionManager,
-)
-from warren.pubsub.rabbitmq.aio_pika.publisher import (
-    RMQPublisher,
-)
+from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
 from warren.storage.jobs.mongodb import (
     MongoDBJobStore,
@@ -85,12 +80,11 @@ async def _publish(config: RuntimeConfig, job_name: str) -> str:
         metadata={"job_name": job_name},
     )
 
-    connection_manager = RMQConnectionManager(config.rabbitmq.connection)
-    exchange_config = config.rabbitmq.exchange
-
-    publisher = RMQPublisher(
-        connection_manager=connection_manager,
-        exchange_config=exchange_config,
+    connection_manager = backends.create_connection_manager(config)
+    publisher = backends.create_publisher(
+        config,
+        connection_manager,
+        name="fake-e2e-publisher",
     )
 
     try:
@@ -124,7 +118,7 @@ async def _publish(config: RuntimeConfig, job_name: str) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Publish fake E2E test messages to RabbitMQ",
+        description="Publish fake E2E test messages to the configured backend",
     )
     # job_name is stored in metadata so callers (check_completion)
     # can look up the job without scraping the store-generated

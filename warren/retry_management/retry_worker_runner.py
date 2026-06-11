@@ -18,21 +18,10 @@ from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
-from warren.pubsub.rabbitmq.aio_pika.consumer import (
-    RMQConsumerManager,
-)
-from warren.pubsub.rabbitmq.aio_pika.publisher import (
-    RMQPublisher,
-)
-from warren.pubsub.rabbitmq.config import (
-    RMQConsumerConfig,
-    RMQConsumerManagerConfig,
-    RMQExchangeConfig,
-    RMQQueueConfig,
-)
 from warren.retry_management.retry_worker import (
     RetryWorker,
 )
+from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import (
     RuntimeInfra,
@@ -69,12 +58,12 @@ class RetryWorkerRunner(WorkerRunnerBase):
     :param worker_name: unique identifier for this retry worker.
     :param retry_store: optional override for the retry envelope store.
         Default: ``CachedDocumentStore`` wrapping MongoDB + Redis.
-    :param republish_publisher: optional override for the exchange
-        publisher. Default: ``RMQPublisher`` targeting the processing
-        exchange.
+    :param republish_publisher: optional override for the republish
+        publisher. Default: the configured backend's publisher targeting
+        the processing exchange/topic.
     :param consumer_manager_factory: optional override for the consumer
-        manager factory. Default: factory creating ``RMQConsumerManager``
-        on the retry queue.
+        manager factory. Default: factory creating the configured
+        backend's consumer manager on the retry queue/group.
     :param message_key_func: optional function to extract a composite
         key from a message dict. Passed to ``RetryWorker``.
     """
@@ -102,7 +91,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
     async def setup(self) -> None:
         """Create infrastructure, build defaults, wire the worker.
 
-        1. Create infrastructure (MongoDB, Redis, RabbitMQ)
+        1. Create infrastructure (MongoDB, Redis, pubsub backend)
         2. Build default retry store, publisher, consumer factory
            for any components not injected
         3. Set up the republish publisher
@@ -110,7 +99,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
         5. Create and set up the consumer manager
         6. Schedule pending retries from the store
         """
-        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
+        with self._exception_wrapping("Infrastructure setup (pubsub/MongoDB/Redis)"):
             self._infra = await create_runtime_infrastructure(self._config)
 
         if self._retry_store is None:
@@ -185,42 +174,19 @@ class RetryWorkerRunner(WorkerRunnerBase):
         return CachedDocumentStore(mongo_store, cache)
 
     def _create_default_publisher(self) -> PublisherInterface:
-        exchange_cfg = self._config.rabbitmq.exchange
-        return RMQPublisher(
-            connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=RMQExchangeConfig(
-                name=exchange_cfg.name,
-                type=exchange_cfg.type,
-                durable=exchange_cfg.durable,
-            ),
+        return backends.create_publisher(
+            self._config,
+            self._infra.pubsub_connection_manager,
         )
 
     def _create_default_consumer_factory(self) -> ConsumerManagerFactory:
-        exchange_cfg = self._config.rabbitmq.exchange
-        consumer_cfg = self._config.rabbitmq.consumer
-
-        manager_config = RMQConsumerManagerConfig(
-            exchange=RMQExchangeConfig(
-                name=exchange_cfg.name,
-                type=exchange_cfg.type,
-                durable=exchange_cfg.durable,
-            ),
-            queue=RMQQueueConfig(
-                name=f"{exchange_cfg.name}.{RETRY_WORKER_TYPE}",
-                durable=True,
-            ),
-            consumer=RMQConsumerConfig(
-                prefetch_count=consumer_cfg.prefetch_count,
-                on_shutdown_timeout=consumer_cfg.on_shutdown_timeout,
-            ),
-        )
-
         def factory(
             consumer: MessageConsumerInterface,
         ) -> ConsumerManagerInterface:
-            return RMQConsumerManager(
-                config=manager_config,
-                connection_manager=self._infra.rmq_connection_manager,
+            return backends.create_consumer_manager(
+                self._config,
+                self._infra.pubsub_connection_manager,
+                worker_type=RETRY_WORKER_TYPE,
                 consumer=consumer,
             )
 

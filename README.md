@@ -10,16 +10,20 @@ Warren separates the **framework** (worker base classes, storage interfaces, pub
 
 ## Installation
 
+The transport backends and cloud storage are optional extras — install the ones you use. The Quickstart below runs on RabbitMQ, so install the `rmq` extra:
+
 ```bash
-pip install warren
+pip install "warren[rmq]"
 ```
+
+Use `warren[kafka]` to run on Kafka instead, and `warren[gcs]` for Google Cloud Storage document discovery. Selecting a backend or resolver without its extra raises a clear `OptionalDependencyError`.
 
 Requires Python 3.12+. For development:
 
 ```bash
 git clone https://github.com/Gradient-DS/warren.git
 cd warren
-pip install -e .[dev]
+pip install -e ".[dev,rmq,kafka]"
 ```
 
 ## Quickstart — the fake example pipeline
@@ -84,7 +88,7 @@ Deeper design docs live in [`warren/docs/`](warren/docs/): workers, storage and 
 ## Development
 
 ```bash
-pip install -e .[dev]
+pip install -e ".[dev,rmq,kafka]"
 python -m pytest tests -q
 ruff check . && ruff format --check .
 ```

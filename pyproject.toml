@@ -35,6 +35,9 @@ dependencies = [
 dev = [
     "pytest>=8",
     "ruff",
+    # Kafka backend transport — becomes the `kafka` extra in the packaging
+    # phase; kept in dev for now so the unit tests can import aiokafka.
+    "aiokafka>=0.12",
 ]
 
 [project.urls]

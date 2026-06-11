@@ -1,5 +1,7 @@
 # Warren
 
+[![tests](https://github.com/Gradient-DS/warren/actions/workflows/tests.yml/badge.svg)](https://github.com/Gradient-DS/warren/actions/workflows/tests.yml) [![PyPI version](https://img.shields.io/pypi/v/warren)](https://pypi.org/project/warren/) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 Warren is a message-driven document processing framework. You define a pipeline as a set of worker types, each consuming messages from a shared RabbitMQ fanout exchange and **self-selecting** which messages to process. Workers run as independent processes — you scale by adding replicas of any worker type.
 
 A typical flow: a job enters the pipeline as a message on the fanout exchange. Every worker type receives a copy in its own queue, but only processes the messages relevant to it — each worker's `should_process()` decides whether to act or discard. When a worker processes a message, it writes its results to a cached storage layer (MongoDB + Redis), then publishes a new message describing the *location* of those results. Downstream workers pick that up, fetch what they need from storage, and publish their own result locations. Adding a new worker type is purely additive — no routing configuration changes, no upstream modifications.
@@ -9,7 +11,7 @@ Warren separates the **framework** (worker base classes, storage interfaces, pub
 ## Installation
 
 ```bash
-pip install git+https://github.com/Gradient-DS/warren.git@v0.1.0
+pip install warren
 ```
 
 Requires Python 3.12+. For development:
@@ -82,6 +84,10 @@ pip install -e .[dev]
 python -m pytest tests -q
 ruff check . && ruff format --check .
 ```
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). To report a security issue, follow [SECURITY.md](SECURITY.md) (never a public issue).
 
 ## License
 

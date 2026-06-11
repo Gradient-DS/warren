@@ -10,6 +10,16 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
+keywords = ["rabbitmq", "pipeline", "document-processing", "workers", "message-driven", "mongodb", "redis"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Framework :: AsyncIO",
+]
 authors = [{ name = "Gradient DS" }]
 dependencies = [
     "visionscaper-pybase>=0.4.0",
@@ -28,7 +38,10 @@ dev = [
 ]
 
 [project.urls]
+Homepage = "https://github.com/Gradient-DS/warren"
 Repository = "https://github.com/Gradient-DS/warren"
+Issues = "https://github.com/Gradient-DS/warren/issues"
+Documentation = "https://github.com/Gradient-DS/warren/blob/main/warren/runtime/USAGE.md"
 
 [project.scripts]
 warren-worker = "runtime_scripts.start_worker:main"

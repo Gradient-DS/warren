@@ -25,19 +25,20 @@ dependencies = [
     "visionscaper-pybase>=0.4.0",
     "pymongo>=4.10",
     "redis>=4.0",
-    "aio-pika>=9.5",
     "pydantic>=2.11",
     "PyYAML>=6",
-    "google-cloud-storage>=2.18",
 ]
 
 [project.optional-dependencies]
+# Backend transports and cloud storage are optional: install only the
+# extras you use. A missing extra surfaces as an OptionalDependencyError
+# the moment that backend / resolver is selected.
+rmq = ["aio-pika>=9.5"]
+kafka = ["aiokafka>=0.12"]
+gcs = ["google-cloud-storage>=2.18"]
 dev = [
     "pytest>=8",
     "ruff",
-    # Kafka backend transport — becomes the `kafka` extra in the packaging
-    # phase; kept in dev for now so the unit tests can import aiokafka.
-    "aiokafka>=0.12",
 ]
 
 [project.urls]

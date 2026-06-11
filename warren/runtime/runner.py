@@ -214,9 +214,14 @@ class DefaultWorkerRunner(WorkerRunnerBase):
 
             resolvers["cloud"] = partial(resolve_gcs, client=GCSClient())
         except ImportError:
+            # Optional 'gcs' extra. The 'cloud' resolver is only attempted,
+            # never required — pipelines that never resolve cloud documents
+            # run fine without it, so we degrade gracefully rather than
+            # raise. Selecting a 'cloud' document location without the
+            # resolver later fails with UnknownLocationTypeError.
             module_logger.debug(
-                "google-cloud-storage not installed — "
-                "'cloud' document resolver disabled"
+                "google-cloud-storage not installed — 'cloud' document "
+                'resolver disabled; install with: pip install "warren[gcs]"'
             )
         except Exception as exc:
             module_logger.warning(

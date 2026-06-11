@@ -66,14 +66,18 @@ def test_connection_manager_kafka() -> None:
 
 def test_publisher_rabbitmq() -> None:
     config = RuntimeConfig(backend="rabbitmq")
-    publisher = backends.create_publisher(config, object())
+    publisher = backends.create_publisher(config, object(), name="x")
     assert isinstance(publisher, RMQPublisher)
+    # The name is forwarded to the publisher (woven into its logger name).
+    assert publisher._pybase_logger_name == "[RMQPublisher] x"
 
 
 def test_publisher_kafka() -> None:
     config = RuntimeConfig(backend="kafka")
-    publisher = backends.create_publisher(config, object())
+    publisher = backends.create_publisher(config, object(), name="x")
     assert isinstance(publisher, KafkaPublisher)
+    # The name is forwarded to the publisher (woven into its logger name).
+    assert publisher._pybase_logger_name == "[KafkaPublisher] x"
 
 
 # ---------------------------------------------------------------------------

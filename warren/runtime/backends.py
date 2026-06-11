@@ -27,6 +27,12 @@ one place (this factory). ``KafkaConsumerManager`` keeps its own
 ``group_id or "<topic>.<type>"`` fallback for direct construction outside
 the runtime, but in the runtime path it always receives a concrete
 ``group_id`` and never reaches that fallback.
+
+Note the suffix sources differ: the factory derives the group from its
+``worker_type`` argument, whereas the manager's fallback derives it from
+``consumer.type``. These are the same value in the runtime path (callers
+pass ``worker_type=consumer.type``) but are not guaranteed interchangeable
+for direct construction.
 """
 
 from typing import Any

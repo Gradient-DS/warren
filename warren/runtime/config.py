@@ -17,15 +17,18 @@ from pydantic import BaseModel
 from warren.pubsub.rabbitmq.config import (
     RMQConnectionConfig,
     RMQConsumerConfig,
-    RMQExchangeConfig,
 )
 
 
 class RuntimeRMQConfig(BaseModel):
-    """RabbitMQ settings composed from framework config models."""
+    """RabbitMQ connection + consumer settings (environment-specific).
+
+    Exchange *definitions* (topology) live on the ``PipelineSpec``, not here —
+    see tasks/routing-design.md D3. Config holds only what varies per
+    deployment: where the broker is and how to consume.
+    """
 
     connection: RMQConnectionConfig = RMQConnectionConfig()
-    exchange: RMQExchangeConfig = RMQExchangeConfig(name="jobs", type="fanout")
     consumer: RMQConsumerConfig = RMQConsumerConfig()
 
 

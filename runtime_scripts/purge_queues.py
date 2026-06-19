@@ -146,9 +146,10 @@ async def run_purge(
         msg = f"Unable to load config from: {resolved_config_path}"
         raise WarrenError(msg) from e
 
-    if queues is not None:
-        queue_names = queues
-    else:
+    # Exchanges live in the pipeline spec now, so load it whenever we need
+    # to derive queue names or the default exchange to delete.
+    pipeline = None
+    if queues is None or exchange is None:
         spec_str = pipeline_spec or DEFAULT_PIPELINE_DIR
         try:
             pipeline, _ = load_pipeline(spec_str, log)
@@ -156,10 +157,15 @@ async def run_purge(
             msg = f"Unable to load pipeline spec from: {spec_str}"
             raise WarrenError(msg) from e
 
-        exchange_name = config.rabbitmq.exchange.name
-        queue_names = [f"{exchange_name}.{wt}" for wt in pipeline.workers]
+    if queues is not None:
+        queue_names = queues
+    else:
+        queue_names = [
+            f"{pipeline.exchanges[spec.consume_exchange].name}.{wt}"
+            for wt, spec in pipeline.workers.items()
+        ]
 
-    exchange_to_delete = exchange or config.rabbitmq.exchange.name
+    exchange_to_delete = exchange or pipeline.exchanges[pipeline.default_exchange].name
 
     log.info(f"Queues to purge: {queue_names}")
     log.info(f"Exchange to delete: {exchange_to_delete}")

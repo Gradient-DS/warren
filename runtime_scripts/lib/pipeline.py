@@ -12,6 +12,7 @@ from pathlib import Path
 
 from basics.logging import get_logger
 
+from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.spec import PipelineSpec
 
@@ -165,6 +166,20 @@ def resolve_config_path(
         "from a Python module (no directory to infer config.yaml from)"
     )
     raise ValueError(msg)
+
+
+def resolve_default_exchange(pipeline: PipelineSpec) -> RMQExchangeConfig:
+    """Return the exchange the support workers observe (``default_exchange``).
+
+    :raises ValueError: if ``default_exchange`` is not in ``exchanges``.
+    """
+    if pipeline.default_exchange not in pipeline.exchanges:
+        msg = (
+            f"default_exchange '{pipeline.default_exchange}' is not in exchanges "
+            f"{sorted(pipeline.exchanges)}"
+        )
+        raise ValueError(msg)
+    return pipeline.exchanges[pipeline.default_exchange]
 
 
 def load_config(config_file: Path) -> RuntimeConfig:

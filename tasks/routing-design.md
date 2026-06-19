@@ -200,22 +200,31 @@ queue depth. No per-instance bindings.
 
 ## Phased build (each phase = its own branch/PR + tests; examples are live verification)
 
-### Phase 1 — exchange model (single-exchange, single-publish)
+### Phase 1 — exchange model (single-exchange, single-publish) — ✅ DONE
 - D1 (add `direct`/`topic` to the `Literal`), D2, D3 (exchanges → `PipelineSpec`, breaking),
   D4 (new `WorkerSpec`/`PublishSpec`, remove `terminal`), D5/D6 groundwork (`MessageFieldRouter`),
-  D9 (control-publisher split — correct foundation, so we never ship the N-retry bug),
   D13 deploy-time `validate_pipeline` (lighter), D14.
 - **Single-publish** per worker; completion stays on the existing `final_data_type` (Phase 1 has no
   empty-`publish` workers — the final worker still emits its final message).
-- Migrate `examples/fake` → **Example A (fanout)**; add **Example B (topic)**. Update the 9 tests +
-  README/USAGE for the new config/spec shape. Docker integration test for topic delivery.
+- Migrated `examples/fake` → **Example A (fanout)**; added **examples/topic** (**Example B**). Tests
+  green (routing + validation unit tests + a broker-backed topic integration test); README/USAGE
+  updated for the new config/spec shape.
+
+> **Deviation from the original plan (agreed: defer, don't redesign):** D9 (control-publisher split)
+> and D10 (retry-by-replay) were **moved out of Phase 1 into Phase 3**. Rationale: Phase 1 is
+> single-publish, so the "retry N times" bug cannot occur; folding the split in now would be
+> speculative restructuring against the "keep it simple" directive. Phase 1 keeps the existing single
+> `publishers`-list behavior (lifecycle envelopes ride the worker's one publisher, as today). The
+> internal support-worker runners route lifecycle/observer publishing via `observer_route_func`
+> (data_type) under topic; full replay-based retry lands with multi-publish in Phase 3.
 
 ### Phase 2 — capabilities & job-defined routing
 - D7 (`CapabilityWorkerBase`), D8 (`accepts`/`produces` on `WorkerSpec`), D6 `RoutingPlanRouter`,
   D13 submission-time `validate_routing_plan`. Direct / job-defined-routing example.
 
 ### Phase 3 — multi-exchange & lifecycle
-- Multi-publish + multiple exchanges, D12 (per-exchange observers), D10 (idempotent retry by replay),
+- Multi-publish + multiple exchanges, **D9 (control-publisher split, moved from Phase 1)**,
+  D12 (per-exchange observers), D10 (idempotent retry by replay),
   D11 (terminal-set completion + completion signals), **Example C (fanout + topic/direct at once)**.
 
 ---

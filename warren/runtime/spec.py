@@ -13,12 +13,14 @@ treat them uniformly.
 """
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pymongo import AsyncMongoClient
 from redis.asyncio import Redis
 
 from warren.common import MessageConsumerInterface
+from warren.pubsub.common import Route, RouteFunc
+from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 from warren.storage.document_store.interface import (
     DocumentStoreInterface,
 )
@@ -76,14 +78,40 @@ inside.
 
 
 @dataclass(frozen=True)
+class PublishSpec:
+    """One downstream publishing target for a worker.
+
+    A worker publishes its result to each ``PublishSpec`` in
+    ``WorkerSpec.publish``. The exchange's type decides how the routing key
+    is set: ``fanout`` ignores it (leave ``route``/``route_func`` unset);
+    ``direct``/``topic`` require exactly one of ``route`` (a static key) or
+    ``route_func`` (computed per message, e.g. ``MessageFieldRouter``).
+
+    :param exchange: Name of an exchange defined in ``PipelineSpec.exchanges``.
+    :param route: Static routing key (direct/topic only).
+    :param route_func: Per-message routing function (direct/topic only).
+    """
+
+    exchange: str
+    route: Route | None = None
+    route_func: RouteFunc | None = None
+
+
+@dataclass(frozen=True)
 class WorkerSpec:
-    """One worker type: its collections, factory, and terminal flag.
+    """One worker type: how it is wired into the pipeline's exchanges.
 
     :param collections: Maps role ("read", "write") to MongoDB collection
         name. The runner creates a DefaultResultsStore per role.
     :param factory: Callable that creates the worker given a
         ``WorkerFactoryContext``.
-    :param terminal: If True, the worker publishes nothing downstream.
+    :param consume_exchange: Name of the exchange (in
+        ``PipelineSpec.exchanges``) this worker's queue binds to.
+    :param binding_key: Queue binding pattern for direct/topic exchanges.
+        Must be ``None`` for a fanout exchange; required for direct/topic.
+    :param publish: Downstream publishing targets. An empty list means the
+        worker publishes no data downstream (see ``PipelineSpec`` for how
+        job completion is determined — it does not key off this).
     :param needs_document_fetcher: If True, the runner passes a
         GetDocumentFunc to the factory. Otherwise passes None.
     :param needs_document_store: If True, the runner passes a
@@ -96,16 +124,23 @@ class WorkerSpec:
 
     collections: dict[str, str]
     factory: WorkerFactory
-    terminal: bool = False
+    consume_exchange: str
+    binding_key: str | None = None
+    publish: list[PublishSpec] = field(default_factory=list)
     needs_document_fetcher: bool = False
     needs_document_store: bool = False
 
 
 @dataclass(frozen=True)
 class PipelineSpec:
-    """Full pipeline composition: workers + completion criteria.
+    """Full pipeline composition: exchanges, workers + completion criteria.
 
     :param workers: Maps worker type name to its WorkerSpec.
+    :param exchanges: Named exchange definitions (topology). Workers
+        reference these by name via ``consume_exchange`` / ``PublishSpec``.
+    :param default_exchange: Name of the exchange the support workers
+        (job-status, retry, publication) observe. Must be a key in
+        ``exchanges``.
     :param result_collections: All MongoDB collection names to report
         in summaries (e.g., ["parsed_documents", "chunks", "embeddings"]).
     :param reference_collection: Collection whose count defines "expected"
@@ -118,6 +153,8 @@ class PipelineSpec:
     """
 
     workers: dict[str, WorkerSpec]
+    exchanges: dict[str, RMQExchangeConfig]
+    default_exchange: str
     result_collections: list[str]
     reference_collection: str
     completion_collection: str

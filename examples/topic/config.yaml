@@ -13,7 +13,7 @@ rabbitmq:
 mongodb:
   host: localhost
   port: 27017
-  database: e2e_test
+  database: e2e_topic
 
 redis:
   host: localhost
@@ -22,7 +22,3 @@ redis:
 retry:
   enabled: true
   collection_name: retries
-
-e2e:
-  check_timeout_seconds: 60
-  check_poll_interval_seconds: 2

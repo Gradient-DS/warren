@@ -28,6 +28,8 @@ A `PipelineSpec` declares the full pipeline composition: which worker types exis
 
 ```python
 PipelineSpec(
+    exchanges={"jobs": RMQExchangeConfig(name="jobs", type="fanout")},
+    default_exchange="jobs",
     workers={"parser": WorkerSpec(...), "chunker": WorkerSpec(...), ...},
     result_collections=["parsed_documents", "chunks", "embeddings"],
     reference_collection="chunks",
@@ -36,6 +38,8 @@ PipelineSpec(
 )
 ```
 
+- `exchanges` maps a name to an `RMQExchangeConfig` (`type` is `fanout`, `topic`, or `direct`). Exchanges are pipeline topology, so they live here in the spec — `config.yaml` holds only per-environment infra (hosts, credentials, prefetch).
+- `default_exchange` names the exchange the support workers (job-status, retry, publication) observe.
 - `workers` maps a worker type name (string) to its `WorkerSpec`. The type name determines the RabbitMQ queue name (`{exchange}.{worker_type}`).
 - `final_data_type` is the message type that signals a document is fully processed. The `JobStatusWorker` uses this to detect completion and mark jobs as done in the job store.
 - `result_collections`, `reference_collection`, `completion_collection` — currently used only by the E2E test's `check_completion.py` polling script (count-comparison heuristic). Not used by any framework component. These should be moved out of `PipelineSpec` into E2E-specific config in a future cleanup (see TODOs).
@@ -48,7 +52,9 @@ A `WorkerSpec` describes one worker type — what it needs and how to build it:
 WorkerSpec(
     collections={"read": "chunks", "write": "embeddings"},
     factory=create_embedder,
-    terminal=False,
+    consume_exchange="jobs",
+    binding_key=None,                       # required for topic/direct, None for fanout
+    publish=[PublishSpec(exchange="jobs")],  # empty list = no downstream data
     needs_document_fetcher=False,
     needs_document_store=False,
 )
@@ -56,7 +62,9 @@ WorkerSpec(
 
 - `collections` maps roles to MongoDB collection names. Workers typically have a "read" collection (upstream results to consume) and a "write" collection (where this worker stores its own processing results). The runner creates a `DefaultResultsStore` per role and passes them to the factory via `ctx.stores["read"]`, `ctx.stores["write"]`, etc. Some workers have additional roles (e.g. the embedder reads from "chunks", "summaries", and "item_metadata").
 - `factory` is an async callable `(WorkerFactoryContext) -> MessageConsumerInterface`. It creates and returns the worker instance. See [Defining a pipeline](#defining-a-pipeline).
-- `terminal` — if `True`, the worker publishes nothing downstream (no RMQ publisher is created). Use for the last stage in a pipeline.
+- `consume_exchange` names the exchange (from `PipelineSpec.exchanges`) this worker's queue binds to.
+- `binding_key` is the queue's binding pattern. It must be `None` on a `fanout` exchange (which ignores keys) and is required on `topic`/`direct` exchanges (e.g. a `data_type` like `"markdown_document"`, or a `topic` wildcard like `"document.*"`).
+- `publish` is a list of `PublishSpec(exchange, route=None, route_func=None)` downstream targets. On `fanout`, leave `route`/`route_func` unset; on `topic`/`direct`, set one (e.g. `route_func=MessageFieldRouter()` to route by `data_type`). An **empty `publish` list** means the worker publishes no data downstream — there is no separate `terminal` flag.
 - `needs_document_fetcher` — if `True`, the runner builds a `CachedDocumentFetcher` (with path and GCS resolvers) and passes it as `ctx.get_document_func`. (Note: there is an open design question about whether this should be the factory's responsibility instead of the runner's — see TODOs.)
 - `needs_document_store` — if `True`, the runner creates a `MongoDBDocumentStore` on the `documents` collection and passes it as `ctx.document_store`. (Same design note as above.)
 
@@ -84,15 +92,12 @@ Infrastructure settings loaded from YAML:
 
 ```yaml
 rabbitmq:
+  # Exchange definitions live in the pipeline spec (topology), not here.
   connection:
     host: localhost
     port: 5672
     login: guest
     password: guest
-  exchange:
-    name: jobs
-    type: fanout
-    durable: true
   consumer:
     prefetch_count: 4
     on_shutdown_timeout: 30.0
@@ -128,7 +133,7 @@ The runner that wires everything together. Given a `RuntimeConfig` and a `Worker
 2. Builds `ResultsStoreInterface` instances from `collections`
 3. Optionally creates a `CachedDocumentFetcher` and/or `DocumentStoreInterface`
 4. Calls the factory function with a `WorkerFactoryContext`
-5. Creates an RMQ publisher (unless `terminal=True`) and consumer manager
+5. Creates one RMQ publisher per `publish` target (none if `publish` is empty) and a consumer manager bound to `consume_exchange` with `binding_key`
 6. Runs the consumer until `SIGINT`/`SIGTERM`
 7. Tears down everything on shutdown
 
@@ -180,18 +185,23 @@ The pipeline spec then references these factories via lazy-import wrappers:
 ```python
 # my_pipeline/pipeline_spec.py
 
-from warren.runtime import PipelineSpec, WorkerFactoryContext, WorkerSpec
+from warren.runtime import PipelineSpec, PublishSpec, WorkerFactoryContext, WorkerSpec
 from warren.common import MessageConsumerInterface
+from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 
 async def _create_parser(ctx: WorkerFactoryContext) -> MessageConsumerInterface:
     from my_pipeline.workers.parser_worker import create
     return await create(ctx)
 
 PIPELINE = PipelineSpec(
+    exchanges={"jobs": RMQExchangeConfig(name="jobs", type="fanout")},
+    default_exchange="jobs",
     workers={
         "parser": WorkerSpec(
             collections={"write": "parsed_documents"},
             factory=_create_parser,
+            consume_exchange="jobs",
+            publish=[PublishSpec(exchange="jobs")],
             needs_document_fetcher=True,
         ),
         ...

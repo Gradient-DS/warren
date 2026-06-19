@@ -31,9 +31,14 @@ from warren.runtime.runner import (
 )
 from warren.runtime.spec import (
     PipelineSpec,
+    PublishSpec,
     WorkerFactory,
     WorkerFactoryContext,
     WorkerSpec,
+)
+from warren.runtime.validation import (
+    PipelineValidationError,
+    validate_pipeline,
 )
 
 
@@ -41,6 +46,8 @@ __all__ = [
     "DefaultWorkerRunner",
     "MongoDBConfig",
     "PipelineSpec",
+    "PipelineValidationError",
+    "PublishSpec",
     "RedisConfig",
     "RuntimeConfig",
     "RuntimeInfra",
@@ -51,4 +58,5 @@ __all__ = [
     "WorkerSpec",
     "close_runtime_infrastructure",
     "create_runtime_infrastructure",
+    "validate_pipeline",
 ]

@@ -42,11 +42,11 @@ python -m runtime_scripts.start_worker --pipeline-spec ./examples/fake --worker-
 python -m runtime_scripts.start_worker --pipeline-spec ./examples/fake --worker-type embedding_generator --config-file examples/fake/config.yaml
 ```
 
-Optionally also start the support workers (job completion tracking and retry management):
+Optionally also start the support workers (job completion tracking and retry management). They take `--pipeline-spec` too, so they can resolve which exchange to observe:
 
 ```bash
-python -m runtime_scripts.start_job_status_worker --config-file examples/fake/config.yaml
-python -m runtime_scripts.start_retry_worker --config-file examples/fake/config.yaml
+python -m runtime_scripts.start_job_status_worker --pipeline-spec ./examples/fake --config-file examples/fake/config.yaml
+python -m runtime_scripts.start_retry_worker --pipeline-spec ./examples/fake --config-file examples/fake/config.yaml
 ```
 
 **3. Publish the fake documents:**
@@ -60,6 +60,8 @@ Watch the worker terminals: the parser picks up the documents, the chunker picks
 ## Defining your own pipeline
 
 A pipeline is a directory with a `pipeline_spec.py` (exporting a `PIPELINE: PipelineSpec`) and a `config.yaml` (a `RuntimeConfig`). Each worker module owns a `create(ctx: WorkerFactoryContext)` factory; the spec references factories via lazy-import wrappers so different deployment images only load the dependencies they need.
+
+The `PipelineSpec` also defines the **exchanges** (topology) and how each worker is wired to them: `consume_exchange`, an optional `binding_key`, and a list of `publish` targets (`config.yaml` holds only per-environment infra — broker/Mongo/Redis hosts, credentials, prefetch). A `fanout` exchange broadcasts to every worker (each self-selects via `should_process`); a `topic` or `direct` exchange lets the broker route by routing key. See `examples/fake/` (fanout) and `examples/topic/` (topic routing by `data_type`).
 
 **Read [`warren/runtime/USAGE.md`](warren/runtime/USAGE.md)** — the full usage guide: core concepts (`PipelineSpec`, `WorkerSpec`, `WorkerFactoryContext`, `RuntimeConfig`, `DefaultWorkerRunner`), the launcher scripts, custom runners, and recommended project layout.
 

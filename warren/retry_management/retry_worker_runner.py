@@ -30,6 +30,10 @@ from warren.pubsub.rabbitmq.config import (
     RMQExchangeConfig,
     RMQQueueConfig,
 )
+from warren.pubsub.routing import (
+    observer_binding_key,
+    observer_route_func,
+)
 from warren.retry_management.retry_worker import (
     RetryWorker,
 )
@@ -84,6 +88,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
         config: RuntimeConfig,
         worker_name: str,
         *,
+        exchange: RMQExchangeConfig,
         retry_store: DocumentStoreInterface | None = None,
         republish_publisher: PublisherInterface | None = None,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
@@ -92,6 +97,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
         super().__init__(name=worker_name)
         self._worker_name = worker_name
         self._config = config
+        self._exchange = exchange
         self._retry_store = retry_store
         self._republish_publisher = republish_publisher
         self._consumer_manager_factory = consumer_manager_factory
@@ -185,29 +191,21 @@ class RetryWorkerRunner(WorkerRunnerBase):
         return CachedDocumentStore(mongo_store, cache)
 
     def _create_default_publisher(self) -> PublisherInterface:
-        exchange_cfg = self._config.rabbitmq.exchange
         return RMQPublisher(
             connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=RMQExchangeConfig(
-                name=exchange_cfg.name,
-                type=exchange_cfg.type,
-                durable=exchange_cfg.durable,
-            ),
+            exchange_config=self._exchange,
+            route_func=observer_route_func(self._exchange),
         )
 
     def _create_default_consumer_factory(self) -> ConsumerManagerFactory:
-        exchange_cfg = self._config.rabbitmq.exchange
         consumer_cfg = self._config.rabbitmq.consumer
 
         manager_config = RMQConsumerManagerConfig(
-            exchange=RMQExchangeConfig(
-                name=exchange_cfg.name,
-                type=exchange_cfg.type,
-                durable=exchange_cfg.durable,
-            ),
+            exchange=self._exchange,
             queue=RMQQueueConfig(
-                name=f"{exchange_cfg.name}.{RETRY_WORKER_TYPE}",
+                name=f"{self._exchange.name}.{RETRY_WORKER_TYPE}",
                 durable=True,
+                routing_key=observer_binding_key(self._exchange),
             ),
             consumer=RMQConsumerConfig(
                 prefetch_count=consumer_cfg.prefetch_count,

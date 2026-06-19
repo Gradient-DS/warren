@@ -32,7 +32,9 @@ class RMQConnectionConfig(BaseModel):
 
 class RMQExchangeConfig(BaseModel):
     name: str
-    type: Literal["topic", "fanout"] = "topic"
+    # "headers" is intentionally unsupported (routes on binding arguments,
+    # a different code path from routing keys). See tasks/routing-design.md D1.
+    type: Literal["fanout", "direct", "topic"] = "topic"
     durable: bool = True
 
 

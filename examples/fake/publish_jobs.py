@@ -24,18 +24,20 @@ from examples.fake.data import FAKE_DOCUMENTS
 from examples.fake.e2e_publisher import (
     FakeE2EPublisher,
 )
-from examples.fake.pipeline_spec import PIPELINE
 from runtime_scripts.lib.logging_setup import (
     configure_logging,
     resolve_log_level,
 )
+from runtime_scripts.lib.pipeline import load_pipeline
 from warren.pubsub.rabbitmq.aio_pika.connection import (
     RMQConnectionManager,
 )
 from warren.pubsub.rabbitmq.aio_pika.publisher import (
     RMQPublisher,
 )
+from warren.pubsub.routing import observer_route_func
 from warren.runtime.config import RuntimeConfig
+from warren.runtime.spec import PipelineSpec
 from warren.storage.jobs.mongodb import (
     MongoDBJobStore,
 )
@@ -57,7 +59,11 @@ async def _as_async_iterable(
         yield (doc_id, content)
 
 
-async def _publish(config: RuntimeConfig, job_name: str) -> str:
+async def _publish(
+    config: RuntimeConfig,
+    pipeline: PipelineSpec,
+    job_name: str,
+) -> str:
     """Create job, publish fake documents, report results.
 
     :return: The store-generated job ID.
@@ -81,16 +87,17 @@ async def _publish(config: RuntimeConfig, job_name: str) -> str:
     # without scraping the store-generated job_id from logs,
     # which is fragile.
     job_id = await job_store.create_job(
-        final_data_type=PIPELINE.final_data_type,
+        final_data_type=pipeline.final_data_type,
         metadata={"job_name": job_name},
     )
 
     connection_manager = RMQConnectionManager(config.rabbitmq.connection)
-    exchange_config = config.rabbitmq.exchange
+    exchange_config = pipeline.exchanges[pipeline.default_exchange]
 
     publisher = RMQPublisher(
         connection_manager=connection_manager,
         exchange_config=exchange_config,
+        route_func=observer_route_func(exchange_config),
     )
 
     try:
@@ -135,6 +142,15 @@ def _parse_args() -> argparse.Namespace:
         help="Human-readable job name (stored in metadata).",
     )
     parser.add_argument(
+        "--pipeline-spec",
+        type=str,
+        default="./examples/fake",
+        help=(
+            "Pipeline spec location (same format as start_worker). Determines "
+            "the exchange the documents are published to. Default: ./examples/fake"
+        ),
+    )
+    parser.add_argument(
         "--config-file",
         type=Path,
         default=DEFAULT_CONFIG_PATH,
@@ -157,8 +173,9 @@ def main() -> None:
     module_logger = get_logger(__name__, log_level=log_level)
 
     config = RuntimeConfig.from_yaml(args.config_file)
+    pipeline, _ = load_pipeline(args.pipeline_spec, module_logger)
 
-    asyncio.run(_publish(config, args.job_name))
+    asyncio.run(_publish(config, pipeline, args.job_name))
 
 
 if __name__ == "__main__":

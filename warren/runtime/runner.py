@@ -29,6 +29,7 @@ from warren.pubsub.rabbitmq.aio_pika import (
     RMQConsumerManager,
     RMQPublisher,
 )
+from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import (
     RuntimeInfra,
@@ -78,7 +79,10 @@ class DefaultWorkerRunner(WorkerRunnerBase):
     :param config: runtime infrastructure configuration.
     :param worker_name: unique worker instance identifier.
     :param worker_type: name of the worker type (used for queue naming).
-    :param worker_spec: spec defining collections, factory, and flags.
+    :param worker_spec: spec defining collections, factory, exchange
+        wiring (consume_exchange, binding_key, publish), and flags.
+    :param exchanges: named exchange definitions from the ``PipelineSpec``,
+        resolved by ``worker_spec.consume_exchange`` / ``PublishSpec.exchange``.
     :param document_fetcher: optional override for the document fetcher.
         Default: ``CachedDocumentFetcher`` with path + GCS resolvers
         (created when ``worker_spec.needs_document_fetcher`` is True).
@@ -98,6 +102,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         *,
         worker_type: str,
         worker_spec: WorkerSpec,
+        exchanges: dict[str, RMQExchangeConfig],
         document_fetcher: GetDocumentFunc | None = None,
         document_store: DocumentStoreInterface | None = None,
         results_stores: dict[str, ResultsStoreInterface] | None = None,
@@ -107,6 +112,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         self._worker_name = worker_name
         self._config = config
         self._worker_spec: WorkerSpec = worker_spec
+        self._exchanges = exchanges
         self._document_fetcher = document_fetcher
         self._document_store = document_store
         self._results_stores = results_stores
@@ -280,14 +286,15 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         return await self._worker_spec.factory(context)
 
     def _create_publishers(self) -> list[PublisherInterface]:
-        if self._worker_spec.terminal:
-            return []
-
+        """One publisher per downstream target. Empty ``publish`` → no publishers."""
         return [
             RMQPublisher(
                 connection_manager=self._infra.rmq_connection_manager,
-                exchange_config=self._config.rabbitmq.exchange,
+                exchange_config=self._exchanges[target.exchange],
+                route=target.route,
+                route_func=target.route_func,
             )
+            for target in self._worker_spec.publish
         ]
 
     def _create_consumer_manager(
@@ -295,12 +302,13 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         consumer: MessageConsumerInterface,
         publishers: list[PublisherInterface],
     ) -> ConsumerManagerInterface:
-        exchange_config = self._config.rabbitmq.exchange
+        exchange_config = self._exchanges[self._worker_spec.consume_exchange]
         queue_name = f"{exchange_config.name}.{self._worker_type}"
 
         queue_config = RMQQueueConfig(
             name=queue_name,
             durable=True,
+            routing_key=self._worker_spec.binding_key,
         )
 
         manager_config = RMQConsumerManagerConfig(

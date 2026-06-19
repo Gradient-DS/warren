@@ -31,6 +31,10 @@ from warren.pubsub.rabbitmq.config import (
     RMQExchangeConfig,
     RMQQueueConfig,
 )
+from warren.pubsub.routing import (
+    observer_binding_key,
+    observer_route_func,
+)
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import (
     RuntimeInfra,
@@ -82,6 +86,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         config: RuntimeConfig,
         worker_name: str,
         *,
+        exchange: RMQExchangeConfig,
         job_store: JobStoreInterface | None = None,
         job_results_store: JobResultsStoreInterface | None = None,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
@@ -89,6 +94,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         super().__init__(name=worker_name)
         self._worker_name = worker_name
         self._config = config
+        self._exchange = exchange
         self._job_store = job_store
         self._job_results_store = job_results_store
         self._consumer_manager_factory = consumer_manager_factory
@@ -165,29 +171,21 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         return store
 
     def _create_default_publisher(self) -> PublisherInterface:
-        exchange_cfg = self._config.rabbitmq.exchange
         return RMQPublisher(
             connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=RMQExchangeConfig(
-                name=exchange_cfg.name,
-                type=exchange_cfg.type,
-                durable=exchange_cfg.durable,
-            ),
+            exchange_config=self._exchange,
+            route_func=observer_route_func(self._exchange),
         )
 
     def _create_default_consumer_factory(self) -> ConsumerManagerFactory:
-        exchange_cfg = self._config.rabbitmq.exchange
         consumer_cfg = self._config.rabbitmq.consumer
 
         manager_config = RMQConsumerManagerConfig(
-            exchange=RMQExchangeConfig(
-                name=exchange_cfg.name,
-                type=exchange_cfg.type,
-                durable=exchange_cfg.durable,
-            ),
+            exchange=self._exchange,
             queue=RMQQueueConfig(
-                name=f"{exchange_cfg.name}.{JOB_STATUS_WORKER_TYPE}",
+                name=f"{self._exchange.name}.{JOB_STATUS_WORKER_TYPE}",
                 durable=True,
+                routing_key=observer_binding_key(self._exchange),
             ),
             consumer=RMQConsumerConfig(
                 prefetch_count=consumer_cfg.prefetch_count,

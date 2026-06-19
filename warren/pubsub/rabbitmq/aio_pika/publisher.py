@@ -63,8 +63,11 @@ class RMQPublisher(BasePublisher):
             msg = "Cannot specify both 'route' and 'route_func'. Use one or the other."
             raise ValueError(msg)
 
-        if exchange_config.type == "topic" and not has_static and not has_route_func:
-            msg = "Topic exchanges require a route or route_func."
+        if exchange_config.type != "fanout" and not has_static and not has_route_func:
+            msg = (
+                f"{exchange_config.type} exchanges require a route or route_func "
+                "to compute the routing key."
+            )
             raise ValueError(msg)
 
         if exchange_config.type == "fanout" and has_static:

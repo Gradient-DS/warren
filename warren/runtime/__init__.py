@@ -38,7 +38,10 @@ from warren.runtime.spec import (
 )
 from warren.runtime.validation import (
     PipelineValidationError,
+    RoutingPlanValidationError,
+    build_capability_registry,
     validate_pipeline,
+    validate_routing_plan,
 )
 
 
@@ -49,6 +52,7 @@ __all__ = [
     "PipelineValidationError",
     "PublishSpec",
     "RedisConfig",
+    "RoutingPlanValidationError",
     "RuntimeConfig",
     "RuntimeInfra",
     "RuntimeRMQConfig",
@@ -56,7 +60,9 @@ __all__ = [
     "WorkerFactory",
     "WorkerFactoryContext",
     "WorkerSpec",
+    "build_capability_registry",
     "close_runtime_infrastructure",
     "create_runtime_infrastructure",
     "validate_pipeline",
+    "validate_routing_plan",
 ]

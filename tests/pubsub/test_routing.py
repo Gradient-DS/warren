@@ -7,9 +7,25 @@ import pytest
 from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 from warren.pubsub.routing import (
     MessageFieldRouter,
+    RoutingPlan,
+    RoutingPlanRouter,
     observer_binding_key,
     observer_route_func,
 )
+
+
+_PLAN = {
+    "entry": ["parser"],
+    "edges": {"parser": ["chunker"], "chunker": ["embedder"], "embedder": []},
+}
+
+
+def _msg(origin_type, plan=_PLAN):
+    return {
+        "data_type": "x",
+        "origin": {"type": origin_type, "name": "n"},
+        "job_parameters": {"routing": plan},
+    }
 
 
 def test_message_field_router_routes_by_data_type():
@@ -46,3 +62,37 @@ def test_observer_route_func_per_exchange_type():
         observer_route_func(RMQExchangeConfig(name="x", type="direct")),
         MessageFieldRouter,
     )
+
+
+def test_routing_plan_router_unknown_origin_routes_to_entry():
+    # The initial publish (publisher origin not in the plan) → entry nodes.
+    routes = asyncio.run(RoutingPlanRouter()(_msg("some-publisher")))
+    assert [r.key for r in routes] == ["parser"]
+
+
+def test_routing_plan_router_routes_to_successors():
+    routes = asyncio.run(RoutingPlanRouter()(_msg("parser")))
+    assert [r.key for r in routes] == ["chunker"]
+
+
+def test_routing_plan_router_terminal_node_routes_nowhere():
+    routes = asyncio.run(RoutingPlanRouter()(_msg("embedder")))
+    assert routes == []
+
+
+def test_routing_plan_router_fan_out():
+    plan = {"entry": ["a"], "edges": {"a": ["b", "c"]}}
+    routes = asyncio.run(RoutingPlanRouter()(_msg("a", plan)))
+    assert sorted(r.key for r in routes) == ["b", "c"]
+
+
+def test_routing_plan_router_raises_without_plan():
+    with pytest.raises(ValueError, match="no routing plan"):
+        asyncio.run(RoutingPlanRouter()({"origin": {"type": "parser"}}))
+
+
+def test_routing_plan_accepts_model_instance():
+    plan = RoutingPlan(entry=["parser"], edges={"parser": ["chunker"]})
+    msg = {"origin": {"type": "parser"}, "job_parameters": {"routing": plan}}
+    routes = asyncio.run(RoutingPlanRouter()(msg))
+    assert [r.key for r in routes] == ["chunker"]

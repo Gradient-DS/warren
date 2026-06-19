@@ -5,9 +5,14 @@ import dataclasses
 import pytest
 
 from warren.pubsub.rabbitmq.config import RMQExchangeConfig
-from warren.pubsub.routing import MessageFieldRouter
+from warren.pubsub.routing import MessageFieldRouter, RoutingPlan
 from warren.runtime.spec import PipelineSpec, PublishSpec, WorkerSpec
-from warren.runtime.validation import PipelineValidationError, validate_pipeline
+from warren.runtime.validation import (
+    PipelineValidationError,
+    RoutingPlanValidationError,
+    validate_pipeline,
+    validate_routing_plan,
+)
 
 
 async def _factory(ctx):  # pragma: no cover - never called by validation
@@ -133,3 +138,40 @@ def test_dangling_publish_exchange():
     p = _pipeline({"w": bad}, {"jobs": RMQExchangeConfig(name="jobs", type="fanout")})
     with pytest.raises(PipelineValidationError, match="publish exchange"):
         validate_pipeline(p)
+
+
+# --- validate_routing_plan (submission-time) ---
+
+# parser→md, chunker accepts md→chunks, embedder accepts chunks→vec
+_REGISTRY = {
+    "parser": (frozenset({"pdf"}), "md"),
+    "chunker": (frozenset({"md"}), "chunks"),
+    "embedder": (frozenset({"chunks"}), "vec"),
+}
+
+
+def test_valid_routing_plan_passes():
+    plan = RoutingPlan(
+        entry=["parser"],
+        edges={"parser": ["chunker"], "chunker": ["embedder"], "embedder": []},
+    )
+    validate_routing_plan(plan, _REGISTRY, entry_data_type="pdf")
+
+
+def test_routing_plan_undeployed_node():
+    plan = RoutingPlan(entry=["parser"], edges={"parser": ["ghost"]})
+    with pytest.raises(RoutingPlanValidationError, match="not a deployed worker"):
+        validate_routing_plan(plan, _REGISTRY)
+
+
+def test_routing_plan_type_incompatible_edge():
+    # parser produces "md" but embedder accepts only "chunks"
+    plan = RoutingPlan(entry=["parser"], edges={"parser": ["embedder"]})
+    with pytest.raises(RoutingPlanValidationError, match="not in consumer accepts"):
+        validate_routing_plan(plan, _REGISTRY)
+
+
+def test_routing_plan_entry_rejects_input_type():
+    plan = RoutingPlan(entry=["parser"], edges={"parser": ["chunker"]})
+    with pytest.raises(RoutingPlanValidationError, match="does not accept"):
+        validate_routing_plan(plan, _REGISTRY, entry_data_type="png")

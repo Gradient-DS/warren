@@ -250,3 +250,63 @@ class FilteringWorkerBase(AsyncProcessingWorkerBase):
         if not self.should_process(message):
             return None
         return await self.process(message)
+
+
+class CapabilityWorkerBase(AsyncProcessingWorkerBase):
+    """Async worker that declares its capabilities (``accepts`` / ``produces``).
+
+    The declarative counterpart to ``FilteringWorkerBase``: instead of
+    hand-writing ``should_process``, the worker declares the input
+    ``data_type``s it ``accepts``, and ``should_process`` defaults to
+    "is the message's ``data_type`` one I accept?". This doubles as a runtime
+    type guard (defense in depth) even when a topic/direct exchange has already
+    routed only matching messages.
+
+    ``accepts`` / ``produces`` are typically supplied from the ``WorkerSpec``
+    via ``WorkerFactoryContext`` (single source of truth, also used by
+    routing-plan validation).
+
+    :param accepts: Input ``data_type``s this worker handles.
+    :param produces: Output ``data_type`` (informational; None if none).
+    """
+
+    def __init__(
+        self,
+        worker_name: str,
+        *,
+        accepts: frozenset[str] | set[str] | list[str],
+        produces: str | None = None,
+        worker_type: str | None = None,
+    ) -> None:
+        super().__init__(worker_name, worker_type=worker_type)
+        self._accepts = frozenset(accepts)
+        self._produces = produces
+
+    @property
+    def accepts(self) -> frozenset[str]:
+        return self._accepts
+
+    @property
+    def produces(self) -> str | None:
+        return self._produces
+
+    def should_process(self, message: dict) -> bool:
+        """Default guard: accept the message iff its data_type is in ``accepts``.
+
+        Override for finer-grained selection (e.g. on ``preprocessing_required``).
+        """
+        return message.get("data_type") in self._accepts
+
+    @abstractmethod
+    async def process(self, message: dict) -> dict | None:
+        """Process a message that passed ``should_process()``.
+
+        :raises SoftFailureException: When failure is retryable.
+        :raises HardFailureException: When failure is permanent.
+        """
+        ...
+
+    async def __call__(self, message: dict) -> dict | None:
+        if not self.should_process(message):
+            return None
+        return await self.process(message)

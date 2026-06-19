@@ -218,9 +218,17 @@ queue depth. No per-instance bindings.
 > internal support-worker runners route lifecycle/observer publishing via `observer_route_func`
 > (data_type) under topic; full replay-based retry lands with multi-publish in Phase 3.
 
-### Phase 2 — capabilities & job-defined routing
-- D7 (`CapabilityWorkerBase`), D8 (`accepts`/`produces` on `WorkerSpec`), D6 `RoutingPlanRouter`,
-  D13 submission-time `validate_routing_plan`. Direct / job-defined-routing example.
+### Phase 2 — capabilities & job-defined routing — ✅ DONE
+- D7 (`CapabilityWorkerBase` — declares `accepts`/`produces`, `should_process` derived),
+  D8 (`accepts`/`produces` on `WorkerSpec`; `worker_type`/`accepts`/`produces` added to
+  `WorkerFactoryContext` so `origin.type` matches the spec key — the node id used for addressed
+  routing), D6 (`RoutingPlan` + `RoutingPlanRouter`, reading `job_parameters["routing"]`),
+  D13 submission-time `validate_routing_plan` + `build_capability_registry`.
+- **examples/routed** (direct exchange, addressed by worker-id) verifies it e2e: a job's `RoutingPlan`
+  drives the path (publisher → parser → chunker → embedder), validated before publish. Unit tests for
+  the router (entry/successor/terminal/fan-out), the validator, and `CapabilityWorkerBase`.
+- Note: completion tracking under addressed routing (terminal-set completion, D11) is Phase 3; the
+  routed example does not run job-status.
 
 ### Phase 3 — multi-exchange & lifecycle
 - Multi-publish + multiple exchanges, **D9 (control-publisher split, moved from Phase 1)**,

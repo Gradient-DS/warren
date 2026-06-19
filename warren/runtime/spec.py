@@ -43,9 +43,15 @@ class WorkerFactoryContext:
     keeps factory signatures stable as more concerns get added.
 
     :param worker_name: Runner-assigned unique name for this worker.
+    :param worker_type: The worker type (its key in ``PipelineSpec.workers``).
+        Pass to the worker so its ``type`` / message ``origin`` matches the
+        spec key (the node id used by addressed/job-defined routing).
     :param stores: Pre-built ``ResultsStoreInterface`` per role (keys
         come from ``WorkerSpec.collections``). Factories that don't use
         them ignore the dict.
+    :param accepts: Declared input ``data_type``s from the spec. Pass to a
+        ``CapabilityWorkerBase`` so its ``should_process`` can derive from it.
+    :param produces: Declared output ``data_type`` from the spec.
     :param get_document_func: Present when ``needs_document_fetcher``
         is set on the spec. ``None`` otherwise.
     :param document_store: Present when ``needs_document_store`` is
@@ -59,10 +65,13 @@ class WorkerFactoryContext:
     """
 
     worker_name: str
+    worker_type: str
     stores: dict[str, ResultsStoreInterface]
     mongo_client: AsyncMongoClient
     redis_client: Redis
     database_name: str
+    accepts: frozenset[str] = frozenset()
+    produces: str | None = None
     get_document_func: GetDocumentFunc | None = None
     document_store: DocumentStoreInterface | None = None
 
@@ -112,6 +121,10 @@ class WorkerSpec:
     :param publish: Downstream publishing targets. An empty list means the
         worker publishes no data downstream (see ``PipelineSpec`` for how
         job completion is determined — it does not key off this).
+    :param accepts: Declared input ``data_type``s this worker can handle.
+        Nominal (by-name) capability metadata, used by routing-plan
+        validation and by ``CapabilityWorkerBase.should_process``.
+    :param produces: Declared output ``data_type`` (None if terminal/none).
     :param needs_document_fetcher: If True, the runner passes a
         GetDocumentFunc to the factory. Otherwise passes None.
     :param needs_document_store: If True, the runner passes a
@@ -127,6 +140,8 @@ class WorkerSpec:
     consume_exchange: str
     binding_key: str | None = None
     publish: list[PublishSpec] = field(default_factory=list)
+    accepts: frozenset[str] = frozenset()
+    produces: str | None = None
     needs_document_fetcher: bool = False
     needs_document_store: bool = False
 

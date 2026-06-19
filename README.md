@@ -61,7 +61,13 @@ Watch the worker terminals: the parser picks up the documents, the chunker picks
 
 A pipeline is a directory with a `pipeline_spec.py` (exporting a `PIPELINE: PipelineSpec`) and a `config.yaml` (a `RuntimeConfig`). Each worker module owns a `create(ctx: WorkerFactoryContext)` factory; the spec references factories via lazy-import wrappers so different deployment images only load the dependencies they need.
 
-The `PipelineSpec` also defines the **exchanges** (topology) and how each worker is wired to them: `consume_exchange`, an optional `binding_key`, and a list of `publish` targets (`config.yaml` holds only per-environment infra — broker/Mongo/Redis hosts, credentials, prefetch). A `fanout` exchange broadcasts to every worker (each self-selects via `should_process`); a `topic` or `direct` exchange lets the broker route by routing key. See `examples/fake/` (fanout) and `examples/topic/` (topic routing by `data_type`).
+The `PipelineSpec` also defines the **exchanges** (topology) and how each worker is wired to them: `consume_exchange`, an optional `binding_key`, and a list of `publish` targets (`config.yaml` holds only per-environment infra — broker/Mongo/Redis hosts, credentials, prefetch). A `fanout` exchange broadcasts to every worker (each self-selects via `should_process`); a `topic` or `direct` exchange lets the broker route by routing key.
+
+Three runnable examples show the spread:
+
+- `examples/fake/` — **fanout**: every worker sees every message, self-selects.
+- `examples/topic/` — **topic**: the broker routes by `data_type` (workers bind the type they consume).
+- `examples/routed/` — **direct + job-defined routing**: workers are `CapabilityWorkerBase` (declare `accepts`/`produces`); each *job* ships a `RoutingPlan` in `job_parameters` that decides the path through the same deployed workers. The plan is validated against the workers' declared capabilities before publishing (`validate_routing_plan`).
 
 **Read [`warren/runtime/USAGE.md`](warren/runtime/USAGE.md)** — the full usage guide: core concepts (`PipelineSpec`, `WorkerSpec`, `WorkerFactoryContext`, `RuntimeConfig`, `DefaultWorkerRunner`), the launcher scripts, custom runners, and recommended project layout.
 

@@ -16,11 +16,20 @@ Dynamic ``route_func`` keys cannot be enumerated statically at all.
 import logging
 
 from warren.exceptions import WarrenError
+from warren.pubsub.routing import RoutingPlan
 from warren.runtime.spec import PipelineSpec
 
 
 class PipelineValidationError(WarrenError):
     """A ``PipelineSpec`` is internally inconsistent. Carries all findings."""
+
+
+class RoutingPlanValidationError(WarrenError):
+    """A job's ``RoutingPlan`` is invalid for the deployed pipeline."""
+
+
+# worker-type -> (accepts, produces)
+CapabilityRegistry = dict[str, tuple[frozenset[str], str | None]]
 
 
 def validate_pipeline(
@@ -98,3 +107,69 @@ def validate_pipeline(
             "Pipeline validation passed (references + binding/route presence). "
             "Note: route reachability is not yet validated."
         )
+
+
+def build_capability_registry(pipeline: PipelineSpec) -> CapabilityRegistry:
+    """Map each worker type to its declared ``(accepts, produces)`` capability."""
+    return {
+        worker_type: (spec.accepts, spec.produces)
+        for worker_type, spec in pipeline.workers.items()
+    }
+
+
+def validate_routing_plan(
+    plan: RoutingPlan,
+    registry: CapabilityRegistry,
+    *,
+    entry_data_type: str | None = None,
+) -> None:
+    """Validate a job's ``RoutingPlan`` against deployed worker capabilities.
+
+    Run at job-submission time, before any message is published.
+
+    Checks: every node maps to a deployed worker; every edge ``u -> v`` is
+    nominally type-compatible (``produces[u] in accepts[v]``); and — if given —
+    every entry node accepts ``entry_data_type``.
+
+    :raises RoutingPlanValidationError: with every problem found.
+    """
+    errors: list[str] = []
+
+    nodes = (
+        set(plan.entry)
+        | set(plan.edges)
+        | {succ for succs in plan.edges.values() for succ in succs}
+    )
+    for node in sorted(nodes):
+        if node not in registry:
+            errors.append(
+                f"routing node '{node}' is not a deployed worker type "
+                f"{sorted(registry)}"
+            )
+
+    for producer, successors in plan.edges.items():
+        if producer not in registry:
+            continue
+        produces = registry[producer][1]
+        for consumer in successors:
+            if consumer not in registry:
+                continue
+            accepts = registry[consumer][0]
+            if produces not in accepts:
+                errors.append(
+                    f"edge {producer} -> {consumer}: producer produces "
+                    f"'{produces}', not in consumer accepts {sorted(accepts)}"
+                )
+
+    if entry_data_type is not None:
+        for entry in plan.entry:
+            if entry in registry and entry_data_type not in registry[entry][0]:
+                errors.append(
+                    f"entry '{entry}' does not accept the submitted data_type "
+                    f"'{entry_data_type}' (accepts {sorted(registry[entry][0])})"
+                )
+
+    if errors:
+        bullets = "\n  - ".join(errors)
+        msg = f"Invalid routing plan ({len(errors)} problem(s)):\n  - {bullets}"
+        raise RoutingPlanValidationError(msg)

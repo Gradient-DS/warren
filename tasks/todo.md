@@ -9,11 +9,14 @@
 - [x] Investigate repo, exchanges, OSS readiness.
 - [x] Design dialogue → decisions D1–D14 agreed (Ben + Claude).
 - [x] Documented for colleague review before PR.
-- [x] **Phase 1 implemented + verified** (fanout + topic e2e on Docker, 23 tests green, ruff clean).
+- [x] **Phase 1 implemented + verified** (fanout + topic e2e on Docker, ruff clean).
       One deviation: D9/D10 deferred to Phase 3 (see `routing-design.md` Phase 1 note).
-- [ ] Colleague review of `routing-design.md` + Phase 1 diff.
-- [ ] Phase 2 (capabilities + job-defined routing), Phase 3 (multi-exchange + lifecycle).
-- [ ] Examples branch (`feat/examples`): polish A/B, add sync worker + inspect_job, Example C.
+- [x] **Phase 2 implemented + verified** (CapabilityWorkerBase, RoutingPlan + RoutingPlanRouter,
+      submission-time validation; examples/routed e2e on Docker; 36 tests green, ruff clean).
+- [ ] Colleague review of `routing-design.md` + Phase 1/2 diff.
+- [ ] Phase 3 (multi-exchange + per-exchange observers + idempotent retry + terminal-set completion;
+      D9/D10/D11/D12; Example C — fanout + topic/direct at once).
+- [ ] Examples branch (`feat/examples`): polish A/B/routed, add sync worker + inspect_job.
 
 ## Branch / phase plan
 - `feat/topic-exchange-support` (this branch) holds the design docs.

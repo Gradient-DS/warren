@@ -276,10 +276,13 @@ class DefaultWorkerRunner(WorkerRunnerBase):
     ) -> MessageConsumerInterface:
         context = WorkerFactoryContext(
             worker_name=self._worker_name,
+            worker_type=self._worker_type,
             stores=stores,
             mongo_client=self._infra.mongo_client,
             redis_client=self._infra.redis_client,
             database_name=self._config.mongodb.database,
+            accepts=self._worker_spec.accepts,
+            produces=self._worker_spec.produces,
             get_document_func=get_document_func,
             document_store=document_store,
         )

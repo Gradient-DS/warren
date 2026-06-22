@@ -230,10 +230,30 @@ queue depth. No per-instance bindings.
 - Note: completion tracking under addressed routing (terminal-set completion, D11) is Phase 3; the
   routed example does not run job-status.
 
-### Phase 3 — multi-exchange & lifecycle
-- Multi-publish + multiple exchanges, **D9 (control-publisher split, moved from Phase 1)**,
-  D12 (per-exchange observers), D10 (idempotent retry by replay),
-  D11 (terminal-set completion + completion signals), **Example C (fanout + topic/direct at once)**.
+### Phase 3 — multi-exchange & lifecycle — ✅ DONE (D9, D10, multi-publish); D11/D12 deferred
+- **Multi-publish + multiple exchanges**: the runner builds one publisher per `WorkerSpec.publish`
+  entry, so a worker can publish to a fanout **and** a topic/direct exchange at once. Verified by
+  **examples/multi_exchange** (Example C): parse→chunk→embed on a `jobs` fanout exchange, each worker
+  *also* publishing to an `events` **topic** exchange (keyed by `data_type`), with an `AuditWorker`
+  bound `#` on `events` recording every stage event. Main pipeline = 18 embeddings; audit = 12 events.
+- **D9 (control-publisher split)**: `RMQConsumerManager` now takes `data_publishers` (success, 0..N)
+  + a single `control_publisher` (lifecycle envelopes → the consume exchange, exactly once). A failure
+  is emitted once regardless of how many data publishers a worker has. Backwards-compatible on fanout.
+- **D10 (retry by replay)**: the consumer manager stamps the incoming `message.routing_key` on the
+  soft-failure envelope (`REPLAY_ROUTING_KEY_FIELD`); the retry worker republishes via `ReplayRouter`,
+  which replays that key so re-delivery lands back in the failed worker's queue under any routing
+  scheme. (The retry worker was already idempotent on `retry_key` + generation, so no double-retry.)
+  Verified end-to-end with a flaky worker: soft-fail → control publisher → retry → replay → success.
+
+> **D11 (terminal-set completion) and D12 (per-exchange observers) deferred — flagged, not silently
+> dropped.** Neither is exercised by any current example, and building them speculatively would violate
+> "keep it simple, don't overengineer":
+> - **D11**: every example's final worker still publishes a final message, so the existing
+>   `final_data_type` completion path works. D11 (making a genuinely terminal `publish=[]` worker
+>   observable via a framework completion signal) only becomes necessary when such a worker exists.
+> - **D12**: the lifecycle/control plane rides one exchange (`default_exchange`); multi-exchange
+>   *observation* has no consumer yet (Example C's `events` topic is a pure data side-channel).
+> Both remain in the design as the intended approach when a real use case demands them.
 
 ---
 

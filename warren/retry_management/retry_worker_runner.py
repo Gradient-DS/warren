@@ -31,8 +31,8 @@ from warren.pubsub.rabbitmq.config import (
     RMQQueueConfig,
 )
 from warren.pubsub.routing import (
+    ReplayRouter,
     observer_binding_key,
-    observer_route_func,
 )
 from warren.retry_management.retry_worker import (
     RetryWorker,
@@ -191,10 +191,13 @@ class RetryWorkerRunner(WorkerRunnerBase):
         return CachedDocumentStore(mongo_store, cache)
 
     def _create_default_publisher(self) -> PublisherInterface:
+        # Replay the original routing key (stamped on the failed message) so a
+        # retried message lands back in the worker that failed, for any routing
+        # scheme (data_type, addressed, fanout-broadcast). See D10.
         return RMQPublisher(
             connection_manager=self._infra.rmq_connection_manager,
             exchange_config=self._exchange,
-            route_func=observer_route_func(self._exchange),
+            route_func=ReplayRouter(),
         )
 
     def _create_default_consumer_factory(self) -> ConsumerManagerFactory:

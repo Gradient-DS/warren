@@ -6,7 +6,9 @@ import pytest
 
 from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 from warren.pubsub.routing import (
+    REPLAY_ROUTING_KEY_FIELD,
     MessageFieldRouter,
+    ReplayRouter,
     RoutingPlan,
     RoutingPlanRouter,
     observer_binding_key,
@@ -96,3 +98,16 @@ def test_routing_plan_accepts_model_instance():
     msg = {"origin": {"type": "parser"}, "job_parameters": {"routing": plan}}
     routes = asyncio.run(RoutingPlanRouter()(msg))
     assert [r.key for r in routes] == ["chunker"]
+
+
+def test_replay_router_replays_stamped_key():
+    routes = asyncio.run(
+        ReplayRouter()({REPLAY_ROUTING_KEY_FIELD: "markdown_document"})
+    )
+    assert [r.key for r in routes] == ["markdown_document"]
+
+
+def test_replay_router_defaults_to_empty_key():
+    # Missing stamp (e.g. fanout, which ignores keys) → "".
+    routes = asyncio.run(ReplayRouter()({"data_type": "x"}))
+    assert [r.key for r in routes] == [""]

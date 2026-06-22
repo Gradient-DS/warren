@@ -30,6 +30,10 @@ DATA_TYPE_FIELD = "data_type"
 ROUTING_PLAN_KEY = "routing"
 """Key under ``job_parameters`` where a :class:`RoutingPlan` is carried."""
 
+REPLAY_ROUTING_KEY_FIELD = "_replay_routing_key"
+"""Message field the consumer manager stamps with the original routing key so a
+retry worker can replay the message back to the worker that failed."""
+
 
 class MessageFieldRouter:
     """A :class:`RouteFunc` that routes by a single field of the message body.
@@ -102,6 +106,25 @@ class RoutingPlanRouter:
         current = (message.get("origin") or {}).get("type")
         keys = plan.edges.get(current, plan.entry)
         return [Route(key=key) for key in keys]
+
+
+class ReplayRouter:
+    """A :class:`RouteFunc` that replays the routing key stamped on a message.
+
+    Used by the retry worker: the consumer manager stamps the original routing
+    key (``REPLAY_ROUTING_KEY_FIELD``) onto a failed message before it goes to
+    retry, so re-delivery lands back in the same worker's queue regardless of
+    the routing scheme (data_type, addressed, …). A missing/empty key replays
+    with ``""`` (correct for fanout, which ignores keys).
+
+    :param field: Message field holding the original routing key.
+    """
+
+    def __init__(self, field: str = REPLAY_ROUTING_KEY_FIELD) -> None:
+        self._field = field
+
+    async def __call__(self, message: dict) -> list[Route]:
+        return [Route(key=str(message.get(self._field) or ""))]
 
 
 def observer_binding_key(exchange: RMQExchangeConfig) -> str | None:

@@ -30,6 +30,7 @@ from warren.pubsub.rabbitmq.aio_pika import (
     RMQPublisher,
 )
 from warren.pubsub.rabbitmq.config import RMQExchangeConfig
+from warren.pubsub.routing import observer_route_func
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import (
     RuntimeInfra,
@@ -157,10 +158,10 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             await self._worker.setup()
 
         with self._exception_wrapping("Consumer manager creation"):
-            publishers = self._create_publishers()
             self._consumer_manager = self._create_consumer_manager(
                 self._worker,
-                publishers,
+                self._create_data_publishers(),
+                self._create_control_publisher(),
             )
         with self._exception_wrapping("Consumer manager setup"):
             await self._consumer_manager.setup()
@@ -288,8 +289,8 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         )
         return await self._worker_spec.factory(context)
 
-    def _create_publishers(self) -> list[PublisherInterface]:
-        """One publisher per downstream target. Empty ``publish`` → no publishers."""
+    def _create_data_publishers(self) -> list[PublisherInterface]:
+        """One publisher per downstream target. Empty ``publish`` → none."""
         return [
             RMQPublisher(
                 connection_manager=self._infra.rmq_connection_manager,
@@ -300,10 +301,25 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             for target in self._worker_spec.publish
         ]
 
+    def _create_control_publisher(self) -> PublisherInterface:
+        """Single publisher for lifecycle envelopes (soft/hard-failure).
+
+        Publishes to the worker's *consume* exchange so a retry/status worker
+        observing that exchange picks them up; on a fanout exchange it
+        broadcasts (no key), on topic/direct it routes by ``data_type`` (D9).
+        """
+        consume_exchange = self._exchanges[self._worker_spec.consume_exchange]
+        return RMQPublisher(
+            connection_manager=self._infra.rmq_connection_manager,
+            exchange_config=consume_exchange,
+            route_func=observer_route_func(consume_exchange),
+        )
+
     def _create_consumer_manager(
         self,
         consumer: MessageConsumerInterface,
-        publishers: list[PublisherInterface],
+        data_publishers: list[PublisherInterface],
+        control_publisher: PublisherInterface,
     ) -> ConsumerManagerInterface:
         exchange_config = self._exchanges[self._worker_spec.consume_exchange]
         queue_name = f"{exchange_config.name}.{self._worker_type}"
@@ -324,5 +340,6 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             config=manager_config,
             connection_manager=self._infra.rmq_connection_manager,
             consumer=consumer,
-            publishers=publishers,
+            data_publishers=data_publishers,
+            control_publisher=control_publisher,
         )

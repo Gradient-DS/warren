@@ -68,6 +68,7 @@ Three runnable examples show the spread:
 - `examples/fake/` — **fanout**: every worker sees every message, self-selects.
 - `examples/topic/` — **topic**: the broker routes by `data_type` (workers bind the type they consume).
 - `examples/routed/` — **direct + job-defined routing**: workers are `CapabilityWorkerBase` (declare `accepts`/`produces`); each *job* ships a `RoutingPlan` in `job_parameters` that decides the path through the same deployed workers. The plan is validated against the workers' declared capabilities before publishing (`validate_routing_plan`).
+- `examples/multi_exchange/` — **fanout + topic at once**: the parse→chunk→embed pipeline runs on a `jobs` fanout exchange, and every worker *also* publishes to a separate `events` topic exchange (keyed by `data_type`). An `AuditWorker` bound to `#` on `events` records each stage — one worker publishing to two exchanges of different types simultaneously.
 
 **Read [`warren/runtime/USAGE.md`](warren/runtime/USAGE.md)** — the full usage guide: core concepts (`PipelineSpec`, `WorkerSpec`, `WorkerFactoryContext`, `RuntimeConfig`, `DefaultWorkerRunner`), the launcher scripts, custom runners, and recommended project layout.
 

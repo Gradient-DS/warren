@@ -13,10 +13,12 @@
       One deviation: D9/D10 deferred to Phase 3 (see `routing-design.md` Phase 1 note).
 - [x] **Phase 2 implemented + verified** (CapabilityWorkerBase, RoutingPlan + RoutingPlanRouter,
       submission-time validation; examples/routed e2e on Docker; 36 tests green, ruff clean).
-- [ ] Colleague review of `routing-design.md` + Phase 1/2 diff.
-- [ ] Phase 3 (multi-exchange + per-exchange observers + idempotent retry + terminal-set completion;
-      D9/D10/D11/D12; Example C — fanout + topic/direct at once).
-- [ ] Examples branch (`feat/examples`): polish A/B/routed, add sync worker + inspect_job.
+- [x] **Phase 3 implemented + verified** (D9 control-publisher split, D10 retry-by-replay, multi-publish;
+      examples/multi_exchange e2e — fanout + topic at once; flaky-worker retry loop verified; 38 tests,
+      ruff clean). D11/D12 deferred with rationale (not exercised by any example) — see routing-design.md.
+- [ ] Colleague review of `routing-design.md` + the Phase 1/2/3 diff.
+- [ ] Examples branch (`feat/examples`): polish examples, add a sync worker + inspect_job.
+- [ ] (Future, when a real use case needs it) D11 terminal-set completion, D12 per-exchange observers.
 
 ## Branch / phase plan
 - `feat/topic-exchange-support` (this branch) holds the design docs.

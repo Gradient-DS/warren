@@ -202,7 +202,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
                 config=manager_config,
                 connection_manager=self._infra.rmq_connection_manager,
                 consumer=consumer,
-                publishers=publishers,
+                data_publishers=publishers,
                 publish_hard_failures=False,
             )
 

@@ -57,6 +57,20 @@ python -m examples.fake.publish_jobs --job-name demo-001 --config-file examples/
 
 Watch the worker terminals: the parser picks up the documents, the chunker picks up the parsed results, the embedder picks up the chunks. Results land in MongoDB collections `parsed_documents`, `chunks`, and `embeddings` (database `e2e_test`, per the example config).
 
+**4. Watch the run (optional).** With a job-status worker running (the support worker above), `inspect_job` polls the job by name and prints a live per-stage view until it completes:
+
+```bash
+python -m examples.inspect_job --job-name demo-001 --config-file examples/fake/config.yaml
+```
+
+```
+  stage                   total     ok   soft   hard
+  ---------------------- ------ ------ ------ ------
+  embedded_document           4      4      0      0
+  ...
+  state: COMPLETED
+```
+
 ## Defining your own pipeline
 
 A pipeline is a directory with a `pipeline_spec.py` (exporting a `PIPELINE: PipelineSpec`) and a `config.yaml` (a `RuntimeConfig`). Each worker module owns a `create(ctx: WorkerFactoryContext)` factory; the spec references factories via lazy-import wrappers so different deployment images only load the dependencies they need.
@@ -68,7 +82,7 @@ Three runnable examples show the spread:
 - `examples/fake/` — **fanout**: every worker sees every message, self-selects.
 - `examples/topic/` — **topic**: the broker routes by `data_type` (workers bind the type they consume).
 - `examples/routed/` — **direct + job-defined routing**: workers are `CapabilityWorkerBase` (declare `accepts`/`produces`); each *job* ships a `RoutingPlan` in `job_parameters` that decides the path through the same deployed workers. The plan is validated against the workers' declared capabilities before publishing (`validate_routing_plan`).
-- `examples/multi_exchange/` — **fanout + topic at once**: the parse→chunk→embed pipeline runs on a `jobs` fanout exchange, and every worker *also* publishes to a separate `events` topic exchange (keyed by `data_type`). An `AuditWorker` bound to `#` on `events` records each stage — one worker publishing to two exchanges of different types simultaneously.
+- `examples/multi_exchange/` — **fanout + topic at once**: the parse→chunk→embed pipeline runs on a `jobs` fanout exchange, and every worker *also* publishes to a separate `events` topic exchange (keyed by `data_type`). A sync `AuditWorker` (a `SyncProcessingWorkerBase`, run in a thread pool) bound to `#` on `events` records each stage — showing one worker publishing to two exchanges at once *and* sync/async workers mixed in one pipeline.
 
 **Read [`warren/runtime/USAGE.md`](warren/runtime/USAGE.md)** — the full usage guide: core concepts (`PipelineSpec`, `WorkerSpec`, `WorkerFactoryContext`, `RuntimeConfig`, `DefaultWorkerRunner`), the launcher scripts, custom runners, and recommended project layout.
 

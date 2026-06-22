@@ -14,12 +14,14 @@ Each pipeline worker publishes its result to **both** exchanges at once
 a fanout and a topic exchange simultaneously.
 """
 
+import os
+
 from examples.fake.pipeline_spec import (
     _create_document_parser,
     _create_embedding_generator,
     _create_text_chunker,
 )
-from examples.multi_exchange.audit_worker import AuditWorker
+from examples.multi_exchange.audit_worker import AuditWorker, create_audit_collection
 from warren.common import MessageConsumerInterface
 from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 from warren.pubsub.routing import MessageFieldRouter
@@ -32,11 +34,16 @@ from warren.runtime.spec import (
 
 
 async def _create_audit(ctx: WorkerFactoryContext) -> MessageConsumerInterface:
-    return AuditWorker(
-        worker_name=ctx.worker_name,
-        mongo_client=ctx.mongo_client,
-        database_name=ctx.database_name,
+    # The audit worker is sync and cannot use the runner's async Mongo client,
+    # so it builds its own sync pymongo collection. Host/port come from the
+    # environment (defaults match the example config), per the convention of
+    # reading external config inside the factory.
+    collection = create_audit_collection(
+        host=os.environ.get("MONGO_HOST", "localhost"),
+        port=int(os.environ.get("MONGO_PORT", "27017")),
+        database=ctx.database_name,
     )
+    return AuditWorker(worker_name=ctx.worker_name, collection=collection)
 
 
 def _dual_publish() -> list[PublishSpec]:

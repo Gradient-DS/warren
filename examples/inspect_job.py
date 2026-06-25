@@ -8,7 +8,7 @@ pipelines — point it at the same ``--config-file`` you started the workers wit
 
 Usage:
     python -m examples.inspect_job \
-        --job-name demo-001 --config-file examples/fake/config.yaml
+        --job-name demo-001 --config-file examples/exchanges/fanout/config.yaml
 """
 
 import argparse

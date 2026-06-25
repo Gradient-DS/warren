@@ -1,0 +1,60 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 682 >>
+stream
+BT
+/F1 12 Tf
+14 TL
+72 720 Td
+(Choosing a RabbitMQ exchange type in Warren.) Tj
+T*
+() Tj
+T*
+(A fanout exchange broadcasts every message to every worker, which) Tj
+T*
+(self-selects via should_process. Use it for linear pipelines where) Tj
+T*
+(adding a worker should not require touching any routing.) Tj
+T*
+() Tj
+T*
+(A topic exchange routes by a key. Use it when inputs are mixed and) Tj
+T*
+(each kind needs a different worker: PDFs to a PDF parser, HTML to) Tj
+T*
+(an OCR worker, and so on. The broker filters; workers do not.) Tj
+T*
+() Tj
+T*
+(A direct exchange with a per-job routing plan lets different jobs) Tj
+T*
+(take different paths through the same deployed workers.) Tj
+T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000974 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1044
+%%EOF

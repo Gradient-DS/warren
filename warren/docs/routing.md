@@ -222,9 +222,10 @@ cannot schedule two retries.
 
 | Example | Exchange | Demonstrates |
 |---------|----------|--------------|
-| `examples/fake` | fanout | broadcast + `should_process` self-selection |
-| `examples/topic` | topic | broker routing by `data_type` |
-| `examples/routed` | direct | capability workers + job-defined `RoutingPlan` |
+| `examples/rag` | fanout | **real** PDF → chunk → embed (pypdf + OpenAI); document fetcher; soft/hard failure on a real API |
+| `examples/exchanges/fanout` | fanout | broadcast + `should_process` self-selection (synthetic, zero-dependency) |
+| `examples/exchanges/topic` | topic | broker routing by `data_type` |
+| `examples/exchanges/direct` | direct | capability workers + job-defined `RoutingPlan` |
 
 ## Not supported (yet)
 

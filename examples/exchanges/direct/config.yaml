@@ -12,7 +12,7 @@ rabbitmq:
 mongodb:
   host: localhost
   port: 27017
-  database: e2e_routed
+  database: warren_direct
 
 redis:
   host: localhost

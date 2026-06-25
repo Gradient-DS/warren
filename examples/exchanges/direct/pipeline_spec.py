@@ -6,10 +6,10 @@ The deployment is the same three capabilities (parse → chunk → embed), but t
 its own *worker-type id* on a ``direct`` exchange and publishes via a
 ``RoutingPlanRouter``, which reads the ``RoutingPlan`` the submitter put in
 ``job_parameters`` and forwards the result to whichever worker the plan names
-next. See ``examples/routed/publish_routed.py``.
+next. See ``examples/exchanges/direct/publish.py``.
 """
 
-from examples.routed.workers import (
+from examples.exchanges.capability_workers import (
     DocumentParserWorker,
     EmbeddingGeneratorWorker,
     TextChunkerWorker,

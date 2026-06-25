@@ -1,7 +1,7 @@
 """
 Capability workers for the job-defined-routing example.
 
-Same parse → chunk → embed work as ``examples/fake``, but written as
+Same parse → chunk → embed work as the fanout example, but written as
 ``CapabilityWorkerBase`` subclasses: each declares the ``data_type`` it
 ``accepts`` (so ``should_process`` is derived, not hand-written) and the
 ``data_type`` it ``produces``. Unlike the fake workers, they **propagate
@@ -15,8 +15,8 @@ result to whichever worker the job's plan names next.
 
 from typing import Any
 
-from examples.fake.data import FAKE_DOCUMENTS
-from examples.fake.workers.embedding_generator import _fake_embedding
+from examples.exchanges.data import FAKE_DOCUMENTS
+from examples.exchanges.workers.embedding_generator import _fake_embedding
 from warren.storage.results.interface import ResultsStoreInterface
 from warren.workers.workers import CapabilityWorkerBase
 

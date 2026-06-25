@@ -6,13 +6,13 @@ external dependencies. 4 fake documents produce 18 chunks and
 18 embeddings.
 """
 
-from examples.fake.workers.document_parser import (
+from examples.exchanges.workers.document_parser import (
     DocumentParserWorker,
 )
-from examples.fake.workers.embedding_generator import (
+from examples.exchanges.workers.embedding_generator import (
     EmbeddingGeneratorWorker,
 )
-from examples.fake.workers.text_chunker import (
+from examples.exchanges.workers.text_chunker import (
     TextChunkerWorker,
 )
 from warren.common import MessageConsumerInterface

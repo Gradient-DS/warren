@@ -1,7 +1,7 @@
 """
 Topic-exchange variant of the fake pipeline.
 
-Same three workers as ``examples/fake`` (parse → chunk → embed), but on a
+Same three workers as the fanout example (parse → chunk → embed), but on a
 **topic** exchange: instead of broadcasting every message to every worker,
 the broker routes each message by its ``data_type`` to the worker that binds
 that key. Each worker:
@@ -14,7 +14,7 @@ that key. Each worker:
 routing the broker has already delivered only matching messages.
 """
 
-from examples.fake.pipeline_spec import (
+from examples.exchanges.fanout.pipeline_spec import (
     _create_document_parser,
     _create_embedding_generator,
     _create_text_chunker,

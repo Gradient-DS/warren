@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "warren"
 version = "0.1.1"
-description = "Message-driven document processing framework — self-selecting workers on a RabbitMQ fanout exchange with MongoDB/Redis-backed storage"
+description = "Message-driven document processing framework — self-selecting workers on RabbitMQ (fanout by default; topic/direct supported) with MongoDB/Redis-backed storage"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
@@ -35,6 +35,12 @@ dependencies = [
 dev = [
     "pytest>=8",
     "ruff",
+]
+# Extra dependencies used only by the runnable `examples/pdf` pipeline
+# (real PDF parsing + OpenAI embeddings). Not needed by the framework.
+examples = [
+    "pypdf>=4",
+    "openai>=1.0",
 ]
 
 [project.urls]

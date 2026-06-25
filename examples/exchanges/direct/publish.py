@@ -1,5 +1,5 @@
 """
-Publish the fake documents through a **job-defined route**.
+Publish the synthetic documents through a **job-defined route**.
 
 Builds a ``RoutingPlan`` (parse → chunk → embed), validates it against the
 deployed workers' declared capabilities (`validate_routing_plan`), then
@@ -8,8 +8,8 @@ publishes each document with the plan in ``job_parameters``. A
 entry node; each worker forwards along the plan from there.
 
 Usage:
-    python -m examples.routed.publish_routed \
-        --job-name routed-001 --config-file examples/routed/config.yaml
+    python -m examples.exchanges.direct.publish \
+        --job-name direct-001 --config-file examples/exchanges/direct/config.yaml
 """
 
 import argparse
@@ -20,8 +20,8 @@ from pathlib import Path
 from basics.logging import get_logger
 from pymongo import AsyncMongoClient
 
-from examples.fake.data import FAKE_DOCUMENTS
-from examples.routed.pipeline_spec import PIPELINE
+from examples.exchanges.data import FAKE_DOCUMENTS
+from examples.exchanges.direct.pipeline_spec import PIPELINE
 from runtime_scripts.lib.logging_setup import configure_logging, resolve_log_level
 from warren.pubsub.rabbitmq.aio_pika.connection import RMQConnectionManager
 from warren.pubsub.rabbitmq.aio_pika.publisher import RMQPublisher

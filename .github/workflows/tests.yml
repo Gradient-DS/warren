@@ -15,8 +15,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install package + dev tools + transport extras
-        run: pip install -e ".[dev,rmq,kafka]"
+      - name: Install package + dev tools + all extras
+        run: pip install -e ".[dev,rmq,kafka,gcs,s3]"
 
       - name: Ruff lint
         run: ruff check .

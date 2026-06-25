@@ -30,7 +30,7 @@ from warren.pubsub.rabbitmq.aio_pika import (
     RMQPublisher,
 )
 from warren.pubsub.rabbitmq.config import RMQExchangeConfig
-from warren.pubsub.routing import observer_route_func
+from warren.pubsub.routing import observer_exchange, observer_route_func
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import (
     RuntimeInfra,
@@ -162,6 +162,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
                 self._worker,
                 self._create_data_publishers(),
                 self._create_control_publisher(),
+                self._create_observer_publisher(),
             )
         with self._exception_wrapping("Consumer manager setup"):
             await self._consumer_manager.setup()
@@ -306,14 +307,33 @@ class DefaultWorkerRunner(WorkerRunnerBase):
     def _create_control_publisher(self) -> PublisherInterface:
         """Single publisher for lifecycle envelopes (soft/hard-failure).
 
-        Publishes to the pipeline exchange so a retry/status worker observing
-        it picks them up; on a fanout exchange it broadcasts (no key), on
-        topic/direct it routes by ``data_type`` (D9).
+        Publishes to the **observer** exchange so the retry/status workers pick
+        them up. For a fanout/topic pipeline the observer exchange is the data
+        exchange itself; for a direct pipeline it's the derived fanout observer
+        exchange.
         """
+        observer = observer_exchange(self._exchange)
         return RMQPublisher(
             connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=self._exchange,
-            route_func=observer_route_func(self._exchange),
+            exchange_config=observer,
+            route_func=observer_route_func(observer),
+        )
+
+    def _create_observer_publisher(self) -> PublisherInterface | None:
+        """Echoes successful results to the observer exchange — direct only.
+
+        When the data exchange can't be observed in place (direct), workers also
+        publish their result to the derived fanout observer exchange so the
+        status worker sees every stage. For fanout/topic the data publish is
+        already observable, so this returns ``None`` (no echo, no doubling).
+        """
+        observer = observer_exchange(self._exchange)
+        if observer.name == self._exchange.name:
+            return None
+        return RMQPublisher(
+            connection_manager=self._infra.rmq_connection_manager,
+            exchange_config=observer,
+            route_func=observer_route_func(observer),
         )
 
     def _create_consumer_manager(
@@ -321,6 +341,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         consumer: MessageConsumerInterface,
         data_publishers: list[PublisherInterface],
         control_publisher: PublisherInterface,
+        observer_publisher: PublisherInterface | None,
     ) -> ConsumerManagerInterface:
         exchange_config = self._exchange
         queue_name = f"{exchange_config.name}.{self._worker_type}"
@@ -343,4 +364,5 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             consumer=consumer,
             data_publishers=data_publishers,
             control_publisher=control_publisher,
+            observer_publisher=observer_publisher,
         )

@@ -119,6 +119,7 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         worker_name: str,
         *,
         exchange: RMQExchangeConfig,
+        publish_exchange: RMQExchangeConfig | None = None,
         documents_publisher_factory: DocumentsPublisherFactoryFunc,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
         create_source_generator: Callable[[dict], AsyncIterable] | None = None,
@@ -126,7 +127,11 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         super().__init__(name=worker_name)
         self._worker_name = worker_name
         self._config = config
+        # Consume job submissions on ``exchange`` (the observer exchange);
+        # publish per-document messages to ``publish_exchange`` (the data
+        # exchange). They coincide for fanout/topic.
         self._exchange = exchange
+        self._publish_exchange = publish_exchange or exchange
         self._documents_publisher_factory = documents_publisher_factory
         self._consumer_manager_factory = consumer_manager_factory
         self._create_source_generator = create_source_generator
@@ -188,10 +193,11 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
                 )
 
     def _create_default_publisher(self) -> PublisherInterface:
+        # Documents enter the pipeline on the data exchange.
         return RMQPublisher(
             connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=self._exchange,
-            route_func=observer_route_func(self._exchange),
+            exchange_config=self._publish_exchange,
+            route_func=observer_route_func(self._publish_exchange),
         )
 
     def _create_default_consumer_factory(self) -> ConsumerManagerFactory:

@@ -61,6 +61,7 @@ async def _publish(config: RuntimeConfig, job_name: str) -> str:
     await job_store.setup()
     job_id = await job_store.create_job(
         final_data_type=PIPELINE.final_data_type,
+        num_documents=len(FAKE_DOCUMENTS),
         metadata={"job_name": job_name},
     )
 

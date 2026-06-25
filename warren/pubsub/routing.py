@@ -141,14 +141,34 @@ class ReplayRouter:
         return [Route(key=str(message.get(self._field) or ""))]
 
 
-def observer_binding_key(exchange: RMQExchangeConfig) -> str | None:
-    """Binding key for a support worker that observes *all* messages on ``exchange``.
+def observer_exchange(exchange: RMQExchangeConfig) -> RMQExchangeConfig:
+    """The exchange the support workers (job-status, retry) observe.
 
-    Support workers (job-status, retry, publication) watch the whole pipeline.
-    On ``fanout`` they receive everything (no key). On ``topic`` they bind the
-    catch-all ``#``. ``direct`` has no wildcard, so wholesale observation is not
-    supported (returns ``None`` → matches nothing); observing a direct exchange
-    is a later-phase concern.
+    ``fanout`` and ``topic`` can be observed *in place* — fanout broadcasts to
+    every bound queue, and topic supports a ``#`` catch-all binding — so the
+    data exchange is its own observer exchange.
+
+    A ``direct`` exchange routes by exact key and cannot be observed wholesale,
+    so the framework derives a dedicated **fanout** observer exchange
+    (``<name>.observer``). On a direct pipeline, workers echo their results to it
+    and lifecycle envelopes go to it, so observers see the whole pipeline; the
+    user never declares it. See warren/docs/routing.md.
+    """
+    if exchange.type in ("fanout", "topic"):
+        return exchange
+    return RMQExchangeConfig(
+        name=f"{exchange.name}.observer",
+        type="fanout",
+        durable=exchange.durable,
+    )
+
+
+def observer_binding_key(exchange: RMQExchangeConfig) -> str | None:
+    """Binding key for a support worker observing *all* messages on ``exchange``.
+
+    ``fanout`` receives everything (no key); ``topic`` binds the catch-all ``#``.
+    This is only ever called with an exchange returned by ``observer_exchange``,
+    which is always fanout or topic (never direct).
     """
     return "#" if exchange.type == "topic" else None
 
@@ -156,7 +176,7 @@ def observer_binding_key(exchange: RMQExchangeConfig) -> str | None:
 def observer_route_func(exchange: RMQExchangeConfig) -> RouteFunc | None:
     """Route function for a support worker that *publishes* on ``exchange``.
 
-    ``fanout`` ignores keys (``None``); ``topic``/``direct`` route by
-    ``data_type`` via :class:`MessageFieldRouter`.
+    ``fanout`` ignores keys (``None``); ``topic`` routes by ``data_type`` via
+    :class:`MessageFieldRouter`.
     """
     return MessageFieldRouter() if exchange.type != "fanout" else None

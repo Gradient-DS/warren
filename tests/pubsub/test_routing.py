@@ -12,6 +12,7 @@ from warren.pubsub.routing import (
     RoutingPlan,
     RoutingPlanRouter,
     observer_binding_key,
+    observer_exchange,
     observer_route_func,
 )
 
@@ -45,6 +46,19 @@ def test_message_field_router_custom_field():
 def test_message_field_router_raises_on_missing_field():
     with pytest.raises(ValueError, match="data_type"):
         asyncio.run(MessageFieldRouter()({"no_data_type": "x"}))
+
+
+def test_observer_exchange_fanout_and_topic_observe_in_place():
+    fan = RMQExchangeConfig(name="jobs", type="fanout")
+    top = RMQExchangeConfig(name="docs", type="topic")
+    assert observer_exchange(fan) is fan  # same object — observed in place
+    assert observer_exchange(top) is top
+
+
+def test_observer_exchange_direct_derives_fanout():
+    obs = observer_exchange(RMQExchangeConfig(name="route", type="direct"))
+    assert obs.name == "route.observer"
+    assert obs.type == "fanout"
 
 
 def test_observer_binding_key_per_exchange_type():

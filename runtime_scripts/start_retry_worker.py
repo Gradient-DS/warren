@@ -54,7 +54,7 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Pipeline spec location (same format as start_worker). Needed to "
-            "observe (must be a fanout or topic exchange). "
+            "observe (the framework derives the observer exchange). "
             f"Default path: {DEFAULT_PIPELINE_DIR}"
         ),
     )
@@ -111,13 +111,19 @@ async def start_retry_worker(
         msg = f"Unable to load pipeline spec from: {spec_str}"
         raise WarrenError(msg) from e
 
+    # Observe soft-failures on the observer exchange; republish retried
+    # messages to the data exchange (they coincide for fanout/topic).
     exchange = resolve_observation_exchange(pipeline)
     resolved_config = resolve_config_path(
         Path(config_file) if config_file else None, pipeline_dir
     )
 
     await run(
-        runner_factory_func=partial(RetryWorkerRunner, exchange=exchange),
+        runner_factory_func=partial(
+            RetryWorkerRunner,
+            exchange=exchange,
+            republish_exchange=pipeline.exchange,
+        ),
         config_file=resolved_config,
         worker_name=worker_name,
         worker_name_prefix="retry-worker",

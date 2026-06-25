@@ -73,7 +73,7 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Pipeline spec location (same format as start_worker). Needed to "
-            "publish on (must be a fanout or topic exchange). "
+            "publish on. "
             f"Default path: {DEFAULT_PIPELINE_DIR}"
         ),
     )
@@ -164,6 +164,7 @@ async def start_job_publication_worker(
     runner_factory = partial(
         JobPublicationWorkerRunner,
         exchange=exchange,
+        publish_exchange=pipeline.exchange,
         documents_publisher_factory=pub_factory_func,
     )
 

@@ -13,6 +13,7 @@ from pathlib import Path
 from basics.logging import get_logger
 
 from warren.pubsub.rabbitmq.config import RMQExchangeConfig
+from warren.pubsub.routing import observer_exchange
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.spec import PipelineSpec
 
@@ -169,26 +170,13 @@ def resolve_config_path(
 
 
 def resolve_observation_exchange(pipeline: PipelineSpec) -> RMQExchangeConfig:
-    """Return the pipeline exchange for a support worker to observe.
+    """Return the exchange a support worker should observe.
 
-    Observation needs a broadcast-capable exchange: ``fanout`` (every queue
-    gets every message) or ``topic`` (a ``#`` catch-all binding). A ``direct``
-    exchange cannot be observed wholesale, so support workers cannot run on a
-    direct-only pipeline — see warren/docs/routing.md.
-
-    :raises ValueError: if the pipeline exchange is ``direct``.
+    For fanout/topic this is the pipeline exchange itself (observed in place);
+    for direct it's the framework-derived fanout observer exchange. See
+    ``observer_exchange`` and warren/docs/routing.md.
     """
-    exchange = pipeline.exchange
-    if exchange.type not in ("fanout", "topic"):
-        msg = (
-            f"Support workers need a fanout or topic exchange to observe, but "
-            f"the pipeline exchange '{exchange.name}' is '{exchange.type}'. A "
-            f"direct-routed pipeline cannot be observed wholesale; add a "
-            f"fanout/topic exchange for observation (deferred — see "
-            f"warren/docs/routing.md)."
-        )
-        raise ValueError(msg)
-    return exchange
+    return observer_exchange(pipeline.exchange)
 
 
 def load_config(config_file: Path) -> RuntimeConfig:

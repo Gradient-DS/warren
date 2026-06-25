@@ -168,22 +168,37 @@ breaking change.
 ## Observation (support workers)
 
 The support workers — job-status (completion tracking) and retry — **observe**
-the pipeline by consuming everything on the exchange. Observation needs a
-broadcast-capable exchange: a **fanout** exchange (every queue gets every
-message) or a **topic** exchange (a `#` catch-all binding). A **direct** exchange
-routes by exact key and cannot be observed wholesale, so support workers refuse
-to start against a direct pipeline (the launcher fails loudly). A direct-routed
-pipeline that needs observation would add a separate fanout/topic exchange for
-it — which is the multi-exchange case, deferred below.
+the pipeline by consuming everything, on an **observer exchange** that the
+framework derives from the pipeline exchange (`observer_exchange`):
+
+- **fanout / topic** → observed *in place*: fanout broadcasts to every queue,
+  and topic supports a `#` catch-all binding, so the data exchange is its own
+  observer exchange. No second exchange, no extra messages.
+- **direct** → can't be observed wholesale (it routes by exact key), so the
+  framework creates a dedicated **fanout** observer exchange (`<name>.observer`),
+  *invisible to the user*. On a direct pipeline, each worker also publishes its
+  result to the observer exchange (an extra publish per message, direct only),
+  and lifecycle envelopes go there too — so the support workers see the whole
+  pipeline. The retry worker observes the observer exchange and republishes
+  retried messages back to the direct data exchange.
+
+The observer workers themselves are identical across all three cases — they bind
+a plain fanout/topic exchange and record/retry. Only the framework's wiring
+differs by exchange type. (Defining *additional* user-facing exchanges, or a
+worker publishing to several at once, remains deferred — see below.)
 
 ## Failure lifecycle
 
-A worker publishes through two paths, kept separate so the failure path is
-independent of the success path:
+A worker publishes through separate paths so the failure path is independent of
+the success path, and so observation works regardless of the data exchange type:
 
-- **Data publisher** (`publish`) — the successful result goes downstream.
+- **Data publisher** (`publish`) — the successful result routes downstream on
+  the data exchange (the worker's route).
 - **Control publisher** — lifecycle envelopes (soft/hard-failure) go to the
-  pipeline exchange so the retry/status workers observe them.
+  *observer* exchange so the retry/status workers see them.
+- **Observer publisher** (direct only) — echoes the successful result to the
+  observer exchange so the status worker can track stages on a direct pipeline.
+  Unset for fanout/topic (the data publish is already observable).
 
 On a soft failure the consumer manager stamps the routing key the message
 arrived with onto the envelope. The retry worker persists it, waits the backoff
@@ -216,10 +231,10 @@ cannot schedule two retries.
 These are deliberate boundaries, designed to be added later without reworking
 the model:
 
-- **Multiple exchanges** — one pipeline using more than one exchange, or a
-  worker publishing to several at once. A pipeline has exactly one exchange
-  today. This also means a direct-routed pipeline can't be observed (observation
-  would need a second, broadcast exchange).
+- **Multiple user-facing exchanges** — a pipeline exposing more than one
+  exchange, or a worker publishing to several at once. A pipeline has exactly one
+  user-defined exchange today. (The framework's derived observer exchange for
+  direct pipelines is internal and doesn't count — the user never defines it.)
 - **Fan-in / join** — a worker waiting on multiple upstream branches.
 - **`headers` exchanges.**
 - **Structural type checking** — a `data_type → schema` registry over the

@@ -89,6 +89,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
         worker_name: str,
         *,
         exchange: RMQExchangeConfig,
+        republish_exchange: RMQExchangeConfig | None = None,
         retry_store: DocumentStoreInterface | None = None,
         republish_publisher: PublisherInterface | None = None,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
@@ -97,7 +98,12 @@ class RetryWorkerRunner(WorkerRunnerBase):
         super().__init__(name=worker_name)
         self._worker_name = worker_name
         self._config = config
+        # Observe soft-failures on ``exchange`` (the observer exchange);
+        # republish retried messages to ``republish_exchange`` (the data
+        # exchange). They coincide for fanout/topic; for direct the observer is
+        # a separate fanout exchange while republish targets the direct exchange.
         self._exchange = exchange
+        self._republish_exchange = republish_exchange or exchange
         self._retry_store = retry_store
         self._republish_publisher = republish_publisher
         self._consumer_manager_factory = consumer_manager_factory
@@ -191,12 +197,12 @@ class RetryWorkerRunner(WorkerRunnerBase):
         return CachedDocumentStore(mongo_store, cache)
 
     def _create_default_publisher(self) -> PublisherInterface:
-        # Replay the original routing key (stamped on the failed message) so a
-        # retried message lands back in the worker that failed, for any routing
-        # scheme (data_type, addressed, fanout-broadcast). See D10.
+        # Republish to the DATA exchange, replaying the original routing key
+        # (stamped on the failed message) so a retried message lands back in the
+        # worker that failed, for any routing scheme. See D10.
         return RMQPublisher(
             connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=self._exchange,
+            exchange_config=self._republish_exchange,
             route_func=ReplayRouter(),
         )
 

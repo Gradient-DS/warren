@@ -53,7 +53,7 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Pipeline spec location (same format as start_worker). Needed to "
-            "observe (must be a fanout or topic exchange). "
+            "observe (the framework derives the observer exchange). "
             f"Default path: {DEFAULT_PIPELINE_DIR}"
         ),
     )

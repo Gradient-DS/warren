@@ -2,8 +2,8 @@
 Runner for the job status worker.
 
 Manages the JobStatusWorker lifecycle: creates infrastructure, builds
-stores and consumer, observes all messages on the fanout exchange and
-records per-document processing results.
+stores and consumer, observes all messages on the fanout exchange / topic
+and records per-document processing results.
 
 Accepts ``RuntimeConfig`` and manages its own infrastructure. Custom
 components can be injected to override the defaults (e.g. for testing).
@@ -19,18 +19,7 @@ from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
-from warren.pubsub.rabbitmq.aio_pika.consumer import (
-    RMQConsumerManager,
-)
-from warren.pubsub.rabbitmq.aio_pika.publisher import (
-    RMQPublisher,
-)
-from warren.pubsub.rabbitmq.config import (
-    RMQConsumerConfig,
-    RMQConsumerManagerConfig,
-    RMQExchangeConfig,
-    RMQQueueConfig,
-)
+from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import (
     RuntimeInfra,
@@ -72,9 +61,9 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
     :param job_results_store: optional override for the per-document
         results store. Default: ``MongoDBJobResultsStore``.
     :param consumer_manager_factory: optional override for the consumer
-        manager factory. Default: factory creating ``RMQConsumerManager``
-        on the job status queue with a publisher for the
-        ``job-completed`` signal.
+        manager factory. Default: factory creating the configured
+        backend's consumer manager on the job status queue/group with a
+        publisher for the ``job-completed`` signal.
     """
 
     def __init__(
@@ -98,12 +87,12 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
     async def setup(self) -> None:
         """Create infrastructure, build defaults, wire the worker.
 
-        1. Create infrastructure (MongoDB, Redis, RabbitMQ)
+        1. Create infrastructure (MongoDB, Redis, pubsub backend)
         2. Build default stores and consumer factory for any not injected
         3. Create the JobStatusWorker
         4. Create and set up the consumer manager
         """
-        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
+        with self._exception_wrapping("Infrastructure setup (pubsub/MongoDB/Redis)"):
             self._infra = await create_runtime_infrastructure(self._config)
 
         if self._job_store is None:
@@ -165,44 +154,21 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         return store
 
     def _create_default_publisher(self) -> PublisherInterface:
-        exchange_cfg = self._config.rabbitmq.exchange
-        return RMQPublisher(
-            connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=RMQExchangeConfig(
-                name=exchange_cfg.name,
-                type=exchange_cfg.type,
-                durable=exchange_cfg.durable,
-            ),
+        return backends.create_publisher(
+            self._config,
+            self._infra.pubsub_connection_manager,
         )
 
     def _create_default_consumer_factory(self) -> ConsumerManagerFactory:
-        exchange_cfg = self._config.rabbitmq.exchange
-        consumer_cfg = self._config.rabbitmq.consumer
-
-        manager_config = RMQConsumerManagerConfig(
-            exchange=RMQExchangeConfig(
-                name=exchange_cfg.name,
-                type=exchange_cfg.type,
-                durable=exchange_cfg.durable,
-            ),
-            queue=RMQQueueConfig(
-                name=f"{exchange_cfg.name}.{JOB_STATUS_WORKER_TYPE}",
-                durable=True,
-            ),
-            consumer=RMQConsumerConfig(
-                prefetch_count=consumer_cfg.prefetch_count,
-                on_shutdown_timeout=consumer_cfg.on_shutdown_timeout,
-            ),
-        )
-
         publishers = [self._publisher] if self._publisher is not None else []
 
         def factory(
             consumer: MessageConsumerInterface,
         ) -> ConsumerManagerInterface:
-            return RMQConsumerManager(
-                config=manager_config,
-                connection_manager=self._infra.rmq_connection_manager,
+            return backends.create_consumer_manager(
+                self._config,
+                self._infra.pubsub_connection_manager,
+                worker_type=JOB_STATUS_WORKER_TYPE,
                 consumer=consumer,
                 publishers=publishers,
                 publish_hard_failures=False,

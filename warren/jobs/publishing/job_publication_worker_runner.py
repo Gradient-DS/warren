@@ -7,9 +7,9 @@ application-specific ``JobDocumentsPublisher``.
 
 Accepts ``RuntimeConfig`` and manages its own infrastructure. The
 documents publisher is created via an injected factory that receives
-the runner's shared RMQ publisher and infrastructure connections,
+the runner's shared pubsub publisher and infrastructure connections,
 so the application can build its stores from the same MongoDB client
-and publish through the same RMQ channel.
+and publish through the same backend connection.
 """
 
 from abc import abstractmethod
@@ -28,18 +28,7 @@ from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
-from warren.pubsub.rabbitmq.aio_pika.consumer import (
-    RMQConsumerManager,
-)
-from warren.pubsub.rabbitmq.aio_pika.publisher import (
-    RMQPublisher,
-)
-from warren.pubsub.rabbitmq.config import (
-    RMQConsumerConfig,
-    RMQConsumerManagerConfig,
-    RMQExchangeConfig,
-    RMQQueueConfig,
-)
+from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import (
     RuntimeInfra,
@@ -63,10 +52,10 @@ class DocumentsPublisherFactoryFunc:
     is responsible for creating all components the publisher needs
     (stores, adapters, etc.).
 
-    :param publisher: RMQ publisher for downstream messages, shared
+    :param publisher: pubsub publisher for downstream messages, shared
         with the consumer manager. Already created but not yet set up
         — setup happens when the consumer manager starts.
-    :param infra: runtime connections (MongoDB, Redis, RabbitMQ).
+    :param infra: runtime connections (MongoDB, Redis, pubsub backend).
         Use ``infra.mongo_client`` to create stores that share the
         runner's connection rather than opening a second one.
     :param config: runtime configuration. Use
@@ -92,7 +81,7 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
     Creates infrastructure from ``RuntimeConfig``, then calls the
     injected ``documents_publisher_factory`` to build the
     application-specific publisher. The factory receives the runner's
-    shared RMQ publisher and infrastructure so it can create stores
+    shared pubsub publisher and infrastructure so it can create stores
     from the same connections.
 
     :param config: runtime infrastructure configuration.
@@ -101,8 +90,8 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         ``DocumentsPublisherFactoryFunc``. Called in ``setup()``
         after infrastructure is created.
     :param consumer_manager_factory: optional override for the consumer
-        manager factory. Default: factory creating ``RMQConsumerManager``
-        on the publication queue.
+        manager factory. Default: factory creating the configured
+        backend's consumer manager on the publication queue/group.
     :param create_source_generator: optional callable that receives
         the message ``data`` dict and returns an ``AsyncIterable``
         of document sources. When ``None``, defaults to iterating
@@ -131,13 +120,13 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
     async def setup(self) -> None:
         """Create infrastructure, build publisher, wire the worker.
 
-        1. Create infrastructure (MongoDB, Redis, RabbitMQ)
-        2. Create RMQ publisher for downstream messages
+        1. Create infrastructure (MongoDB, Redis, pubsub backend)
+        2. Create pubsub publisher for downstream messages
         3. Call documents publisher factory with shared infrastructure
         4. Build default consumer factory if not injected
         5. Create the JobPublicationWorker and consumer manager
         """
-        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
+        with self._exception_wrapping("Infrastructure setup (pubsub/MongoDB/Redis)"):
             self._infra = await create_runtime_infrastructure(self._config)
 
         self._publisher = self._create_default_publisher()
@@ -182,42 +171,19 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
                 )
 
     def _create_default_publisher(self) -> PublisherInterface:
-        exchange_cfg = self._config.rabbitmq.exchange
-        return RMQPublisher(
-            connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=RMQExchangeConfig(
-                name=exchange_cfg.name,
-                type=exchange_cfg.type,
-                durable=exchange_cfg.durable,
-            ),
+        return backends.create_publisher(
+            self._config,
+            self._infra.pubsub_connection_manager,
         )
 
     def _create_default_consumer_factory(self) -> ConsumerManagerFactory:
-        exchange_cfg = self._config.rabbitmq.exchange
-        consumer_cfg = self._config.rabbitmq.consumer
-
-        manager_config = RMQConsumerManagerConfig(
-            exchange=RMQExchangeConfig(
-                name=exchange_cfg.name,
-                type=exchange_cfg.type,
-                durable=exchange_cfg.durable,
-            ),
-            queue=RMQQueueConfig(
-                name=f"{exchange_cfg.name}.{PUBLICATION_WORKER_TYPE}",
-                durable=True,
-            ),
-            consumer=RMQConsumerConfig(
-                prefetch_count=consumer_cfg.prefetch_count,
-                on_shutdown_timeout=consumer_cfg.on_shutdown_timeout,
-            ),
-        )
-
         def factory(
             consumer: MessageConsumerInterface,
         ) -> ConsumerManagerInterface:
-            return RMQConsumerManager(
-                config=manager_config,
-                connection_manager=self._infra.rmq_connection_manager,
+            return backends.create_consumer_manager(
+                self._config,
+                self._infra.pubsub_connection_manager,
+                worker_type=PUBLICATION_WORKER_TYPE,
                 consumer=consumer,
                 publishers=[self._publisher] if self._publisher else [],
                 publish_hard_failures=False,

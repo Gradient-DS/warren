@@ -66,7 +66,7 @@ def discover_gcs_pdfs(
         msg = "google-cloud-storage"
         raise OptionalDependencyError(
             msg,
-            install_hint="pip install google-cloud-storage",
+            install_hint='pip install "warren[gcs]"',
         ) from e
 
     client = storage.Client()

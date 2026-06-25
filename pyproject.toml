@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "warren"
-version = "0.1.1"
-description = "Message-driven document processing framework — self-selecting workers on a RabbitMQ fanout exchange with MongoDB/Redis-backed storage"
+version = "0.2.0"
+description = "Message-driven document processing framework — self-selecting workers on a RabbitMQ or Kafka backend with MongoDB/Redis-backed storage"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-keywords = ["rabbitmq", "pipeline", "document-processing", "workers", "message-driven", "mongodb", "redis"]
+keywords = ["rabbitmq", "kafka", "pipeline", "document-processing", "workers", "message-driven", "mongodb", "redis"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -25,13 +25,17 @@ dependencies = [
     "visionscaper-pybase>=0.4.0",
     "pymongo>=4.10",
     "redis>=4.0",
-    "aio-pika>=9.5",
     "pydantic>=2.11",
     "PyYAML>=6",
-    "google-cloud-storage>=2.18",
 ]
 
 [project.optional-dependencies]
+# Backend transports and cloud storage are optional: install only the
+# extras you use. A missing extra surfaces as an OptionalDependencyError
+# the moment that backend / resolver is selected.
+rmq = ["aio-pika>=9.5"]
+kafka = ["aiokafka>=0.12"]
+gcs = ["google-cloud-storage>=2.18"]
 dev = [
     "pytest>=8",
     "ruff",

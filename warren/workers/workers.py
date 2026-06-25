@@ -206,6 +206,12 @@ class SyncProcessingWorkerBase(Base, SyncMessageConsumerInterface, metaclass=ABC
         ...
 
 
+# DISCUSS (before 1.0): FilteringWorkerBase and CapabilityWorkerBase share the
+# same "filter, then process" shape and differ only in how should_process is
+# decided (abstract here vs. derived from `accepts` below). CapabilityWorkerBase
+# is nearly a superset. Consider merging into a single base with optional
+# accepts/produces and an overridable should_process. See warren/docs/routing.md
+# ("Worker base classes") and PR discussion. Not changing the API yet.
 class FilteringWorkerBase(AsyncProcessingWorkerBase):
     """
     Async worker that self-selects messages via should_process().

@@ -95,10 +95,23 @@ message. Warren ships a few; a pipeline can also supply its own.
 
 ## Job-defined routing
 
-With a topic/direct exchange, routing can be decided **per job** rather than
-fixed by the topology. A job attaches a `RoutingPlan` to its `job_parameters`;
-because `job_parameters` propagates through the message chain, every downstream
-hop can resolve the next step from it.
+Routing *strategy* (what computes the key) and exchange *type* (how the broker
+matches it) are separate choices, but they pair naturally:
+
+| Strategy | Routes by | Natural exchange | Why |
+|----------|-----------|------------------|-----|
+| `MessageFieldRouter` | `data_type` (content) | `topic` | value is wildcard matching over a type taxonomy |
+| `RoutingPlanRouter` | worker-type id (address) | `direct` | worker ids are exact strings — no wildcards needed |
+
+The job-defined pattern below is the **addressed** strategy, so its natural home
+is a **`direct`** exchange. (It *can* run on a topic exchange with literal
+binding keys, since topic exact-matches keys without wildcards, but there's no
+reason to — `direct` is the simpler, correct fit.)
+
+Routing can be decided **per job** rather than fixed by the topology. A job
+attaches a `RoutingPlan` to its `job_parameters`; because `job_parameters`
+propagates through the message chain, every downstream hop can resolve the next
+step from it.
 
 ```python
 class RoutingPlan(BaseModel):
@@ -111,6 +124,14 @@ exchange), and publishes via `RoutingPlanRouter`, which reads the plan, looks up
 the producing node via the message's `origin.type`, and emits one route per
 successor. The submitter publishes the initial message to the plan's `entry`
 node(s).
+
+**The plan is inert without the router.** A `RoutingPlan` is just data in
+`job_parameters` — it has no effect unless the pipeline's publishers use
+`RoutingPlanRouter` as their `route_func`. The two are coupled by design (the
+router is the injected routing policy). Mind the failure modes: a publisher with
+`RoutingPlanRouter` but a message with no plan **raises at publish time**; a plan
+with no `RoutingPlanRouter` anywhere is **silently ignored**. This coupling
+cannot be checked at deploy time — a `route_func` is opaque to the framework.
 
 This is a routing **tree**: fan-out (a node with multiple successors) is
 supported; fan-in / join (a worker waiting on multiple upstream branches) is
@@ -128,6 +149,15 @@ not — that requires a stateful aggregator worker and is out of scope.
 
 `accepts` / `produces` are declared once on the `WorkerSpec` (the single source
 of truth for validation) and passed to the worker via `WorkerFactoryContext`.
+
+> **Open question (to discuss before 1.0): merge these two bases?** They share
+> one shape — "filter, then process" — and differ only in how `should_process`
+> is decided (`FilteringWorkerBase` makes it abstract; `CapabilityWorkerBase`
+> derives a default from `accepts`). `CapabilityWorkerBase` is nearly a superset.
+> A single base with optional `accepts`/`produces` and an overridable
+> `should_process` could cover both modes, at the cost of a public-API change
+> (which is cheap pre-1.0). The counter-argument is that two named classes signal
+> intent. Not yet decided — see PR discussion.
 
 ## Type checking
 

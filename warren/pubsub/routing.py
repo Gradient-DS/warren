@@ -68,6 +68,14 @@ class RoutingPlan(BaseModel):
     workers. A **tree** (each node has one parent): fan-out is supported (a node
     with multiple successors), fan-in/join is not.
 
+    This is the *addressed* routing strategy (route by worker-type id), whose
+    natural home is a ``direct`` exchange.
+
+    **Coupled to** :class:`RoutingPlanRouter`: the plan is inert data on its own.
+    It only takes effect if the pipeline's publishers use ``RoutingPlanRouter``
+    as their ``route_func``. A plan with no such router anywhere is silently
+    ignored.
+
     :param entry: Worker-type id(s) the document enters at.
     :param edges: ``producer-id -> successor-id(s)``; ``[]`` marks a terminal
         node (routes nowhere).
@@ -85,6 +93,12 @@ class RoutingPlanRouter:
     worker-type id), and emits one :class:`Route` per successor. When the origin
     is not a node in the plan — e.g. the initial publish from a publisher — it
     routes to the plan's ``entry`` nodes.
+
+    This router and :class:`RoutingPlan` are two halves of one mechanism: wire
+    this as a publisher's ``route_func`` for the plan to take effect. Without a
+    plan in the message it raises (below); with a plan but no router the plan is
+    silently ignored. The coupling cannot be checked at deploy time because a
+    ``route_func`` is opaque to the framework.
 
     :param plan_key: Key under ``job_parameters`` holding the plan.
     """

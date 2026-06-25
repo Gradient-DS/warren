@@ -1,17 +1,19 @@
 """
-Publish real PDF files into the ``examples/rag`` pipeline.
+Publish PDF URLs into the ``examples/rag`` pipeline.
 
-Each PDF under ``--pdf-dir`` becomes one ``pdf_document`` message carrying a
-**location** (a ``path`` ``DocumentLocation``), not the bytes. The parser
-worker fetches the bytes through the framework's document fetcher from that
-location — so the broker only ever moves small messages around.
+Each URL becomes one small ``pdf_document`` message; the parser worker
+downloads and parses it. Defaults to two arXiv papers so the example runs
+with no arguments — pass ``--url`` (repeatable) to use your own.
 
 Usage:
     export OPENAI_API_KEY=sk-...        # needed by the embedding *worker*
     python -m examples.rag.publish_jobs \
-        --job-name pdf-001 \
-        --pdf-dir examples/rag/documents \
+        --job-name rag-001 \
         --config-file examples/rag/config.yaml
+
+    # your own PDFs:
+    python -m examples.rag.publish_jobs --job-name rag-002 \
+        --url https://example.com/a.pdf --url https://example.com/b.pdf
 """
 
 import argparse
@@ -29,28 +31,29 @@ from warren.pubsub.rabbitmq.aio_pika.connection import RMQConnectionManager
 from warren.pubsub.rabbitmq.aio_pika.publisher import RMQPublisher
 from warren.pubsub.routing import observer_route_func
 from warren.runtime.config import RuntimeConfig
-from warren.storage.documents.location import DocumentPathLocation
 from warren.storage.jobs.mongodb import MongoDBJobStore
 
 
 module_logger: logging.Logger = get_logger(__name__)
 
 DEFAULT_CONFIG_PATH: Path = Path(__file__).parent / "config.yaml"
-DEFAULT_PDF_DIR: Path = Path(__file__).parent / "documents"
+
+# Two arXiv papers, so the example runs out of the box.
+DEFAULT_URLS: list[str] = [
+    "https://arxiv.org/pdf/1706.03762",  # Attention Is All You Need
+    "https://arxiv.org/pdf/2103.15348",  # LayoutParser
+]
 
 
-def _discover_pdfs(pdf_dir: Path) -> list[Path]:
-    pdfs = sorted(p for p in pdf_dir.glob("*.pdf"))
-    if not pdfs:
-        msg = f"No .pdf files found in {pdf_dir}"
-        raise SystemExit(msg)
-    return pdfs
+def _doc_id(url: str) -> str:
+    """Derive a readable doc_id from a URL (its last path segment)."""
+    return url.rstrip("/").rsplit("/", 1)[-1] or url
 
 
 async def _publish(
     config: RuntimeConfig,
     job_name: str,
-    pdfs: list[Path],
+    urls: list[str],
 ) -> str:
     mongo_client = AsyncMongoClient(host=config.mongodb.host, port=config.mongodb.port)
     job_store = MongoDBJobStore(
@@ -59,7 +62,7 @@ async def _publish(
     await job_store.setup()
     job_id = await job_store.create_job(
         final_data_type=PIPELINE.final_data_type,
-        num_documents=len(pdfs),
+        num_documents=len(urls),
         metadata={"job_name": job_name},
     )
 
@@ -72,22 +75,16 @@ async def _publish(
     try:
         await connection_manager.setup()
         await publisher.setup()
-        for pdf in pdfs:
-            doc_id = pdf.stem
-            # Absolute path so the worker resolves it regardless of its CWD.
-            location = DocumentPathLocation(relative_path=str(pdf.resolve()))
+        for url in urls:
             await publisher(
                 {
                     "data_type": "pdf_document",
-                    "data": {
-                        "doc_id": doc_id,
-                        "document_location": location.model_dump(),
-                    },
+                    "data": {"doc_id": _doc_id(url), "url": url},
                     "job_id": job_id,
-                    "origin": {"type": PUBLISHER_ORIGIN_TYPE, "name": "pdf-publisher"},
+                    "origin": {"type": PUBLISHER_ORIGIN_TYPE, "name": "rag-publisher"},
                 }
             )
-        module_logger.info(f"Job {job_id}: published {len(pdfs)} PDF(s)")
+        module_logger.info(f"Job {job_id}: published {len(urls)} PDF URL(s)")
     finally:
         await publisher.teardown()
         await connection_manager.teardown()
@@ -97,13 +94,16 @@ async def _publish(
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Publish PDFs into the pdf pipeline")
+    parser = argparse.ArgumentParser(
+        description="Publish PDF URLs into the rag pipeline"
+    )
     parser.add_argument("--job-name", required=True, help="Human-readable job name.")
     parser.add_argument(
-        "--pdf-dir",
-        type=Path,
-        default=DEFAULT_PDF_DIR,
-        help=f"Directory of .pdf files to publish (default: {DEFAULT_PDF_DIR}).",
+        "--url",
+        action="append",
+        dest="urls",
+        metavar="URL",
+        help="PDF URL to process (repeatable). Defaults to two arXiv papers.",
     )
     parser.add_argument(
         "--config-file", type=Path, default=DEFAULT_CONFIG_PATH, help="Config YAML."
@@ -118,8 +118,8 @@ def main() -> None:
     configure_logging(debug=args.debug)
     module_logger = get_logger(__name__, log_level=resolve_log_level(debug=args.debug))
     config = RuntimeConfig.from_yaml(args.config_file)
-    pdfs = _discover_pdfs(args.pdf_dir)
-    asyncio.run(_publish(config, args.job_name, pdfs))
+    urls = args.urls or DEFAULT_URLS
+    asyncio.run(_publish(config, args.job_name, urls))
 
 
 if __name__ == "__main__":

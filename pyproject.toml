@@ -36,9 +36,10 @@ dev = [
     "pytest>=8",
     "ruff",
 ]
-# Extra dependencies used only by the runnable `examples/pdf` pipeline
-# (real PDF parsing + OpenAI embeddings). Not needed by the framework.
+# Extra dependencies used only by the runnable `examples/rag` pipeline
+# (PDF download + parsing + OpenAI embeddings). Not needed by the framework.
 examples = [
+    "httpx>=0.27",
     "pypdf>=4",
     "openai>=1.0",
 ]

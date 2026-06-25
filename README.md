@@ -74,16 +74,16 @@ python -m examples.inspect_job --job-name demo-001 --config-file examples/exchan
 ## Get started for real — PDFs to embeddings
 
 The quickstart proves the plumbing with synthetic data. `examples/rag/` does
-**real work**: it reads real PDF files, extracts their text with
+**real work**: it downloads real PDFs, extracts their text with
 [`pypdf`](https://pypi.org/project/pypdf/), splits it into chunks, and embeds
 each chunk with the OpenAI API — the first three stages of a RAG pipeline. You
-bring your own `OPENAI_API_KEY`. It ships with three tiny sample PDFs, and you
-can point it at a folder of your own.
+bring your own `OPENAI_API_KEY`. It defaults to two arXiv papers and takes your
+own with `--url`.
 
 It runs on a **fanout** exchange (every worker self-selects), like the
-quickstart — what's new is that the work is real: a document fetcher, a real
-parser, and a real embedding API whose transient errors flow through Warren's
-retry path.
+quickstart — what's new is that the work is real: the parser **downloads** each
+PDF over HTTP, and a real embedding API whose transient errors flow through
+Warren's retry path.
 
 **1. Install the example extras** (real PDF + OpenAI clients, not needed by the
 framework itself) and start the same infrastructure as the quickstart:
@@ -106,16 +106,16 @@ python -m runtime_scripts.start_job_status_worker --pipeline-spec ./examples/rag
 `OPENAI_API_KEY` only needs to be set for the **embedding** worker's terminal —
 the parser and chunker don't call OpenAI.
 
-**3. Publish the bundled PDFs** (or your own with `--pdf-dir`):
+**3. Publish the PDFs** (defaults to two arXiv papers; add your own with `--url`):
 
 ```bash
-python -m examples.rag.publish_jobs --job-name rag-001 --pdf-dir examples/rag/documents --config-file examples/rag/config.yaml
+python -m examples.rag.publish_jobs --job-name rag-001 --config-file examples/rag/config.yaml
 ```
 
-The publisher sends one small message per PDF carrying the file's *location*,
-not its bytes — the parser fetches each PDF through Warren's document fetcher.
-Results land in the `parsed_documents`, `chunks`, and `embeddings` collections
-of the `warren_rag` database.
+The publisher sends one small message per PDF carrying just its *URL* — the
+parser worker downloads and parses each one. Results land in the
+`parsed_documents`, `chunks`, and `embeddings` collections of the `warren_rag`
+database.
 
 **4. Watch it run:**
 
@@ -123,9 +123,9 @@ of the `warren_rag` database.
 python -m examples.inspect_job --job-name rag-001 --config-file examples/rag/config.yaml
 ```
 
-To embed your own corpus, drop PDFs into a folder and pass `--pdf-dir`. The
-chunk size and embedding model are constants at the top of
-`examples/rag/workers/` — tune them for your documents.
+To embed your own corpus, pass `--url` (repeatable). The chunk size and
+embedding model are constants at the top of `examples/rag/workers/` — tune them
+for your documents.
 
 ## Defining your own pipeline
 

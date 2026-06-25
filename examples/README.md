@@ -1,17 +1,18 @@
 # Examples
 
-Two kinds of runnable example. Full run instructions (infrastructure, workers,
+Two kinds of runnable examples. Full run instructions (infrastructure, workers,
 publishing, inspecting) live in the repo [README](../README.md) — this is just
 the map.
 
-## `rag/` — the real one
+## `rag/` — real workload
 
 Real PDFs → text → chunks → OpenAI embeddings: the first three stages of a RAG
-pipeline. Bring your own `OPENAI_API_KEY`; ships with sample PDFs and takes your
-own via `--pdf-dir`. Start here if you want to see Warren do actual work. See
+pipeline. The parser **downloads** each PDF from a URL. Bring your own
+`OPENAI_API_KEY`; defaults to two arXiv papers and takes your own via `--url`.
+Start here if you want to see Warren do actual work. See
 [Get started for real](../README.md#get-started-for-real--pdfs-to-embeddings).
 
-## `exchanges/` — one pipeline, three exchanges
+## `exchanges/` — one synthetic pipeline, three exchanges
 
 The **same** parse → chunk → embed pipeline over synthetic data, wired onto each
 of Warren's exchange types so the routing is what stands out. See

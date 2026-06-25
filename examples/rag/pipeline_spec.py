@@ -1,9 +1,10 @@
 """
 Real PDF -> chunks -> embeddings pipeline (fanout exchange).
 
-The get-started example that does actual work: it reads real PDF files,
-extracts their text with ``pypdf``, splits the text into chunks, and embeds
-each chunk with the OpenAI API (bring your own ``OPENAI_API_KEY``).
+The get-started example that does actual work: it downloads real PDFs (two
+arXiv papers by default), extracts their text with ``pypdf``, splits the text
+into chunks, and embeds each chunk with the OpenAI API (bring your own
+``OPENAI_API_KEY``).
 
 It runs on a **fanout** exchange — the simplest topology. Every worker
 receives every message in its own queue and self-selects via
@@ -31,7 +32,6 @@ from warren.runtime.spec import (
 async def _create_pdf_parser(ctx: WorkerFactoryContext) -> MessageConsumerInterface:
     return PdfParserWorker(
         worker_name=ctx.worker_name,
-        get_document_func=ctx.get_document_func,
         write_store=ctx.stores["write"],
     )
 
@@ -69,9 +69,8 @@ PIPELINE: PipelineSpec = PipelineSpec(
         "pdf_parser": WorkerSpec(
             collections={"write": "parsed_documents"},
             factory=_create_pdf_parser,
-            # Hands the worker a GetDocumentFunc so it can fetch PDF bytes
-            # by location (local path here) instead of reading files itself.
-            needs_document_fetcher=True,
+            # The worker downloads the PDF from the URL in the message itself,
+            # so it needs no document fetcher.
             publish=PublishSpec(),
         ),
         "text_chunker": WorkerSpec(

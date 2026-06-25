@@ -160,7 +160,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         with self._exception_wrapping("Consumer manager creation"):
             self._consumer_manager = self._create_consumer_manager(
                 self._worker,
-                self._create_data_publishers(),
+                self._create_data_publisher(),
                 self._create_control_publisher(),
                 self._create_observer_publisher(),
             )
@@ -290,19 +290,17 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         )
         return await self._worker_spec.factory(context)
 
-    def _create_data_publishers(self) -> list[PublisherInterface]:
-        """The worker's downstream publisher, or none if it's terminal."""
+    def _create_data_publisher(self) -> PublisherInterface | None:
+        """The worker's downstream publisher, or ``None`` if it's terminal."""
         publish = self._worker_spec.publish
         if publish is None:
-            return []
-        return [
-            RMQPublisher(
-                connection_manager=self._infra.rmq_connection_manager,
-                exchange_config=self._exchange,
-                route=publish.route,
-                route_func=publish.route_func,
-            )
-        ]
+            return None
+        return RMQPublisher(
+            connection_manager=self._infra.rmq_connection_manager,
+            exchange_config=self._exchange,
+            route=publish.route,
+            route_func=publish.route_func,
+        )
 
     def _create_control_publisher(self) -> PublisherInterface:
         """Single publisher for lifecycle envelopes (soft/hard-failure).
@@ -339,7 +337,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
     def _create_consumer_manager(
         self,
         consumer: MessageConsumerInterface,
-        data_publishers: list[PublisherInterface],
+        data_publisher: PublisherInterface | None,
         control_publisher: PublisherInterface,
         observer_publisher: PublisherInterface | None,
     ) -> ConsumerManagerInterface:
@@ -362,7 +360,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             config=manager_config,
             connection_manager=self._infra.rmq_connection_manager,
             consumer=consumer,
-            data_publishers=data_publishers,
+            data_publisher=data_publisher,
             control_publisher=control_publisher,
             observer_publisher=observer_publisher,
         )

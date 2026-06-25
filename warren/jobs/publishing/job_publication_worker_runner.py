@@ -223,7 +223,7 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
                 config=manager_config,
                 connection_manager=self._infra.rmq_connection_manager,
                 consumer=consumer,
-                data_publishers=[self._publisher] if self._publisher else [],
+                data_publisher=self._publisher,
                 publish_hard_failures=False,
             )
 

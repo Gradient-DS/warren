@@ -58,7 +58,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         connection_manager: RMQConnectionManager,
         consumer: MessageConsumerInterface,
         *,
-        data_publishers: list[PublisherInterface] | None = None,
+        data_publisher: PublisherInterface | None = None,
         control_publisher: PublisherInterface | None = None,
         observer_publisher: PublisherInterface | None = None,
         retry_config: RetryConfig | None = None,
@@ -66,24 +66,26 @@ class RMQConsumerManager(ConsumerManagerBase):
         publish_hard_failures: bool = True,
     ) -> None:
         # Three publishing paths (see warren/docs/routing.md):
-        # - data_publishers: successful results route downstream on the data
-        #   exchange (the worker's `publish` route).
+        # - data_publisher: the successful result routes downstream on the data
+        #   exchange (the worker's `publish` route). None if the worker is
+        #   terminal.
         # - control_publisher: lifecycle envelopes (soft/hard-failure) go to the
         #   observer exchange so the retry/status workers pick them up.
         # - observer_publisher: echoes successful results to the observer
         #   exchange — set only when the data exchange can't be observed in place
         #   (direct). None for fanout/topic, so they don't double their traffic.
         # The base tracks all of them for setup/teardown.
-        all_publishers = list(data_publishers or [])
-        for extra in (control_publisher, observer_publisher):
-            if extra is not None:
-                all_publishers.append(extra)
+        all_publishers = [
+            p
+            for p in (data_publisher, control_publisher, observer_publisher)
+            if p is not None
+        ]
         super().__init__(
             consumer,
             publishers=all_publishers,
         )
 
-        self._data_publishers = data_publishers or []
+        self._data_publisher = data_publisher
         self._control_publisher = control_publisher
         self._observer_publisher = observer_publisher
         self._config = config
@@ -262,11 +264,11 @@ class RMQConsumerManager(ConsumerManagerBase):
                     body,
                 )
 
-            # Publish downstream if data publishers configured and a result was
-            # returned. Lifecycle envelopes go through the control publisher.
+            # Route the result downstream (terminal workers have no data
+            # publisher). Lifecycle envelopes go through the control publisher.
             if result is not None:
-                if self._data_publishers:
-                    await self._publish_downstream(result)
+                if self._data_publisher is not None:
+                    await self._data_publisher(result)
                 # Echo to the observer exchange when it can't observe the data
                 # exchange in place (direct). None for fanout/topic.
                 if self._observer_publisher is not None:
@@ -285,11 +287,6 @@ class RMQConsumerManager(ConsumerManagerBase):
 
         except Exception as e:
             await self._handle_hard_failure(message, body, e)
-
-    async def _publish_downstream(self, result: dict) -> None:
-        """Publish a successful result to every data publisher."""
-        for publisher in self._data_publishers:
-            await publisher(result)
 
     async def _handle_soft_failure(
         self,

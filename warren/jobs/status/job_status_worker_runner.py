@@ -193,8 +193,6 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
             ),
         )
 
-        publishers = [self._publisher] if self._publisher is not None else []
-
         def factory(
             consumer: MessageConsumerInterface,
         ) -> ConsumerManagerInterface:
@@ -202,7 +200,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
                 config=manager_config,
                 connection_manager=self._infra.rmq_connection_manager,
                 consumer=consumer,
-                data_publishers=publishers,
+                data_publisher=self._publisher,
                 publish_hard_failures=False,
             )
 

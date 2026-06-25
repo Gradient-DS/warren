@@ -60,15 +60,13 @@ async def _create_embedder(ctx: WorkerFactoryContext) -> MessageConsumerInterfac
 def _addressed(binding_key: str) -> dict:
     """Common wiring: bind to own worker-id, publish via the routing plan."""
     return {
-        "consume_exchange": "route",
         "binding_key": binding_key,
-        "publish": [PublishSpec(exchange="route", route_func=RoutingPlanRouter())],
+        "publish": PublishSpec(route_func=RoutingPlanRouter()),
     }
 
 
 PIPELINE: PipelineSpec = PipelineSpec(
-    exchanges={"route": RMQExchangeConfig(name="route", type="direct")},
-    default_exchange="route",
+    exchange=RMQExchangeConfig(name="route", type="direct"),
     workers={
         "document_parser": WorkerSpec(
             collections={"write": "parsed_documents"},

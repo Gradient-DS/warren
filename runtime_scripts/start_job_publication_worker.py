@@ -38,7 +38,7 @@ from runtime_scripts.lib.pipeline import (
     DEFAULT_PIPELINE_DIR,
     load_pipeline,
     resolve_config_path,
-    resolve_default_exchange,
+    resolve_observation_exchange,
 )
 from runtime_scripts.lib.runner import run
 from warren.exceptions import WarrenError
@@ -73,7 +73,7 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Pipeline spec location (same format as start_worker). Needed to "
-            "resolve the exchange to publish on (default_exchange). "
+            "publish on (must be a fanout or topic exchange). "
             f"Default path: {DEFAULT_PIPELINE_DIR}"
         ),
     )
@@ -156,7 +156,7 @@ async def start_job_publication_worker(
         msg = f"Unable to load pipeline spec from: {spec_str}"
         raise WarrenError(msg) from e
 
-    exchange = resolve_default_exchange(pipeline)
+    exchange = resolve_observation_exchange(pipeline)
     resolved_config = resolve_config_path(
         Path(config_file) if config_file else None, pipeline_dir
     )

@@ -29,29 +29,25 @@ from warren.runtime.spec import (
 
 
 PIPELINE: PipelineSpec = PipelineSpec(
-    exchanges={"docs": RMQExchangeConfig(name="docs", type="topic")},
-    default_exchange="docs",
+    exchange=RMQExchangeConfig(name="docs", type="topic"),
     workers={
         "document_parser": WorkerSpec(
             collections={"write": "parsed_documents"},
             factory=_create_document_parser,
-            consume_exchange="docs",
             binding_key="pdf_document",
-            publish=[PublishSpec(exchange="docs", route_func=MessageFieldRouter())],
+            publish=PublishSpec(route_func=MessageFieldRouter()),
         ),
         "text_chunker": WorkerSpec(
             collections={"read": "parsed_documents", "write": "chunks"},
             factory=_create_text_chunker,
-            consume_exchange="docs",
             binding_key="markdown_document",
-            publish=[PublishSpec(exchange="docs", route_func=MessageFieldRouter())],
+            publish=PublishSpec(route_func=MessageFieldRouter()),
         ),
         "embedding_generator": WorkerSpec(
             collections={"read": "chunks", "write": "embeddings"},
             factory=_create_embedding_generator,
-            consume_exchange="docs",
             binding_key="text_chunks",
-            publish=[PublishSpec(exchange="docs", route_func=MessageFieldRouter())],
+            publish=PublishSpec(route_func=MessageFieldRouter()),
         ),
     },
     result_collections=["parsed_documents", "chunks", "embeddings"],

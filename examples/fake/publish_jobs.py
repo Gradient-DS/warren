@@ -92,7 +92,7 @@ async def _publish(
     )
 
     connection_manager = RMQConnectionManager(config.rabbitmq.connection)
-    exchange_config = pipeline.exchanges[pipeline.default_exchange]
+    exchange_config = pipeline.exchange
 
     publisher = RMQPublisher(
         connection_manager=connection_manager,

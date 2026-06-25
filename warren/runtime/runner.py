@@ -81,9 +81,9 @@ class DefaultWorkerRunner(WorkerRunnerBase):
     :param worker_name: unique worker instance identifier.
     :param worker_type: name of the worker type (used for queue naming).
     :param worker_spec: spec defining collections, factory, exchange
-        wiring (consume_exchange, binding_key, publish), and flags.
-    :param exchanges: named exchange definitions from the ``PipelineSpec``,
-        resolved by ``worker_spec.consume_exchange`` / ``PublishSpec.exchange``.
+        wiring (binding_key, publish), and flags.
+    :param exchange: the pipeline's exchange (from ``PipelineSpec.exchange``)
+        this worker consumes from and publishes to.
     :param document_fetcher: optional override for the document fetcher.
         Default: ``CachedDocumentFetcher`` with path + GCS resolvers
         (created when ``worker_spec.needs_document_fetcher`` is True).
@@ -103,7 +103,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         *,
         worker_type: str,
         worker_spec: WorkerSpec,
-        exchanges: dict[str, RMQExchangeConfig],
+        exchange: RMQExchangeConfig,
         document_fetcher: GetDocumentFunc | None = None,
         document_store: DocumentStoreInterface | None = None,
         results_stores: dict[str, ResultsStoreInterface] | None = None,
@@ -113,7 +113,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         self._worker_name = worker_name
         self._config = config
         self._worker_spec: WorkerSpec = worker_spec
-        self._exchanges = exchanges
+        self._exchange = exchange
         self._document_fetcher = document_fetcher
         self._document_store = document_store
         self._results_stores = results_stores
@@ -290,29 +290,30 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         return await self._worker_spec.factory(context)
 
     def _create_data_publishers(self) -> list[PublisherInterface]:
-        """One publisher per downstream target. Empty ``publish`` → none."""
+        """The worker's downstream publisher, or none if it's terminal."""
+        publish = self._worker_spec.publish
+        if publish is None:
+            return []
         return [
             RMQPublisher(
                 connection_manager=self._infra.rmq_connection_manager,
-                exchange_config=self._exchanges[target.exchange],
-                route=target.route,
-                route_func=target.route_func,
+                exchange_config=self._exchange,
+                route=publish.route,
+                route_func=publish.route_func,
             )
-            for target in self._worker_spec.publish
         ]
 
     def _create_control_publisher(self) -> PublisherInterface:
         """Single publisher for lifecycle envelopes (soft/hard-failure).
 
-        Publishes to the worker's *consume* exchange so a retry/status worker
-        observing that exchange picks them up; on a fanout exchange it
-        broadcasts (no key), on topic/direct it routes by ``data_type`` (D9).
+        Publishes to the pipeline exchange so a retry/status worker observing
+        it picks them up; on a fanout exchange it broadcasts (no key), on
+        topic/direct it routes by ``data_type`` (D9).
         """
-        consume_exchange = self._exchanges[self._worker_spec.consume_exchange]
         return RMQPublisher(
             connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=consume_exchange,
-            route_func=observer_route_func(consume_exchange),
+            exchange_config=self._exchange,
+            route_func=observer_route_func(self._exchange),
         )
 
     def _create_consumer_manager(
@@ -321,7 +322,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         data_publishers: list[PublisherInterface],
         control_publisher: PublisherInterface,
     ) -> ConsumerManagerInterface:
-        exchange_config = self._exchanges[self._worker_spec.consume_exchange]
+        exchange_config = self._exchange
         queue_name = f"{exchange_config.name}.{self._worker_type}"
 
         queue_config = RMQQueueConfig(

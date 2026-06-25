@@ -1,7 +1,5 @@
 """Unit tests for deploy-time pipeline validation (no broker needed)."""
 
-import dataclasses
-
 import pytest
 
 from warren.pubsub.rabbitmq.config import RMQExchangeConfig
@@ -19,11 +17,10 @@ async def _factory(ctx):  # pragma: no cover - never called by validation
     raise NotImplementedError
 
 
-def _pipeline(workers, exchanges, default_exchange="jobs"):
+def _pipeline(worker, exchange_type="fanout"):
     return PipelineSpec(
-        workers=workers,
-        exchanges=exchanges,
-        default_exchange=default_exchange,
+        workers={"w": worker},
+        exchange=RMQExchangeConfig(name="x", type=exchange_type),
         result_collections=["c"],
         reference_collection="c",
         completion_collection="c",
@@ -31,113 +28,58 @@ def _pipeline(workers, exchanges, default_exchange="jobs"):
     )
 
 
-def _fanout_pipeline():
-    return _pipeline(
-        workers={
-            "w": WorkerSpec(
-                collections={"write": "c"},
-                factory=_factory,
-                consume_exchange="jobs",
-                publish=[PublishSpec(exchange="jobs")],
-            )
-        },
-        exchanges={"jobs": RMQExchangeConfig(name="jobs", type="fanout")},
-    )
-
-
-def _topic_pipeline():
-    return _pipeline(
-        workers={
-            "w": WorkerSpec(
-                collections={"write": "c"},
-                factory=_factory,
-                consume_exchange="docs",
-                binding_key="pdf_document",
-                publish=[PublishSpec(exchange="docs", route_func=MessageFieldRouter())],
-            )
-        },
-        exchanges={"docs": RMQExchangeConfig(name="docs", type="topic")},
-        default_exchange="docs",
-    )
-
-
 def test_valid_fanout_pipeline_passes():
-    validate_pipeline(_fanout_pipeline())
+    worker = WorkerSpec(
+        collections={"write": "c"}, factory=_factory, publish=PublishSpec()
+    )
+    validate_pipeline(_pipeline(worker))
 
 
 def test_valid_topic_pipeline_passes():
-    validate_pipeline(_topic_pipeline())
-
-
-def test_dangling_default_exchange():
-    p = dataclasses.replace(_fanout_pipeline(), default_exchange="missing")
-    with pytest.raises(PipelineValidationError, match="default_exchange"):
-        validate_pipeline(p)
-
-
-def test_dangling_consume_exchange():
-    bad = WorkerSpec(
-        collections={"write": "c"}, factory=_factory, consume_exchange="nope"
+    worker = WorkerSpec(
+        collections={"write": "c"},
+        factory=_factory,
+        binding_key="pdf_document",
+        publish=PublishSpec(route_func=MessageFieldRouter()),
     )
-    p = _pipeline({"w": bad}, {"jobs": RMQExchangeConfig(name="jobs", type="fanout")})
-    with pytest.raises(PipelineValidationError, match="consume_exchange"):
-        validate_pipeline(p)
+    validate_pipeline(_pipeline(worker, exchange_type="topic"))
 
 
 def test_topic_consumer_requires_binding_key():
-    bad = WorkerSpec(
-        collections={"write": "c"},
-        factory=_factory,
-        consume_exchange="docs",  # topic, but no binding_key
-    )
-    p = _pipeline(
-        {"w": bad},
-        {"docs": RMQExchangeConfig(name="docs", type="topic")},
-        default_exchange="docs",
-    )
+    worker = WorkerSpec(collections={"write": "c"}, factory=_factory)  # no binding_key
     with pytest.raises(PipelineValidationError, match="requires a binding_key"):
-        validate_pipeline(p)
+        validate_pipeline(_pipeline(worker, exchange_type="topic"))
 
 
 def test_fanout_consumer_forbids_binding_key():
-    bad = WorkerSpec(
-        collections={"write": "c"},
-        factory=_factory,
-        consume_exchange="jobs",
-        binding_key="oops",
+    worker = WorkerSpec(
+        collections={"write": "c"}, factory=_factory, binding_key="oops"
     )
-    p = _pipeline({"w": bad}, {"jobs": RMQExchangeConfig(name="jobs", type="fanout")})
     with pytest.raises(PipelineValidationError, match="binding_key must be None"):
-        validate_pipeline(p)
+        validate_pipeline(_pipeline(worker))
 
 
 def test_topic_publish_requires_route():
-    bad = WorkerSpec(
+    worker = WorkerSpec(
         collections={"write": "c"},
         factory=_factory,
-        consume_exchange="docs",
         binding_key="x",
-        publish=[PublishSpec(exchange="docs")],  # no route on a topic exchange
+        publish=PublishSpec(),  # no route on a topic exchange
     )
-    p = _pipeline(
-        {"w": bad},
-        {"docs": RMQExchangeConfig(name="docs", type="topic")},
-        default_exchange="docs",
-    )
-    with pytest.raises(PipelineValidationError, match="requires a route"):
-        validate_pipeline(p)
+    with pytest.raises(PipelineValidationError, match="requires a publish route"):
+        validate_pipeline(_pipeline(worker, exchange_type="topic"))
 
 
-def test_dangling_publish_exchange():
-    bad = WorkerSpec(
+def test_fanout_publish_forbids_route():
+    from warren.pubsub.common import Route
+
+    worker = WorkerSpec(
         collections={"write": "c"},
         factory=_factory,
-        consume_exchange="jobs",
-        publish=[PublishSpec(exchange="ghost")],
+        publish=PublishSpec(route=Route(key="nope")),
     )
-    p = _pipeline({"w": bad}, {"jobs": RMQExchangeConfig(name="jobs", type="fanout")})
-    with pytest.raises(PipelineValidationError, match="publish exchange"):
-        validate_pipeline(p)
+    with pytest.raises(PipelineValidationError, match="publish route must be unset"):
+        validate_pipeline(_pipeline(worker))
 
 
 # --- validate_routing_plan (submission-time) ---

@@ -230,7 +230,7 @@ async def start_worker(
         runner_class,
         worker_type=worker_type,
         worker_spec=pipeline.workers[worker_type],
-        exchanges=pipeline.exchanges,
+        exchange=pipeline.exchange,
     )
 
     await run(

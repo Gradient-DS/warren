@@ -26,29 +26,31 @@ each publisher (how the routing key is computed). The exchange type is only
 configuration; there is no per-type branching in the core and no hidden
 routing policy — routing is always supplied explicitly per worker.
 
+## One exchange per pipeline
+
+A pipeline uses a **single exchange**. All workers consume from it and publish
+to it; the exchange type decides how routing works. Deployments with multiple
+exchanges (or a worker publishing to several at once) are **deferred** — see
+*Not supported (yet)*.
+
 ## Where topology lives: `PipelineSpec` vs `config.yaml`
 
-Exchanges, bindings, and routing are **pipeline topology** — they are the same
-across every deployment of a pipeline — so they live in the `PipelineSpec`
-(Python). `config.yaml` holds only per-environment infrastructure: broker /
-MongoDB / Redis hosts, credentials, prefetch.
+The exchange, bindings, and routing are **pipeline topology** — the same across
+every deployment of a pipeline — so they live in the `PipelineSpec` (Python).
+`config.yaml` holds only per-environment infrastructure: broker / MongoDB /
+Redis hosts, credentials, prefetch.
 
 The test: *"If I deploy the same pipeline to staging and prod, what changes?"*
-Only hosts/credentials/scaling (config). The set of exchanges, their types, and
-the routing never change between environments — so they are pipeline identity.
+Only hosts/credentials/scaling (config). The exchange, its type, and the routing
+never change between environments — so they are pipeline identity.
 
 ```python
 PipelineSpec(
-    exchanges={"jobs": RMQExchangeConfig(name="jobs", type="fanout")},
-    default_exchange="jobs",
+    exchange=RMQExchangeConfig(name="jobs", type="fanout"),
     workers={...},
     ...
 )
 ```
-
-- `exchanges` — named exchange definitions (name, type, durable).
-- `default_exchange` — the exchange the support workers (job-status, retry,
-  publication) observe.
 
 ## Wiring a worker
 
@@ -56,22 +58,17 @@ PipelineSpec(
 WorkerSpec(
     collections={"read": "chunks", "write": "embeddings"},
     factory=create_embedder,
-    consume_exchange="jobs",
-    binding_key=None,                        # required for topic/direct, None for fanout
-    publish=[PublishSpec(exchange="jobs")],  # empty list = no downstream data
+    binding_key=None,         # required for topic/direct, None for fanout
+    publish=PublishSpec(),    # None = no downstream data (terminal)
 )
 ```
 
-- `consume_exchange` — which exchange this worker's queue binds to.
 - `binding_key` — the queue's binding pattern. Must be `None` on a fanout
   exchange (which ignores keys) and is required on topic/direct exchanges.
-- `publish` — a list of `PublishSpec(exchange, route=None, route_func=None)`
-  targets. On fanout leave `route`/`route_func` unset; on topic/direct set one.
-  An **empty `publish` list** means the worker publishes no data downstream —
-  there is no separate `terminal` flag.
-
-Because `publish` is a list, a worker can publish to a fanout **and** a
-topic/direct exchange at the same time (see the multi-exchange example).
+- `publish` — a `PublishSpec(route=None, route_func=None)` describing how the
+  worker publishes its result to the pipeline exchange, or `None` if the worker
+  publishes nothing downstream (terminal — there is no separate `terminal`
+  flag). On fanout leave `route`/`route_func` unset; on topic/direct set one.
 
 ### Competing consumers / autoscaling
 
@@ -168,15 +165,25 @@ means same shape" is the pipeline author's responsibility. The boundary is
 designed so a `data_type → schema` registry could be added later without a
 breaking change.
 
+## Observation (support workers)
+
+The support workers — job-status (completion tracking) and retry — **observe**
+the pipeline by consuming everything on the exchange. Observation needs a
+broadcast-capable exchange: a **fanout** exchange (every queue gets every
+message) or a **topic** exchange (a `#` catch-all binding). A **direct** exchange
+routes by exact key and cannot be observed wholesale, so support workers refuse
+to start against a direct pipeline (the launcher fails loudly). A direct-routed
+pipeline that needs observation would add a separate fanout/topic exchange for
+it — which is the multi-exchange case, deferred below.
+
 ## Failure lifecycle
 
-A worker has two publishing paths, kept separate so a failure is never amplified
-by fan-out:
+A worker publishes through two paths, kept separate so the failure path is
+independent of the success path:
 
-- **Data publishers** (`publish`, 0..N) — successful results fan out downstream.
-- **Control publisher** (one) — lifecycle envelopes (soft/hard-failure) go to
-  the worker's *consume* exchange exactly once, so a worker with several data
-  publishers still emits one failure envelope and triggers one retry.
+- **Data publisher** (`publish`) — the successful result goes downstream.
+- **Control publisher** — lifecycle envelopes (soft/hard-failure) go to the
+  pipeline exchange so the retry/status workers observe them.
 
 On a soft failure the consumer manager stamps the routing key the message
 arrived with onto the envelope. The retry worker persists it, waits the backoff
@@ -188,10 +195,9 @@ cannot schedule two retries.
 ## Validation
 
 - **Deploy-time** (`validate_pipeline`, run at launcher startup and as a
-  standalone check): exchange references resolve; a non-fanout consumer has a
-  `binding_key` and a fanout consumer does not; every non-fanout publish target
-  has a route. Reachability of **dynamic** route functions cannot be enumerated
-  statically and is not yet checked.
+  standalone check): a non-fanout consumer has a `binding_key` and a fanout
+  consumer does not; a non-fanout publish has a route. Reachability of **dynamic**
+  route functions cannot be enumerated statically and is not checked.
 - **Submission-time** (`validate_routing_plan`): every node in a job's
   `RoutingPlan` maps to a deployed worker, every edge is nominally
   type-compatible (`produces ∈ accepts`), and entry nodes accept the submitted
@@ -204,13 +210,16 @@ cannot schedule two retries.
 | `examples/fake` | fanout | broadcast + `should_process` self-selection |
 | `examples/topic` | topic | broker routing by `data_type` |
 | `examples/routed` | direct | capability workers + job-defined `RoutingPlan` |
-| `examples/multi_exchange` | fanout + topic | one worker publishing to two exchanges; an audit side-channel |
 
 ## Not supported (yet)
 
 These are deliberate boundaries, designed to be added later without reworking
 the model:
 
+- **Multiple exchanges** — one pipeline using more than one exchange, or a
+  worker publishing to several at once. A pipeline has exactly one exchange
+  today. This also means a direct-routed pipeline can't be observed (observation
+  would need a second, broadcast exchange).
 - **Fan-in / join** — a worker waiting on multiple upstream branches.
 - **`headers` exchanges.**
 - **Structural type checking** — a `data_type → schema` registry over the
@@ -219,9 +228,6 @@ the model:
   cannot be enumerated at deploy time.
 - **Framework completion signals for terminal workers** — completion is
   detected from `final_data_type` today, which assumes the final worker emits a
-  message. A genuinely terminal (`publish=[]`) worker is not yet counted toward
+  message. A genuinely terminal (`publish=None`) worker is not yet counted toward
   completion on its own.
-- **Multi-exchange lifecycle observation** — the job-status / retry workers
-  observe a single (`default_exchange`) exchange. Running observers per exchange
-  is possible but not yet wired.
 </content>

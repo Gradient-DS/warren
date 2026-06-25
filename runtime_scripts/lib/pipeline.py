@@ -168,18 +168,27 @@ def resolve_config_path(
     raise ValueError(msg)
 
 
-def resolve_default_exchange(pipeline: PipelineSpec) -> RMQExchangeConfig:
-    """Return the exchange the support workers observe (``default_exchange``).
+def resolve_observation_exchange(pipeline: PipelineSpec) -> RMQExchangeConfig:
+    """Return the pipeline exchange for a support worker to observe.
 
-    :raises ValueError: if ``default_exchange`` is not in ``exchanges``.
+    Observation needs a broadcast-capable exchange: ``fanout`` (every queue
+    gets every message) or ``topic`` (a ``#`` catch-all binding). A ``direct``
+    exchange cannot be observed wholesale, so support workers cannot run on a
+    direct-only pipeline — see warren/docs/routing.md.
+
+    :raises ValueError: if the pipeline exchange is ``direct``.
     """
-    if pipeline.default_exchange not in pipeline.exchanges:
+    exchange = pipeline.exchange
+    if exchange.type not in ("fanout", "topic"):
         msg = (
-            f"default_exchange '{pipeline.default_exchange}' is not in exchanges "
-            f"{sorted(pipeline.exchanges)}"
+            f"Support workers need a fanout or topic exchange to observe, but "
+            f"the pipeline exchange '{exchange.name}' is '{exchange.type}'. A "
+            f"direct-routed pipeline cannot be observed wholesale; add a "
+            f"fanout/topic exchange for observation (deferred — see "
+            f"warren/docs/routing.md)."
         )
         raise ValueError(msg)
-    return pipeline.exchanges[pipeline.default_exchange]
+    return exchange
 
 
 def load_config(config_file: Path) -> RuntimeConfig:

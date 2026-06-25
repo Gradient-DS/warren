@@ -3,14 +3,14 @@ Deploy-time validation for a ``PipelineSpec``.
 
 ``validate_pipeline`` is a cheap, fail-fast check run at launcher startup (and
 available as a standalone CLI) to catch topology mistakes before any worker
-connects to infrastructure: dangling exchange references, and binding/route
-settings that don't match the exchange type.
+connects to infrastructure: binding/route settings that don't match the
+exchange type (e.g. a topic worker with no binding_key).
 
-Scope (see tasks/routing-design.md D13): this validates *references and
-presence*, not *reachability*. It does NOT yet verify that a published routing
-key actually reaches a consumer — static-route reachability and nominal-type
-(`produces ∈ accepts`) reachability arrive with capabilities in Phase 2.
-Dynamic ``route_func`` keys cannot be enumerated statically at all.
+Scope (see warren/docs/routing.md): this validates binding/route *presence*,
+not *reachability*. It does NOT verify that a published routing key actually
+reaches a consumer — dynamic ``route_func`` keys cannot be enumerated
+statically. ``validate_routing_plan`` covers nominal (`produces ∈ accepts`)
+compatibility for a job's routing plan at submission time.
 """
 
 import logging
@@ -44,58 +44,39 @@ def validate_pipeline(
     :raises PipelineValidationError: with every problem found, not just the
         first.
     """
-    exchanges = pipeline.exchanges
+    is_fanout = pipeline.exchange.type == "fanout"
     errors: list[str] = []
 
-    if pipeline.default_exchange not in exchanges:
-        errors.append(
-            f"default_exchange '{pipeline.default_exchange}' is not defined in "
-            f"exchanges {sorted(exchanges)}"
-        )
-
     for worker_type, spec in pipeline.workers.items():
-        consume = exchanges.get(spec.consume_exchange)
-        if consume is None:
-            errors.append(
-                f"worker '{worker_type}': consume_exchange "
-                f"'{spec.consume_exchange}' is not defined in exchanges "
-                f"{sorted(exchanges)}"
-            )
-        elif consume.type == "fanout":
+        # Consume-side binding key.
+        if is_fanout:
             if spec.binding_key is not None:
                 errors.append(
-                    f"worker '{worker_type}': fanout exchange "
-                    f"'{spec.consume_exchange}' ignores routing keys, so "
-                    f"binding_key must be None (got '{spec.binding_key}')"
+                    f"worker '{worker_type}': fanout exchange ignores routing "
+                    f"keys, so binding_key must be None (got '{spec.binding_key}')"
                 )
         elif not spec.binding_key:
             errors.append(
-                f"worker '{worker_type}': {consume.type} exchange "
-                f"'{spec.consume_exchange}' requires a binding_key"
+                f"worker '{worker_type}': {pipeline.exchange.type} exchange "
+                f"requires a binding_key"
             )
 
-        for target in spec.publish:
-            dest = exchanges.get(target.exchange)
-            if dest is None:
+        # Publish-side route.
+        publish = spec.publish
+        if publish is None:
+            continue
+        has_route = publish.route is not None or publish.route_func is not None
+        if is_fanout:
+            if publish.route is not None:
                 errors.append(
-                    f"worker '{worker_type}': publish exchange "
-                    f"'{target.exchange}' is not defined in exchanges "
-                    f"{sorted(exchanges)}"
+                    f"worker '{worker_type}': fanout exchange ignores routing "
+                    f"keys, so publish route must be unset"
                 )
-                continue
-            has_route = target.route is not None or target.route_func is not None
-            if dest.type == "fanout":
-                if target.route is not None:
-                    errors.append(
-                        f"worker '{worker_type}': fanout exchange "
-                        f"'{target.exchange}' ignores routing keys, so route "
-                        f"must be unset"
-                    )
-            elif not has_route:
-                errors.append(
-                    f"worker '{worker_type}': {dest.type} exchange "
-                    f"'{target.exchange}' requires a route or route_func"
-                )
+        elif not has_route:
+            errors.append(
+                f"worker '{worker_type}': {pipeline.exchange.type} exchange "
+                f"requires a publish route or route_func"
+            )
 
     if errors:
         bullets = "\n  - ".join(errors)
@@ -104,7 +85,7 @@ def validate_pipeline(
 
     if logger is not None:
         logger.info(
-            "Pipeline validation passed (references + binding/route presence). "
+            "Pipeline validation passed (binding/route presence). "
             "Note: route reachability is not yet validated."
         )
 

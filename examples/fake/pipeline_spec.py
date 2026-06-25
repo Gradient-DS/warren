@@ -54,30 +54,26 @@ async def _create_embedding_generator(
 
 # A single fanout exchange: every worker receives every message and
 # self-selects via should_process(). No routing keys (binding_key=None,
-# publish targets carry no route).
+# publish carries no route).
 PIPELINE: PipelineSpec = PipelineSpec(
-    exchanges={"jobs": RMQExchangeConfig(name="jobs", type="fanout")},
-    default_exchange="jobs",
+    exchange=RMQExchangeConfig(name="jobs", type="fanout"),
     workers={
         "document_parser": WorkerSpec(
             collections={"write": "parsed_documents"},
             factory=_create_document_parser,
-            consume_exchange="jobs",
-            publish=[PublishSpec(exchange="jobs")],
+            publish=PublishSpec(),
         ),
         "text_chunker": WorkerSpec(
             collections={"read": "parsed_documents", "write": "chunks"},
             factory=_create_text_chunker,
-            consume_exchange="jobs",
-            publish=[PublishSpec(exchange="jobs")],
+            publish=PublishSpec(),
         ),
         "embedding_generator": WorkerSpec(
             collections={"read": "chunks", "write": "embeddings"},
             factory=_create_embedding_generator,
-            consume_exchange="jobs",
             # Not terminal: still publishes "embedded_document" so the
             # job-status worker can observe completion.
-            publish=[PublishSpec(exchange="jobs")],
+            publish=PublishSpec(),
         ),
     },
     result_collections=["parsed_documents", "chunks", "embeddings"],

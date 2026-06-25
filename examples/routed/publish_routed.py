@@ -64,7 +64,7 @@ async def _publish(config: RuntimeConfig, job_name: str) -> str:
         metadata={"job_name": job_name},
     )
 
-    exchange = PIPELINE.exchanges[PIPELINE.default_exchange]
+    exchange = PIPELINE.exchange
     connection_manager = RMQConnectionManager(config.rabbitmq.connection)
     publisher = RMQPublisher(
         connection_manager=connection_manager,

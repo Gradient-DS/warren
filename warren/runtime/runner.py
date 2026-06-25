@@ -14,7 +14,10 @@ after factory creation (e.g. for failure injection in tests), or
 ``_create_resolvers()`` to customize document resolution strategies.
 """
 
+from typing import TYPE_CHECKING, cast
+
 import logging
+import os
 from functools import partial
 
 from basics.logging import get_logger
@@ -46,6 +49,7 @@ from warren.storage.documents.factories import (
 from warren.storage.documents.interface import (
     GetDocumentFunc,
     ResolveDocumentFunc,
+    UnknownLocationTypeError,
 )
 from warren.storage.documents.resolvers import (
     resolve_path,
@@ -59,7 +63,36 @@ from warren.storage.results.factories import (
 from warren.workers.runners import WorkerRunnerBase
 
 
+if TYPE_CHECKING:
+    from warren.storage.documents.location import DocumentCloudLocation
+
+
 module_logger: logging.Logger = get_logger(__name__)
+
+
+async def _resolve_cloud(
+    location: object,
+    *,
+    by_provider: dict[str, ResolveDocumentFunc],
+) -> bytes:
+    """Dispatch a cloud document location to the appropriate provider resolver.
+
+    :param location: A DocumentCloudLocation whose ``provider`` field
+        identifies the target backend.
+    :param by_provider: Mapping of provider name to resolver function.
+    :return: Raw document bytes from the resolved provider.
+    :raises UnknownLocationTypeError: If no resolver is registered for
+        the location's provider.
+    """
+    cloud_location = cast("DocumentCloudLocation", location)
+    resolver = by_provider.get(cloud_location.provider)
+    if resolver is None:
+        msg = (
+            f"No cloud resolver registered for provider '{cloud_location.provider}'. "
+            f"Registered providers: {list(by_provider)}"
+        )
+        raise UnknownLocationTypeError(msg)
+    return await resolver(cloud_location)
 
 
 class DefaultWorkerRunner(WorkerRunnerBase):
@@ -205,6 +238,8 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         """
         resolvers: dict[str, ResolveDocumentFunc] = {"path": resolve_path}
 
+        cloud_by_provider: dict[str, ResolveDocumentFunc] = {}
+
         try:
             from google.cloud.storage import Client as GCSClient
 
@@ -212,7 +247,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
                 resolve_gcs,
             )
 
-            resolvers["cloud"] = partial(resolve_gcs, client=GCSClient())
+            cloud_by_provider["gcs"] = partial(resolve_gcs, client=GCSClient())
         except ImportError:
             # Optional 'gcs' extra. The 'cloud' resolver is only attempted,
             # never required — pipelines that never resolve cloud documents
@@ -220,14 +255,42 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             # raise. Selecting a 'cloud' document location without the
             # resolver later fails with UnknownLocationTypeError.
             module_logger.debug(
-                "google-cloud-storage not installed — 'cloud' document "
-                'resolver disabled; install with: pip install "warren[gcs]"'
+                "google-cloud-storage not installed — GCS cloud resolver "
+                'disabled; install with: pip install "warren[gcs]"'
             )
         except Exception as exc:
             module_logger.warning(
-                "Could not initialise GCS client — 'cloud' document "
-                f"resolver disabled: {summarize_exception_chain(exc)}"
+                "Could not initialise GCS client — GCS cloud resolver "
+                f"disabled: {summarize_exception_chain(exc)}"
             )
+
+        try:
+            import boto3
+
+            from warren.storage.documents.resolve_s3 import resolve_s3
+
+            s3_client = boto3.client(
+                "s3",
+                endpoint_url=os.environ.get("S3_ENDPOINT_URL") or None,
+                region_name=os.environ.get("S3_REGION") or None,
+            )
+            cloud_by_provider["s3"] = partial(resolve_s3, client=s3_client)
+        except ImportError:
+            # Optional 'S3' extra. Degrade gracefully — pipelines without S3
+            # documents run fine. Selecting an S3 location without the resolver
+            # later fails with UnknownLocationTypeError.
+            module_logger.debug(
+                "boto3 not installed — S3 cloud resolver "
+                'disabled; install with: pip install "warren[s3]"'
+            )
+        except Exception as exc:
+            module_logger.warning(
+                "Could not initialise S3 client — S3 cloud resolver "
+                f"disabled: {summarize_exception_chain(exc)}"
+            )
+
+        if cloud_by_provider:
+            resolvers["cloud"] = partial(_resolve_cloud, by_provider=cloud_by_provider)
 
         return resolvers
 

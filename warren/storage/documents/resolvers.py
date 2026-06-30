@@ -12,13 +12,9 @@ Resolvers raise ``DocumentNotFoundError`` for permanent issues (file
 missing, HTTP 404) and let transient exceptions propagate — the
 fetcher wraps them in ``DocumentResolutionError``.
 
-TODO(ben, 2026-04-24): Add ``resolve_url`` for plain-HTTP document
-download (httpx-based, no browser). Enables ``FileAdapter`` to accept
-``http(s)://`` URLs for files-on-the-web; today those hard-fail at
-adapter load time because no resolver is registered for
-``DocumentURLLocation``. Keep it distinct from WebFetchWorker's
-browser-crawl path — this resolver is for "a file happens to live at
-a URL" (PDF/XML/…), not "render this page and give me the HTML".
+The HTTP(S) URL resolver lives in ``resolve_http.py`` (httpx-based,
+optional ``http`` extra) — for "a file happens to live at a URL"
+(PDF/XML/…), distinct from WebFetchWorker's browser-crawl path.
 """
 
 from typing import cast

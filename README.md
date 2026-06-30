@@ -16,7 +16,7 @@ The transport backends and cloud storage are optional extras — install the one
 pip install "warren[rmq]"
 ```
 
-Use `warren[kafka]` to run on Kafka instead, and `warren[gcs]` for Google Cloud Storage document discovery. Selecting a backend or resolver without its extra raises a clear `OptionalDependencyError`.
+Use `warren[kafka]` to run on Kafka instead. Document resolvers are extras too: `warren[gcs]` (Google Cloud Storage), `warren[s3]` (Amazon S3 / S3-compatible), and `warren[http]` (plain HTTP(S) URLs, e.g. presigned GET links). Selecting a backend or resolver without its extra raises a clear `OptionalDependencyError`.
 
 Requires Python 3.12+. For development:
 

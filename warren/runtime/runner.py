@@ -292,6 +292,30 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         if cloud_by_provider:
             resolvers["cloud"] = partial(_resolve_cloud, by_provider=cloud_by_provider)
 
+        try:
+            import httpx
+
+            from warren.storage.documents.resolve_http import resolve_http
+
+            resolvers["url"] = partial(
+                resolve_http, client=httpx.AsyncClient(timeout=60.0)
+            )
+        except ImportError:
+            # Optional 'http' extra. The 'url' resolver is only attempted,
+            # never required — pipelines that never resolve URL documents
+            # run fine without it, so we degrade gracefully rather than
+            # raise. Selecting a 'url' document location without the
+            # resolver later fails with UnknownLocationTypeError.
+            module_logger.debug(
+                "httpx not installed — HTTP(S) URL resolver "
+                'disabled; install with: pip install "warren[http]"'
+            )
+        except Exception as exc:
+            module_logger.warning(
+                "Could not initialise HTTP(S) URL resolver — "
+                f"disabled: {summarize_exception_chain(exc)}"
+            )
+
         return resolvers
 
     async def _create_default_results_stores(

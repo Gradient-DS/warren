@@ -9,6 +9,8 @@ from typing import Protocol
 
 from dataclasses import dataclass
 
+from pydantic import BaseModel
+
 from warren.exceptions import WarrenError
 
 
@@ -28,6 +30,36 @@ class PubSubSetupError(WarrenError):
     """
 
     pass
+
+
+class RetryConfig(BaseModel):
+    """Retry policy configuration for the consumer manager.
+
+    Transport-agnostic: provides defaults when the worker's
+    ``SoftFailureException`` does not specify values, and caps to enforce
+    system-level limits. Used by all pubsub backends (RabbitMQ, Kafka).
+
+    :param initial_delay: Initial delay in seconds before first retry
+        when worker does not specify.
+    :param max_retries: Max retry attempts when worker does not specify.
+    :param backoff_base: Base for exponential backoff. Delay on
+        attempt N = initial_delay * backoff_base^(N-1).
+    :param jitter: Whether to add random jitter to delays.
+    :param max_delay_cap: Maximum delay in seconds (caps backoff).
+    :param max_retries_cap: Maximum retries allowed (overrides
+        worker request if exceeded).
+    :param fallback_requeue_delay: Delay in seconds before
+        nack+requeue when no retry publisher is configured.
+        Prevents tight retry loops.
+    """
+
+    initial_delay: int = 30
+    max_retries: int = 5
+    backoff_base: float = 2.0
+    jitter: bool = True
+    max_delay_cap: int = 300
+    max_retries_cap: int = 10
+    fallback_requeue_delay: float = 2.0
 
 
 @dataclass(frozen=True)

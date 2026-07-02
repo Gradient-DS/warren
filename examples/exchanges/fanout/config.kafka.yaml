@@ -1,0 +1,32 @@
+# Kafka variant of the fanout example: same pipeline_spec.py, same
+# database — only the transport changes. Kafka supports fanout pipelines
+# only (topic/direct routing is RabbitMQ-only for now); the exchange
+# definition still lives in the pipeline spec.
+backend: kafka
+
+kafka:
+  connection:
+    bootstrap_servers:
+      - localhost:9092
+  topic:
+    name: jobs
+    create_if_missing: true
+  consumer:
+    auto_offset_reset: earliest
+
+mongodb:
+  host: localhost
+  port: 27017
+  database: warren_fanout
+
+redis:
+  host: localhost
+  port: 6379
+
+retry:
+  enabled: true
+  collection_name: retries
+
+e2e:
+  check_timeout_seconds: 60
+  check_poll_interval_seconds: 2

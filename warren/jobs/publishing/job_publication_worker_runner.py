@@ -28,22 +28,14 @@ from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
-from warren.pubsub.rabbitmq.aio_pika.consumer import (
-    RMQConsumerManager,
-)
-from warren.pubsub.rabbitmq.aio_pika.publisher import (
-    RMQPublisher,
-)
 from warren.pubsub.rabbitmq.config import (
-    RMQConsumerConfig,
-    RMQConsumerManagerConfig,
     RMQExchangeConfig,
-    RMQQueueConfig,
 )
 from warren.pubsub.routing import (
     observer_binding_key,
     observer_route_func,
 )
+from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import (
     RuntimeInfra,
@@ -194,34 +186,23 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
 
     def _create_default_publisher(self) -> PublisherInterface:
         # Documents enter the pipeline on the data exchange.
-        return RMQPublisher(
-            connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=self._publish_exchange,
+        return backends.create_publisher(
+            self._config,
+            self._infra.pubsub_connection_manager,
+            exchange=self._publish_exchange,
             route_func=observer_route_func(self._publish_exchange),
         )
 
     def _create_default_consumer_factory(self) -> ConsumerManagerFactory:
-        consumer_cfg = self._config.rabbitmq.consumer
-
-        manager_config = RMQConsumerManagerConfig(
-            exchange=self._exchange,
-            queue=RMQQueueConfig(
-                name=f"{self._exchange.name}.{PUBLICATION_WORKER_TYPE}",
-                durable=True,
-                routing_key=observer_binding_key(self._exchange),
-            ),
-            consumer=RMQConsumerConfig(
-                prefetch_count=consumer_cfg.prefetch_count,
-                on_shutdown_timeout=consumer_cfg.on_shutdown_timeout,
-            ),
-        )
-
         def factory(
             consumer: MessageConsumerInterface,
         ) -> ConsumerManagerInterface:
-            return RMQConsumerManager(
-                config=manager_config,
-                connection_manager=self._infra.rmq_connection_manager,
+            return backends.create_consumer_manager(
+                self._config,
+                self._infra.pubsub_connection_manager,
+                exchange=self._exchange,
+                worker_type=PUBLICATION_WORKER_TYPE,
+                binding_key=observer_binding_key(self._exchange),
                 consumer=consumer,
                 data_publisher=self._publisher,
                 publish_hard_failures=False,

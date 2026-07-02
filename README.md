@@ -2,24 +2,28 @@
 
 [![tests](https://github.com/Gradient-DS/warren/actions/workflows/tests.yml/badge.svg)](https://github.com/Gradient-DS/warren/actions/workflows/tests.yml) [![PyPI version](https://img.shields.io/pypi/v/warren)](https://pypi.org/project/warren/) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-Warren is a message-driven document processing framework. You define a pipeline as a set of worker types, each consuming messages from a shared RabbitMQ fanout exchange and **self-selecting** which messages to process. Workers run as independent processes — you scale by adding replicas of any worker type.
+Warren is a message-driven document processing framework. You define a pipeline as a set of worker types, each consuming messages from a shared fanout exchange (RabbitMQ) or topic (Kafka) and **self-selecting** which messages to process. Workers run as independent processes — you scale by adding replicas of any worker type. The backend is selected by `backend:` in your `RuntimeConfig` YAML (`rabbitmq` by default, or `kafka` for fanout pipelines); nothing else changes.
 
 A typical flow: a job enters the pipeline as a message on the fanout exchange. Every worker type receives a copy in its own queue, but only processes the messages relevant to it — each worker's `should_process()` decides whether to act or discard. When a worker processes a message, it writes its results to a cached storage layer (MongoDB + Redis), then publishes a new message describing the *location* of those results. Downstream workers pick that up, fetch what they need from storage, and publish their own result locations. Adding a new worker type is purely additive — no routing configuration changes, no upstream modifications.
 
-Warren separates the **framework** (worker base classes, storage interfaces, pubsub abstractions — transport-agnostic) from the **runtime** (concrete wiring for RabbitMQ + MongoDB + Redis, shipped in `warren/runtime/`).
+Warren separates the **framework** (worker base classes, storage interfaces, pubsub abstractions — transport-agnostic) from the **runtime** (concrete wiring for RabbitMQ or Kafka + MongoDB + Redis, shipped in `warren/runtime/`).
 
 ## Installation
 
+The transport backends and cloud storage are optional extras — install the ones you use. The Quickstart below runs on RabbitMQ, so install the `rmq` extra:
+
 ```bash
-pip install warren
+pip install "warren[rmq]"
 ```
+
+Use `warren[kafka]` to run on Kafka instead. Document resolvers are extras too: `warren[gcs]` (Google Cloud Storage), `warren[s3]` (Amazon S3 / S3-compatible), and `warren[http]` (plain HTTP(S) URLs, e.g. presigned GET links). Selecting a backend or resolver without its extra raises a clear `OptionalDependencyError`.
 
 Requires Python 3.12+. For development:
 
 ```bash
 git clone https://github.com/Gradient-DS/warren.git
 cd warren
-pip install -e .[dev]
+pip install -e ".[dev,rmq,kafka]"
 ```
 
 ## Quickstart — the synthetic fanout pipeline
@@ -127,6 +131,10 @@ To embed your own corpus, pass `--url` (repeatable). The chunk size and
 embedding model are constants at the top of `examples/rag/workers/` — tune them
 for your documents.
 
+### Running on Kafka instead
+
+A fanout pipeline runs on Kafka with zero code changes — just point every command at `examples/exchanges/fanout/config.kafka.yaml` instead of `config.yaml`, and start a Kafka broker (e.g. `localhost:9092`) in place of RabbitMQ. (Kafka supports fanout pipelines only; `topic`/`direct` routing is RabbitMQ-only for now.) The Kafka config has `backend: kafka`, a `jobs` topic with `create_if_missing: true`, and the same MongoDB/Redis/retry sections. See [`warren/docs/kafka.md`](warren/docs/kafka.md) for the full RabbitMQ→Kafka semantic mapping.
+
 ## Defining your own pipeline
 
 A pipeline is a directory with a `pipeline_spec.py` (exporting a `PIPELINE: PipelineSpec`) and a `config.yaml` (a `RuntimeConfig`). Each worker module owns a `create(ctx: WorkerFactoryContext)` factory; the spec references factories via lazy-import wrappers so different deployment images only load the dependencies they need.
@@ -161,7 +169,7 @@ See [`warren/docs/routing.md`](warren/docs/routing.md) for the full routing mode
 
 **Read [`warren/runtime/USAGE.md`](warren/runtime/USAGE.md)** — the full usage guide: core concepts (`PipelineSpec`, `WorkerSpec`, `WorkerFactoryContext`, `RuntimeConfig`, `DefaultWorkerRunner`), the launcher scripts, custom runners, and recommended project layout.
 
-Deeper design docs live in [`warren/docs/`](warren/docs/): workers, storage and caching, document store, RabbitMQ topology, results store, and the retry system.
+Deeper design docs live in [`warren/docs/`](warren/docs/): workers, storage and caching, document store, RabbitMQ and Kafka topology, results store, and the retry system.
 
 ## Launchers
 
@@ -178,7 +186,7 @@ Deeper design docs live in [`warren/docs/`](warren/docs/): workers, storage and 
 ## Development
 
 ```bash
-pip install -e .[dev]
+pip install -e ".[dev,rmq,kafka]"
 python -m pytest tests -q
 ruff check . && ruff format --check .
 ```

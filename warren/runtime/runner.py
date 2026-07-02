@@ -1,16 +1,21 @@
 """
 Default worker runner for the distributed processing framework.
 
-``DefaultWorkerRunner`` wires RabbitMQ, MongoDB, and Redis for any
-worker type defined in a ``PipelineSpec``. All worker-specific decisions
-are driven by the ``WorkerSpec`` — no branching on worker type name.
+``DefaultWorkerRunner`` wires the pubsub backend (RabbitMQ or Kafka,
+selected by ``config.backend`` via :mod:`warren.runtime.backends`),
+MongoDB, and Redis for any worker type defined in a ``PipelineSpec``.
+All worker-specific decisions are driven by the ``WorkerSpec`` — no
+branching on worker type or backend name.
 
 Subclasses can override ``_wrap_worker()`` to intercept the worker
 after factory creation (e.g. for failure injection in tests), or
 ``_create_resolvers()`` to customize document resolution strategies.
 """
 
+from typing import TYPE_CHECKING, cast
+
 import logging
+import os
 from functools import partial
 
 from basics.logging import get_logger
@@ -21,16 +26,9 @@ from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
-from warren.pubsub.rabbitmq import (
-    RMQConsumerManagerConfig,
-    RMQQueueConfig,
-)
-from warren.pubsub.rabbitmq.aio_pika import (
-    RMQConsumerManager,
-    RMQPublisher,
-)
 from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 from warren.pubsub.routing import observer_exchange, observer_route_func
+from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import (
     RuntimeInfra,
@@ -51,6 +49,7 @@ from warren.storage.documents.factories import (
 from warren.storage.documents.interface import (
     GetDocumentFunc,
     ResolveDocumentFunc,
+    UnknownLocationTypeError,
 )
 from warren.storage.documents.resolvers import (
     resolve_path,
@@ -64,7 +63,36 @@ from warren.storage.results.factories import (
 from warren.workers.runners import WorkerRunnerBase
 
 
+if TYPE_CHECKING:
+    from warren.storage.documents.location import DocumentCloudLocation
+
+
 module_logger: logging.Logger = get_logger(__name__)
+
+
+async def _resolve_cloud(
+    location: object,
+    *,
+    by_provider: dict[str, ResolveDocumentFunc],
+) -> bytes:
+    """Dispatch a cloud document location to the appropriate provider resolver.
+
+    :param location: A DocumentCloudLocation whose ``provider`` field
+        identifies the target backend.
+    :param by_provider: Mapping of provider name to resolver function.
+    :return: Raw document bytes from the resolved provider.
+    :raises UnknownLocationTypeError: If no resolver is registered for
+        the location's provider.
+    """
+    cloud_location = cast("DocumentCloudLocation", location)
+    resolver = by_provider.get(cloud_location.provider)
+    if resolver is None:
+        msg = (
+            f"No cloud resolver registered for provider '{cloud_location.provider}'. "
+            f"Registered providers: {list(by_provider)}"
+        )
+        raise UnknownLocationTypeError(msg)
+    return await resolver(cloud_location)
 
 
 class DefaultWorkerRunner(WorkerRunnerBase):
@@ -213,6 +241,8 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         """
         resolvers: dict[str, ResolveDocumentFunc] = {"path": resolve_path}
 
+        cloud_by_provider: dict[str, ResolveDocumentFunc] = {}
+
         try:
             from google.cloud.storage import Client as GCSClient
 
@@ -220,16 +250,73 @@ class DefaultWorkerRunner(WorkerRunnerBase):
                 resolve_gcs,
             )
 
-            resolvers["cloud"] = partial(resolve_gcs, client=GCSClient())
+            cloud_by_provider["gcs"] = partial(resolve_gcs, client=GCSClient())
         except ImportError:
+            # Optional 'gcs' extra. The 'cloud' resolver is only attempted,
+            # never required — pipelines that never resolve cloud documents
+            # run fine without it, so we degrade gracefully rather than
+            # raise. Selecting a 'cloud' document location without the
+            # resolver later fails with UnknownLocationTypeError.
             module_logger.debug(
-                "google-cloud-storage not installed — "
-                "'cloud' document resolver disabled"
+                "google-cloud-storage not installed — GCS cloud resolver "
+                'disabled; install with: pip install "warren[gcs]"'
             )
         except Exception as exc:
             module_logger.warning(
-                "Could not initialise GCS client — 'cloud' document "
-                f"resolver disabled: {summarize_exception_chain(exc)}"
+                "Could not initialise GCS client — GCS cloud resolver "
+                f"disabled: {summarize_exception_chain(exc)}"
+            )
+
+        try:
+            import boto3
+
+            from warren.storage.documents.resolve_s3 import resolve_s3
+
+            s3_client = boto3.client(
+                "s3",
+                endpoint_url=os.environ.get("S3_ENDPOINT_URL") or None,
+                region_name=os.environ.get("S3_REGION") or None,
+            )
+            cloud_by_provider["s3"] = partial(resolve_s3, client=s3_client)
+        except ImportError:
+            # Optional 'S3' extra. Degrade gracefully — pipelines without S3
+            # documents run fine. Selecting an S3 location without the resolver
+            # later fails with UnknownLocationTypeError.
+            module_logger.debug(
+                "boto3 not installed — S3 cloud resolver "
+                'disabled; install with: pip install "warren[s3]"'
+            )
+        except Exception as exc:
+            module_logger.warning(
+                "Could not initialise S3 client — S3 cloud resolver "
+                f"disabled: {summarize_exception_chain(exc)}"
+            )
+
+        if cloud_by_provider:
+            resolvers["cloud"] = partial(_resolve_cloud, by_provider=cloud_by_provider)
+
+        try:
+            import httpx
+
+            from warren.storage.documents.resolve_http import resolve_http
+
+            resolvers["url"] = partial(
+                resolve_http, client=httpx.AsyncClient(timeout=60.0)
+            )
+        except ImportError:
+            # Optional 'http' extra. The 'url' resolver is only attempted,
+            # never required — pipelines that never resolve URL documents
+            # run fine without it, so we degrade gracefully rather than
+            # raise. Selecting a 'url' document location without the
+            # resolver later fails with UnknownLocationTypeError.
+            module_logger.debug(
+                "httpx not installed — HTTP(S) URL resolver "
+                'disabled; install with: pip install "warren[http]"'
+            )
+        except Exception as exc:
+            module_logger.warning(
+                "Could not initialise HTTP(S) URL resolver — "
+                f"disabled: {summarize_exception_chain(exc)}"
             )
 
         return resolvers
@@ -295,9 +382,10 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         publish = self._worker_spec.publish
         if publish is None:
             return None
-        return RMQPublisher(
-            connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=self._exchange,
+        return backends.create_publisher(
+            self._config,
+            self._infra.pubsub_connection_manager,
+            exchange=self._exchange,
             route=publish.route,
             route_func=publish.route_func,
         )
@@ -311,9 +399,10 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         exchange.
         """
         observer = observer_exchange(self._exchange)
-        return RMQPublisher(
-            connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=observer,
+        return backends.create_publisher(
+            self._config,
+            self._infra.pubsub_connection_manager,
+            exchange=observer,
             route_func=observer_route_func(observer),
         )
 
@@ -328,9 +417,10 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         observer = observer_exchange(self._exchange)
         if observer.name == self._exchange.name:
             return None
-        return RMQPublisher(
-            connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=observer,
+        return backends.create_publisher(
+            self._config,
+            self._infra.pubsub_connection_manager,
+            exchange=observer,
             route_func=observer_route_func(observer),
         )
 
@@ -341,24 +431,12 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         control_publisher: PublisherInterface,
         observer_publisher: PublisherInterface | None,
     ) -> ConsumerManagerInterface:
-        exchange_config = self._exchange
-        queue_name = f"{exchange_config.name}.{self._worker_type}"
-
-        queue_config = RMQQueueConfig(
-            name=queue_name,
-            durable=True,
-            routing_key=self._worker_spec.binding_key,
-        )
-
-        manager_config = RMQConsumerManagerConfig(
-            exchange=exchange_config,
-            queue=queue_config,
-            consumer=self._config.rabbitmq.consumer,
-        )
-
-        return RMQConsumerManager(
-            config=manager_config,
-            connection_manager=self._infra.rmq_connection_manager,
+        return backends.create_consumer_manager(
+            self._config,
+            self._infra.pubsub_connection_manager,
+            exchange=self._exchange,
+            worker_type=self._worker_type,
+            binding_key=self._worker_spec.binding_key,
             consumer=consumer,
             data_publisher=data_publisher,
             control_publisher=control_publisher,

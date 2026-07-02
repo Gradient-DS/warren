@@ -38,13 +38,8 @@ from runtime_scripts.lib.logging_setup import (
     resolve_log_level,
 )
 from runtime_scripts.lib.pipeline import load_pipeline
-from warren.pubsub.rabbitmq.aio_pika.connection import (
-    RMQConnectionManager,
-)
-from warren.pubsub.rabbitmq.aio_pika.publisher import (
-    RMQPublisher,
-)
 from warren.pubsub.routing import observer_route_func
+from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.spec import PipelineSpec
 from warren.storage.jobs.mongodb import (
@@ -102,12 +97,13 @@ async def _publish(
         metadata={"job_name": job_name},
     )
 
-    connection_manager = RMQConnectionManager(config.rabbitmq.connection)
+    connection_manager = backends.create_connection_manager(config)
     exchange_config = pipeline.exchange
 
-    publisher = RMQPublisher(
-        connection_manager=connection_manager,
-        exchange_config=exchange_config,
+    publisher = backends.create_publisher(
+        config,
+        connection_manager,
+        exchange=exchange_config,
         route_func=observer_route_func(exchange_config),
     )
 

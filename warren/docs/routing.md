@@ -6,6 +6,10 @@ self-selects via `should_process()`. Warren also supports **topic** and
 **direct** exchanges, so the broker can route messages by routing key, and a
 single job can define its own path through the deployed workers.
 
+A **fanout** pipeline also runs unchanged on the Kafka backend (one topic, one
+consumer group per worker type — see [`kafka.md`](kafka.md)); `topic` and
+`direct` routing are **RabbitMQ-only** for now (see *Not supported (yet)*).
+
 This document describes the routing model and the design decisions behind it.
 
 ## Exchange types
@@ -236,6 +240,10 @@ the model:
   exchange, or a worker publishing to several at once. A pipeline has exactly one
   user-defined exchange today. (The framework's derived observer exchange for
   direct pipelines is internal and doesn't count — the user never defines it.)
+- **Topic/direct routing on Kafka** — the Kafka backend supports fanout
+  pipelines only (a topic + one consumer group per worker type is exact fanout
+  parity). A `topic`/`direct` pipeline on `backend: kafka` fails fast at
+  startup. Broker-side routing on Kafka is deferred.
 - **Fan-in / join** — a worker waiting on multiple upstream branches.
 - **`headers` exchanges.**
 - **Structural type checking** — a `data_type → schema` registry over the

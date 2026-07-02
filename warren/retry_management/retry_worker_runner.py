@@ -18,17 +18,8 @@ from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
-from warren.pubsub.rabbitmq.aio_pika.consumer import (
-    RMQConsumerManager,
-)
-from warren.pubsub.rabbitmq.aio_pika.publisher import (
-    RMQPublisher,
-)
 from warren.pubsub.rabbitmq.config import (
-    RMQConsumerConfig,
-    RMQConsumerManagerConfig,
     RMQExchangeConfig,
-    RMQQueueConfig,
 )
 from warren.pubsub.routing import (
     ReplayRouter,
@@ -37,6 +28,7 @@ from warren.pubsub.routing import (
 from warren.retry_management.retry_worker import (
     RetryWorker,
 )
+from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import (
     RuntimeInfra,
@@ -199,35 +191,25 @@ class RetryWorkerRunner(WorkerRunnerBase):
     def _create_default_publisher(self) -> PublisherInterface:
         # Republish to the DATA exchange, replaying the original routing key
         # (stamped on the failed message) so a retried message lands back in the
-        # worker that failed, for any routing scheme. See D10.
-        return RMQPublisher(
-            connection_manager=self._infra.rmq_connection_manager,
-            exchange_config=self._republish_exchange,
+        # worker that failed, for any routing scheme. See D10. (On Kafka —
+        # fanout-only — the replay key is dropped; fanout ignores keys.)
+        return backends.create_publisher(
+            self._config,
+            self._infra.pubsub_connection_manager,
+            exchange=self._republish_exchange,
             route_func=ReplayRouter(),
         )
 
     def _create_default_consumer_factory(self) -> ConsumerManagerFactory:
-        consumer_cfg = self._config.rabbitmq.consumer
-
-        manager_config = RMQConsumerManagerConfig(
-            exchange=self._exchange,
-            queue=RMQQueueConfig(
-                name=f"{self._exchange.name}.{RETRY_WORKER_TYPE}",
-                durable=True,
-                routing_key=observer_binding_key(self._exchange),
-            ),
-            consumer=RMQConsumerConfig(
-                prefetch_count=consumer_cfg.prefetch_count,
-                on_shutdown_timeout=consumer_cfg.on_shutdown_timeout,
-            ),
-        )
-
         def factory(
             consumer: MessageConsumerInterface,
         ) -> ConsumerManagerInterface:
-            return RMQConsumerManager(
-                config=manager_config,
-                connection_manager=self._infra.rmq_connection_manager,
+            return backends.create_consumer_manager(
+                self._config,
+                self._infra.pubsub_connection_manager,
+                exchange=self._exchange,
+                worker_type=RETRY_WORKER_TYPE,
+                binding_key=observer_binding_key(self._exchange),
                 consumer=consumer,
             )
 

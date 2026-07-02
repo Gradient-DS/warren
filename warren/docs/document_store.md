@@ -1,5 +1,13 @@
 # Document Fetching Design
 
+> **Historical design record.** This documents the design and rationale as
+> agreed before implementation; specific code snippets and file paths reflect
+> the codebase at that time and have drifted (e.g. `WorkerSpec` no longer has
+> a `terminal` flag, and the `e2e_test/` layout became `examples/` +
+> `tests/`). The *concepts* — the document registry, location-agnostic
+> resolvers, and the binary cache (the claim-check pattern: messages carry a
+> location, workers resolve bytes on demand) — are implemented and current.
+
 ## Problem
 
 The distributed processing system lacks a formal way to register documents for processing, and workers have no location-agnostic mechanism to fetch document bytes. This creates several concrete problems:

@@ -20,7 +20,7 @@ of Warren's exchange types so the routing is what stands out. See
 
 | Dir | Exchange | What it shows |
 |-----|----------|---------------|
-| `exchanges/fanout/` | `fanout` | Every worker self-selects (the quickstart). |
+| `exchanges/fanout/` | `fanout` | Every worker self-selects (the quickstart). Also runs on Kafka via `config.kafka.yaml`. |
 | `exchanges/topic/` | `topic` | Broker routes by `data_type`. |
 | `exchanges/direct/` | `direct` | Per-job `RoutingPlan` over capability workers. |
 

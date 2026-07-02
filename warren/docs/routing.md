@@ -244,7 +244,12 @@ the model:
   pipelines only (a topic + one consumer group per worker type is exact fanout
   parity). A `topic`/`direct` pipeline on `backend: kafka` fails fast at
   startup. Broker-side routing on Kafka is deferred.
-- **Fan-in / join** — a worker waiting on multiple upstream branches.
+- **Fan-in / join** — a worker waiting on multiple upstream branches. This is
+  the planned DAG direction: a stateful join worker buffering partial inputs in
+  the results store (keyed by job + item, idempotent via upsert) and emitting
+  when the expected-input set is complete; `RoutingPlan` extends from tree to
+  DAG by allowing multi-parent nodes. The open problem is failure semantics —
+  a hard-failed branch must release or abort the waiting join.
 - **`headers` exchanges.**
 - **Structural type checking** — a `data_type → schema` registry over the
   current nominal (by-name) checks.

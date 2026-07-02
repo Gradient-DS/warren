@@ -1,8 +1,10 @@
 """
 Cached document fetcher implementation.
 
-Composes a binary cache with a resolver dispatch table to provide
-transparent cache-aside document fetching. Workers receive this as
+Warren's take on the **claim-check pattern**: messages stay small and carry
+only a payload *location*; workers resolve the actual bytes on demand
+through this fetcher. Composes a binary cache with a resolver dispatch
+table to provide transparent cache-aside fetching. Workers receive this as
 a ``GetDocumentFunc`` — they don't know about caching or resolvers.
 """
 

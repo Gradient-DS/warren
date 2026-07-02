@@ -2,9 +2,11 @@
 
 [![tests](https://github.com/Gradient-DS/warren/actions/workflows/tests.yml/badge.svg)](https://github.com/Gradient-DS/warren/actions/workflows/tests.yml) [![PyPI version](https://img.shields.io/pypi/v/warren)](https://pypi.org/project/warren/) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-Warren is a message-driven document processing framework. You define a pipeline as a set of worker types, each consuming messages from a shared fanout exchange (RabbitMQ) or topic (Kafka) and **self-selecting** which messages to process. Workers run as independent processes — you scale by adding replicas of any worker type. The backend is selected by `backend:` in your `RuntimeConfig` YAML (`rabbitmq` by default, or `kafka` for fanout pipelines); nothing else changes.
+Warren is a message-driven **distributed processing framework**: typed messages flow continuously through a graph of workers over a message broker (RabbitMQ or Kafka), with per-item retry, job tracking, and storage-backed reliability. There is no central scheduler — the broker routes, workers self-select, and you scale by adding replicas of any worker type. The broker is selected by `backend:` in your `RuntimeConfig` YAML (`rabbitmq` by default, or `kafka` for fanout pipelines); nothing else changes.
 
-A typical flow: a job enters the pipeline as a message on the fanout exchange. Every worker type receives a copy in its own queue, but only processes the messages relevant to it — each worker's `should_process()` decides whether to act or discard. When a worker processes a message, it writes its results to a cached storage layer (MongoDB + Redis), then publishes a new message describing the *location* of those results. Downstream workers pick that up, fetch what they need from storage, and publish their own result locations. Adding a new worker type is purely additive — no routing configuration changes, no upstream modifications.
+Warren's flagship use case is **document processing for RAG** — the examples take real PDFs through parse → chunk → embed — but the framework is item-agnostic: any workload shaped as *many independent items flowing through processing stages* fits (ETL, media processing, ML inference pipelines, event enrichment).
+
+A typical flow: a job enters the pipeline as a message on the exchange. Every worker type receives a copy in its own queue, but only processes the messages relevant to it — each worker's `should_process()` decides whether to act or discard. When a worker processes a message, it writes its results to a cached storage layer (MongoDB + Redis), then publishes a new message describing the *location* of those results (the claim-check pattern — messages stay small; bytes live in storage). Downstream workers pick that up, fetch what they need from storage, and publish their own result locations. Adding a new worker type is purely additive — no routing configuration changes, no upstream modifications.
 
 Warren separates the **framework** (worker base classes, storage interfaces, pubsub abstractions — transport-agnostic) from the **runtime** (concrete wiring for RabbitMQ or Kafka + MongoDB + Redis, shipped in `warren/runtime/`).
 
@@ -135,6 +137,18 @@ for your documents.
 
 A fanout pipeline runs on Kafka with zero code changes — just point every command at `examples/exchanges/fanout/config.kafka.yaml` instead of `config.yaml`, and start a Kafka broker (e.g. `localhost:9092`) in place of RabbitMQ. (Kafka supports fanout pipelines only; `topic`/`direct` routing is RabbitMQ-only for now.) The Kafka config has `backend: kafka`, a `jobs` topic with `create_if_missing: true`, and the same MongoDB/Redis/retry sections. See [`warren/docs/kafka.md`](warren/docs/kafka.md) for the full RabbitMQ→Kafka semantic mapping.
 
+### Choosing a backend
+
+Pipelines behave identically on both brokers — the choice is **operational, not semantic** (like Postgres vs MySQL behind an ORM). In practice the deciding factor is usually *which broker your team already runs*.
+
+| Prefer **RabbitMQ** when... | Prefer **Kafka** when... |
+|---|---|
+| You want the simplest ops story at small/medium scale | You need very high throughput |
+| Routing-heavy pipelines (`topic`/`direct` are broker-native) | Your org already runs a Kafka platform (MSK, Confluent) |
+| Low-latency, per-message work | Message retention as an audit trail matters |
+
+Kafka-wire-compatible brokers (Redpanda, Azure Event Hubs) work with the same `backend: kafka` config. If your workload is actually *event streaming* — windowed aggregations, stream joins — use Kafka Streams or Flink directly; that's a different altitude than Warren.
+
 ## Defining your own pipeline
 
 A pipeline is a directory with a `pipeline_spec.py` (exporting a `PIPELINE: PipelineSpec`) and a `config.yaml` (a `RuntimeConfig`). Each worker module owns a `create(ctx: WorkerFactoryContext)` factory; the spec references factories via lazy-import wrappers so different deployment images only load the dependencies they need.
@@ -170,6 +184,19 @@ See [`warren/docs/routing.md`](warren/docs/routing.md) for the full routing mode
 **Read [`warren/runtime/USAGE.md`](warren/runtime/USAGE.md)** — the full usage guide: core concepts (`PipelineSpec`, `WorkerSpec`, `WorkerFactoryContext`, `RuntimeConfig`, `DefaultWorkerRunner`), the launcher scripts, custom runners, and recommended project layout.
 
 Deeper design docs live in [`warren/docs/`](warren/docs/): workers, storage and caching, document store, RabbitMQ and Kafka topology, results store, and the retry system.
+
+## How Warren compares
+
+Warren processes **per-item message-flow graphs**: each item flows through the worker graph independently, at message granularity, continuously. Linear pipelines are the simplest case; fan-out works today (broadcast, overlapping topic bindings, multi-successor routing plans); fan-in/join is on the roadmap. That shape is the difference from the neighbours it's often compared to:
+
+| Tool | What it is | How Warren differs |
+|---|---|---|
+| Airflow, Dagster, Prefect | Batch workflow orchestrators — a central scheduler runs *DAGs of task runs* over datasets, on a schedule | Warren has no scheduler and no runs: work arrives as individual messages, workers are always-on, retry/failure is per item |
+| Temporal | Durable workflow-as-code for long-running business logic | Warren is for high-volume homogeneous items, not per-instance sagas |
+| Flink, Kafka Streams | Stream analytics — windows, joins, aggregations | Warren workers are heavyweight per-item processors (parse a PDF, call an embedding API), not stream operators |
+| Celery, RQ | Task queues — point-to-point function invocation | Warren adds pipeline topology, broker routing, typed messages, and job-level tracking |
+
+They compose rather than compete: a natural setup is **Airflow as the calendar-driven control plane, Warren as the always-on data plane** — an Airflow task submits a Warren job and a sensor polls Warren's job store for completion.
 
 ## Launchers
 

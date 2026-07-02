@@ -2,7 +2,7 @@
 
 ## What is Warren?
 
-Warren is a message-driven document processing framework. You define a pipeline as a set of worker types, each consuming messages from a shared RabbitMQ fanout exchange and self-selecting which messages to process. Workers run as independent processes — you scale by adding replicas of any worker type.
+Warren is a message-driven distributed processing framework. You define a pipeline as a set of worker types, each consuming messages from a shared exchange (RabbitMQ, or Kafka for fanout pipelines) and self-selecting which messages to process. Workers run as independent processes — you scale by adding replicas of any worker type. The flagship examples process documents for RAG, but the framework is item-agnostic — any workload of independent items flowing through worker stages fits.
 
 A typical flow: a job enters the pipeline as a message published to a fanout exchange. Every worker type receives a copy of every message in its own queue, but only processes the ones relevant to it — each worker's `should_process()` decides whether to act or discard. When a worker processes a message, it writes its results to a cached storage layer (MongoDB + Redis), then publishes a new message to the same exchange describing the *location* of those results. The cycle repeats: downstream workers pick up the new message, fetch the results they need from storage, process them, and publish their own result locations. This self-selection model means adding a new worker type is purely additive — no routing configuration changes, no upstream modifications.
 
@@ -14,11 +14,11 @@ Warren separates the **framework** (worker base classes, storage interfaces, pub
 
 The runtime provided in `warren/runtime/` uses:
 
-- **RabbitMQ** (via `aio_pika`) for message passing — fanout exchange, per-worker-type queues
+- **RabbitMQ** (via `aio_pika`) or **Kafka** (via `aiokafka`) for message passing, selected by `backend:` in the config. RabbitMQ supports all exchange types; Kafka supports fanout pipelines only (see [`warren/docs/kafka.md`](../docs/kafka.md)).
 - **MongoDB** (via `pymongo.AsyncMongoClient`) for document storage, job tracking, results, and publishing tracker
 - **Redis** (via `redis.asyncio`) for caching (results, document bytes)
 
-The warren library's abstract interfaces (`ConsumerManagerInterface`, `PublisherInterface`, `ResultsStoreInterface`, etc.) don't depend on these choices. A different runtime could bind them to Kafka, PostgreSQL, or any other stack. But the runtime shipped today — and all the launcher scripts in `runtime_scripts/` — assume this RabbitMQ + MongoDB + Redis combination.
+The warren library's abstract interfaces (`ConsumerManagerInterface`, `PublisherInterface`, `ResultsStoreInterface`, etc.) don't depend on these choices — `warren/runtime/backends.py` is the single place that switches on the backend, so the runners and launcher scripts are transport-agnostic. MongoDB + Redis are assumed by the runtime shipped today.
 
 ## Core concepts
 
@@ -61,7 +61,7 @@ WorkerSpec(
 - `factory` is an async callable `(WorkerFactoryContext) -> MessageConsumerInterface`. It creates and returns the worker instance. See [Defining a pipeline](#defining-a-pipeline).
 - `binding_key` is the queue's binding pattern on the pipeline exchange. It must be `None` on a `fanout` exchange (which ignores keys) and is required on `topic`/`direct` exchanges (e.g. a `data_type` like `"markdown_document"`, or a `topic` wildcard like `"document.*"`).
 - `publish` is a `PublishSpec(route=None, route_func=None)` describing how the worker publishes its result to the pipeline exchange, or `None` if it publishes nothing downstream (terminal — there is no separate `terminal` flag). On `fanout`, leave `route`/`route_func` unset; on `topic`/`direct`, set one (e.g. `route_func=MessageFieldRouter()` to route by `data_type`).
-- `needs_document_fetcher` — if `True`, the runner builds a `CachedDocumentFetcher` (with path and GCS resolvers) and passes it as `ctx.get_document_func`. (Note: there is an open design question about whether this should be the factory's responsibility instead of the runner's — see TODOs.)
+- `needs_document_fetcher` — if `True`, the runner builds a `CachedDocumentFetcher` (with path, GCS, S3, and HTTP(S) resolvers — the claim-check pattern: messages carry a location, workers resolve bytes on demand, Redis caches them) and passes it as `ctx.get_document_func`. (Note: there is an open design question about whether this should be the factory's responsibility instead of the runner's — see TODOs.)
 - `needs_document_store` — if `True`, the runner creates a `MongoDBDocumentStore` on the `documents` collection and passes it as `ctx.document_store`. (Same design note as above.)
 
 ### WorkerFactoryContext
@@ -72,10 +72,13 @@ The runner creates a `WorkerFactoryContext` and passes it to each factory functi
 @dataclass(frozen=True)
 class WorkerFactoryContext:
     worker_name: str                              # unique instance name
+    worker_type: str                              # the spec key (node id for routing)
     stores: dict[str, ResultsStoreInterface]      # pre-built stores per role
     mongo_client: AsyncMongoClient                # for creating additional stores
     redis_client: Redis                           # for creating additional stores
     database_name: str                            # MongoDB database name
+    accepts: frozenset[str]                       # declared input data_types (from the spec)
+    produces: str | None                          # declared output data_type
     get_document_func: GetDocumentFunc | None      # when needs_document_fetcher=True
     document_store: DocumentStoreInterface | None  # when needs_document_store=True
 ```
@@ -125,11 +128,11 @@ Note: MongoDB and Redis currently only accept `host`/`port` pairs. Connection st
 
 The runner that wires everything together. Given a `RuntimeConfig` and a `WorkerSpec`, it:
 
-1. Creates infrastructure connections (MongoDB, Redis, RabbitMQ)
+1. Creates infrastructure connections (MongoDB, Redis, and the pubsub backend)
 2. Builds `ResultsStoreInterface` instances from `collections`
 3. Optionally creates a `CachedDocumentFetcher` and/or `DocumentStoreInterface`
 4. Calls the factory function with a `WorkerFactoryContext`
-5. Creates the worker's RMQ publisher (none if `publish` is `None`) and a consumer manager bound to the pipeline exchange with `binding_key`
+5. Creates the worker's publisher (none if `publish` is `None`) and a consumer manager bound to the pipeline exchange with `binding_key` — both via `warren.runtime.backends`, so the same runner serves RabbitMQ and Kafka
 6. Runs the consumer until `SIGINT`/`SIGTERM`
 7. Tears down everything on shutdown
 
@@ -291,9 +294,9 @@ Both use the same `--config-file` and `--worker-name` flags as `start_worker.py`
 ```python
 class MyRunner(DefaultWorkerRunner):
     def _create_resolvers(self):
-        """Add custom document resolvers (e.g. S3)."""
+        """Add custom document resolvers (path, GCS, S3, and HTTP(S) ship built in)."""
         resolvers = super()._create_resolvers()
-        resolvers["s3"] = my_s3_resolver
+        resolvers["azure"] = my_azure_blob_resolver
         return resolvers
 
     def _wrap_worker(self, worker, spec):
@@ -321,7 +324,7 @@ my_project/
 ├── warren/                     # Framework library
 │   ├── common.py               # Shared types, exceptions
 │   ├── workers/                # Worker base classes, runners
-│   ├── pubsub/                 # Transport abstractions + RabbitMQ impl
+│   ├── pubsub/                 # Transport abstractions + RabbitMQ/Kafka impls
 │   ├── storage/                # Storage abstractions + MongoDB/Redis impl
 │   ├── jobs/                   # Job publication, status tracking
 │   ├── retry_management/       # Retry worker + runner
@@ -343,9 +346,11 @@ my_project/
 │   ├── processors/             # Processing logic (parsing, chunking, etc.)
 │   └── publishers/             # Publication worker factory
 │
-└── e2e_test/                   # End-to-end test scenarios
-    ├── fake/                   # Synthetic data, fast iteration
-    └── real/                   # Real documents, GCS integration
+├── examples/                   # Runnable example pipelines
+│   ├── exchanges/              # One pipeline, three exchange types (synthetic)
+│   └── rag/                    # Real PDFs → chunks → OpenAI embeddings
+│
+└── tests/                      # Unit + integration tests
 ```
 
 **Why are `runtime_scripts/` separate from `warren/`?** The scripts are deployment artifacts, not library code. They depend on warren but aren't part of its API. When warren becomes its own pip package, consumers clone the scripts and adapt them — they're templates, not imports.

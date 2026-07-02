@@ -12,6 +12,10 @@ through `warren.runtime.backends`, which switches on `config.backend`.
 > fails fast on `backend: kafka` with a clear error. Broker-side routing on
 > Kafka is deferred until there is a real use case.
 
+Kafka-wire-compatible brokers — Redpanda, Azure Event Hubs (Kafka endpoint) —
+work with the same `backend: kafka` configuration; Warren speaks the Kafka
+protocol via `aiokafka` and doesn't depend on broker internals.
+
 For the RabbitMQ topology this mirrors, see [`rabbitmq.md`](rabbitmq.md).
 
 ## Semantic mapping (RabbitMQ → Kafka)

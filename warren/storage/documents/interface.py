@@ -76,6 +76,8 @@ class GetDocumentFunc(Protocol):
         self,
         doc_id: str,
         document_location: DocumentLocation,
+        *,
+        job_id: str | None = None,
     ) -> bytes:
         """Fetch document bytes by location, with transparent caching.
 
@@ -84,6 +86,10 @@ class GetDocumentFunc(Protocol):
 
         :param doc_id: Document identifier (used as cache key).
         :param document_location: Where the document lives.
+        :param job_id: Job identifier scoping the cache entry. Workers
+            should pass ``message.job_id`` so a re-submitted ``doc_id``
+            with updated content never reads bytes cached by a previous
+            job. ``None`` falls back to the legacy shared per-doc key.
 
         :return: Raw document bytes.
 

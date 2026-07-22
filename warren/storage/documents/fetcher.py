@@ -24,15 +24,25 @@ from warren.storage.documents.location import (
 )
 
 
-def build_document_cache_key(doc_id: str) -> str:
+def build_document_cache_key(doc_id: str, job_id: str | None = None) -> str:
     """Compute the cache key a document's bytes live under.
 
-    Exposed at module level so upstream writers (e.g. ``WebFetchWorker``)
-    can pre-populate the cache with the same key the downstream
-    ``CachedDocumentFetcher`` reads from — avoiding a resolver call for
-    bytes that have already been fetched by an earlier worker.
+    Exposed at module level so upstream writers (e.g. ``WebFetchWorker``
+    via ``BinaryResultsStore``) can pre-populate the cache with the same
+    key the downstream ``CachedDocumentFetcher`` reads from — avoiding a
+    resolver call for bytes that have already been fetched by an earlier
+    worker.
+
+    When ``job_id`` is given the key is job-scoped
+    (``doc:{doc_id}:{job_id}``): retries of the same job still hit the
+    cache, while a re-submission of the same ``doc_id`` with new content
+    (a new job) always fetches fresh bytes instead of serving stale
+    cached ones. Without ``job_id`` the legacy shared key
+    (``doc:{doc_id}``) is used — subject to cross-job staleness.
     """
-    return f"doc:{doc_id}"
+    if job_id is None:
+        return f"doc:{doc_id}"
+    return f"doc:{doc_id}:{job_id}"
 
 
 class CachedDocumentFetcher(Base):
@@ -62,11 +72,17 @@ class CachedDocumentFetcher(Base):
         self,
         doc_id: str,
         document_location: DocumentLocation,
+        *,
+        job_id: str | None = None,
     ) -> bytes:
         """Fetch document bytes, using cache when available.
 
         :param doc_id: Document identifier (used as cache key).
         :param document_location: Where the document lives.
+        :param job_id: Job identifier scoping the cache entry. Pass it so
+            a re-submitted ``doc_id`` with updated content (a new job)
+            never hits bytes cached by a previous job; ``None`` keeps the
+            legacy shared ``doc:{doc_id}`` key.
 
         :return: Raw document bytes.
 
@@ -74,7 +90,7 @@ class CachedDocumentFetcher(Base):
         :raises DocumentNotFoundError: If the document doesn't exist at the location.
         :raises DocumentResolutionError: For transient resolution failures.
         """
-        cache_key = self._build_cache_key(doc_id)
+        cache_key = self._build_cache_key(doc_id, job_id)
         return await get_or_set(
             self._cache,
             cache_key,
@@ -115,6 +131,6 @@ class CachedDocumentFetcher(Base):
                 doc_id=doc_id,
             ) from e
 
-    def _build_cache_key(self, doc_id: str) -> str:
+    def _build_cache_key(self, doc_id: str, job_id: str | None) -> str:
         """Build cache key from document identity."""
-        return build_document_cache_key(doc_id)
+        return build_document_cache_key(doc_id, job_id)

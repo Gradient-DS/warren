@@ -23,3 +23,11 @@ venv/
 
 # Thoughts files
 thoughts/
+
+# Claude scratch/plans + personal tooling — never committed
+plans/
+.superpowers/
+CLAUDE.local.md
+.claude/commands/
+.claude/agents/
+.claude/hooks/

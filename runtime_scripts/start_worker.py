@@ -60,6 +60,7 @@ from warren.exceptions import WarrenError
 from warren.runtime.runner import (
     DefaultWorkerRunner,
 )
+from warren.runtime.validation import validate_pipeline
 
 
 module_logger: logging.Logger = get_logger(__name__)
@@ -205,6 +206,9 @@ async def start_worker(
         msg = f"Unknown worker type '{worker_type}'. Valid types: {valid_types}"
         raise WarrenError(msg)
 
+    # Fail fast on a broken pipeline before connecting to any infrastructure.
+    validate_pipeline(pipeline, logger=log)
+
     runner_class = DefaultWorkerRunner
     if runner is not None:
         try:
@@ -226,6 +230,7 @@ async def start_worker(
         runner_class,
         worker_type=worker_type,
         worker_spec=pipeline.workers[worker_type],
+        exchange=pipeline.exchange,
     )
 
     await run(

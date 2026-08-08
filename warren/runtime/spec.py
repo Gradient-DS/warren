@@ -19,6 +19,8 @@ from pymongo import AsyncMongoClient
 from redis.asyncio import Redis
 
 from warren.common import MessageConsumerInterface
+from warren.pubsub.common import Route, RouteFunc
+from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 from warren.storage.document_store.interface import (
     DocumentStoreInterface,
 )
@@ -41,9 +43,15 @@ class WorkerFactoryContext:
     keeps factory signatures stable as more concerns get added.
 
     :param worker_name: Runner-assigned unique name for this worker.
+    :param worker_type: The worker type (its key in ``PipelineSpec.workers``).
+        Pass to the worker so its ``type`` / message ``origin`` matches the
+        spec key (the node id used by addressed/job-defined routing).
     :param stores: Pre-built ``ResultsStoreInterface`` per role (keys
         come from ``WorkerSpec.collections``). Factories that don't use
         them ignore the dict.
+    :param accepts: Declared input ``data_type``s from the spec. Pass to a
+        ``CapabilityWorkerBase`` so its ``should_process`` can derive from it.
+    :param produces: Declared output ``data_type`` from the spec.
     :param get_document_func: Present when ``needs_document_fetcher``
         is set on the spec. ``None`` otherwise.
     :param document_store: Present when ``needs_document_store`` is
@@ -57,10 +65,13 @@ class WorkerFactoryContext:
     """
 
     worker_name: str
+    worker_type: str
     stores: dict[str, ResultsStoreInterface]
     mongo_client: AsyncMongoClient
     redis_client: Redis
     database_name: str
+    accepts: frozenset[str] = frozenset()
+    produces: str | None = None
     get_document_func: GetDocumentFunc | None = None
     document_store: DocumentStoreInterface | None = None
 
@@ -76,14 +87,39 @@ inside.
 
 
 @dataclass(frozen=True)
+class PublishSpec:
+    """How a worker publishes its result to the pipeline's exchange.
+
+    The exchange's type decides how the routing key is set: ``fanout`` ignores
+    it (leave ``route``/``route_func`` unset); ``direct``/``topic`` require
+    exactly one of ``route`` (a static key) or ``route_func`` (computed per
+    message, e.g. ``MessageFieldRouter``).
+
+    :param route: Static routing key (direct/topic only).
+    :param route_func: Per-message routing function (direct/topic only).
+    """
+
+    route: Route | None = None
+    route_func: RouteFunc | None = None
+
+
+@dataclass(frozen=True)
 class WorkerSpec:
-    """One worker type: its collections, factory, and terminal flag.
+    """One worker type: how it is wired into the pipeline's exchange.
 
     :param collections: Maps role ("read", "write") to MongoDB collection
         name. The runner creates a DefaultResultsStore per role.
     :param factory: Callable that creates the worker given a
         ``WorkerFactoryContext``.
-    :param terminal: If True, the worker publishes nothing downstream.
+    :param binding_key: Queue binding pattern for direct/topic exchanges.
+        Must be ``None`` for a fanout exchange; required for direct/topic.
+    :param publish: How the worker publishes its result, or ``None`` if it
+        publishes nothing downstream (terminal). Job completion does not key
+        off this — see ``PipelineSpec.final_data_type``.
+    :param accepts: Declared input ``data_type``s this worker can handle.
+        Nominal (by-name) capability metadata, used by routing-plan
+        validation and by ``CapabilityWorkerBase.should_process``.
+    :param produces: Declared output ``data_type`` (None if terminal/none).
     :param needs_document_fetcher: If True, the runner passes a
         GetDocumentFunc to the factory. Otherwise passes None.
     :param needs_document_store: If True, the runner passes a
@@ -96,16 +132,24 @@ class WorkerSpec:
 
     collections: dict[str, str]
     factory: WorkerFactory
-    terminal: bool = False
+    binding_key: str | None = None
+    publish: PublishSpec | None = None
+    accepts: frozenset[str] = frozenset()
+    produces: str | None = None
     needs_document_fetcher: bool = False
     needs_document_store: bool = False
 
 
 @dataclass(frozen=True)
 class PipelineSpec:
-    """Full pipeline composition: workers + completion criteria.
+    """Full pipeline composition: exchange, workers + completion criteria.
+
+    A pipeline uses a single exchange. Multi-exchange deployments (a worker
+    publishing to several exchanges at once) are deferred — see
+    ``warren/docs/routing.md``.
 
     :param workers: Maps worker type name to its WorkerSpec.
+    :param exchange: The exchange all workers consume from and publish to.
     :param result_collections: All MongoDB collection names to report
         in summaries (e.g., ["parsed_documents", "chunks", "embeddings"]).
     :param reference_collection: Collection whose count defines "expected"
@@ -118,6 +162,7 @@ class PipelineSpec:
     """
 
     workers: dict[str, WorkerSpec]
+    exchange: RMQExchangeConfig
     result_collections: list[str]
     reference_collection: str
     completion_collection: str

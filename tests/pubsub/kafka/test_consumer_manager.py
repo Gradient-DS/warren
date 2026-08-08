@@ -41,6 +41,7 @@ from warren.pubsub.rabbitmq.config import (
     RMQExchangeConfig,
     RMQQueueConfig,
 )
+from warren.pubsub.routing import REPLAY_ROUTING_KEY_FIELD
 
 
 TOPIC = "jobs"
@@ -196,7 +197,8 @@ def _retry_config(**overrides) -> RetryConfig:
 def _manager(
     worker: _FakeWorker,
     *,
-    publishers: list[_FakePublisher] | None = None,
+    data_publisher: _FakePublisher | None = None,
+    control_publisher: _FakePublisher | None = None,
     retry_config: RetryConfig | None = None,
     conn: _FakeConnectionManager | None = None,
     group_id: str | None = None,
@@ -216,7 +218,8 @@ def _manager(
         config,
         conn,  # type: ignore[arg-type]
         worker,  # type: ignore[arg-type]
-        publishers=publishers,  # type: ignore[arg-type]
+        data_publisher=data_publisher,  # type: ignore[arg-type]
+        control_publisher=control_publisher,  # type: ignore[arg-type]
         retry_config=retry_config or _retry_config(),
         publish_hard_failures=publish_hard_failures,
     )
@@ -280,7 +283,7 @@ def test_setup_sets_up_publishers_first() -> None:
     worker = _FakeWorker()
     publisher = _FakePublisher()
     conn = _FakeConnectionManager(admin=_FakeAdmin(topics=[]))  # topic missing
-    manager, _ = _manager(worker, publishers=[publisher], conn=conn)
+    manager, _ = _manager(worker, control_publisher=publisher, conn=conn)
 
     raised = False
     try:
@@ -340,7 +343,7 @@ def test_start_consuming_requires_setup() -> None:
 def test_success_publishes_result_and_commits() -> None:
     worker = _FakeWorker(result={"data_type": "parsed_document"})
     publisher = _FakePublisher()
-    manager, conn = _manager(worker, publishers=[publisher])
+    manager, conn = _manager(worker, data_publisher=publisher)
 
     _process(manager, _msg(_BODY, offset=7))
 
@@ -362,7 +365,7 @@ def test_success_without_publishers_commits() -> None:
 def test_none_result_commits_without_publishing() -> None:
     worker = _FakeWorker(result=None)
     publisher = _FakePublisher()
-    manager, conn = _manager(worker, publishers=[publisher])
+    manager, conn = _manager(worker, data_publisher=publisher)
 
     _process(manager, _msg(_BODY, offset=7))
 
@@ -381,7 +384,7 @@ def test_undecodable_message_commits_without_calling_worker() -> None:
     assert conn.kafka_consumer.seeks == []
 
 
-def test_soft_failure_without_publishers_seeks_back() -> None:
+def test_soft_failure_without_control_publisher_seeks_back() -> None:
     worker = _FakeWorker(error=SoftFailureException("transient"))
     manager, conn = _manager(worker)
 
@@ -394,7 +397,7 @@ def test_soft_failure_without_publishers_seeks_back() -> None:
 def test_soft_failure_publishes_envelope_and_commits() -> None:
     worker = _FakeWorker(error=SoftFailureException("transient"))
     publisher = _FakePublisher()
-    manager, conn = _manager(worker, publishers=[publisher])
+    manager, conn = _manager(worker, control_publisher=publisher)
 
     _process(manager, _msg(_BODY, offset=7))
 
@@ -406,6 +409,8 @@ def test_soft_failure_publishes_envelope_and_commits() -> None:
             **_BODY,
             # initial_delay 30 * backoff 2.0^(1-1), jitter off; max 5 (capped at 10)
             "retry": {"count": 1, "after": 30, "reason": "transient", "max": 5},
+            # Kafka messages carry no routing key; "" replays as a fanout key.
+            REPLAY_ROUTING_KEY_FIELD: "",
         },
         "job_id": "job-1",
         "origin": {"type": "test_worker", "name": "worker-1"},
@@ -417,7 +422,7 @@ def test_soft_failure_publishes_envelope_and_commits() -> None:
 def test_soft_failure_retry_math_on_re_retry() -> None:
     worker = _FakeWorker(error=SoftFailureException("still transient"))
     publisher = _FakePublisher()
-    manager, conn = _manager(worker, publishers=[publisher])
+    manager, conn = _manager(worker, control_publisher=publisher)
     body = {**_BODY, "retry": {"count": 2, "after": 60, "reason": "old", "max": 5}}
 
     _process(manager, _msg(body, offset=7))
@@ -438,7 +443,7 @@ def test_soft_failure_honors_worker_retry_intent_with_caps() -> None:
         )
     )
     publisher = _FakePublisher()
-    manager, _ = _manager(worker, publishers=[publisher])
+    manager, _ = _manager(worker, control_publisher=publisher)
     body = {**_BODY, "retry": {"count": 1, "after": 200, "reason": "old", "max": 10}}
 
     _process(manager, _msg(body, offset=7))
@@ -451,7 +456,7 @@ def test_soft_failure_honors_worker_retry_intent_with_caps() -> None:
 def test_soft_failure_max_retries_exceeded_becomes_hard_failure() -> None:
     worker = _FakeWorker(error=SoftFailureException("transient"))
     publisher = _FakePublisher()
-    manager, conn = _manager(worker, publishers=[publisher])
+    manager, conn = _manager(worker, control_publisher=publisher)
     body = {**_BODY, "retry": {"count": 5, "after": 300, "reason": "old", "max": 5}}
 
     _process(manager, _msg(body, offset=7))
@@ -470,7 +475,7 @@ def test_soft_failure_without_consuming_retry_slot() -> None:
         error=SoftFailureException("poll again", retry_count_consumed=False)
     )
     publisher = _FakePublisher()
-    manager, conn = _manager(worker, publishers=[publisher])
+    manager, conn = _manager(worker, control_publisher=publisher)
     # count already at max — no slot consumed, so no hard-failure escalation
     body = {**_BODY, "retry": {"count": 5, "after": 300, "reason": "old", "max": 5}}
 
@@ -485,7 +490,7 @@ def test_soft_failure_without_consuming_retry_slot() -> None:
 def test_soft_failure_envelope_publish_failure_seeks_back() -> None:
     worker = _FakeWorker(error=SoftFailureException("transient"))
     publisher = _FakePublisher(error=PublishFailureException("broker gone"))
-    manager, conn = _manager(worker, publishers=[publisher])
+    manager, conn = _manager(worker, control_publisher=publisher)
 
     _process(manager, _msg(_BODY, offset=7))
 
@@ -496,7 +501,7 @@ def test_soft_failure_envelope_publish_failure_seeks_back() -> None:
 def test_result_publish_failure_seeks_back() -> None:
     worker = _FakeWorker(result={"data_type": "parsed_document"})
     publisher = _FakePublisher(error=PublishFailureException("broker gone"))
-    manager, conn = _manager(worker, publishers=[publisher])
+    manager, conn = _manager(worker, data_publisher=publisher)
 
     _process(manager, _msg(_BODY, offset=7))
 
@@ -507,7 +512,7 @@ def test_result_publish_failure_seeks_back() -> None:
 def test_hard_failure_publishes_envelope_and_commits() -> None:
     worker = _FakeWorker(error=HardFailureException("unparseable"))
     publisher = _FakePublisher()
-    manager, conn = _manager(worker, publishers=[publisher])
+    manager, conn = _manager(worker, control_publisher=publisher)
 
     _process(manager, _msg(_BODY, offset=7))
 
@@ -524,7 +529,7 @@ def test_hard_failure_publishes_envelope_and_commits() -> None:
 def test_unexpected_exception_is_treated_as_hard_failure() -> None:
     worker = _FakeWorker(error=ValueError("bug"))
     publisher = _FakePublisher()
-    manager, conn = _manager(worker, publishers=[publisher])
+    manager, conn = _manager(worker, control_publisher=publisher)
 
     _process(manager, _msg(_BODY, offset=7))
 
@@ -536,7 +541,7 @@ def test_hard_failure_envelope_suppressed_when_disabled() -> None:
     worker = _FakeWorker(error=HardFailureException("unparseable"))
     publisher = _FakePublisher()
     manager, conn = _manager(
-        worker, publishers=[publisher], publish_hard_failures=False
+        worker, control_publisher=publisher, publish_hard_failures=False
     )
 
     _process(manager, _msg(_BODY, offset=7))
@@ -548,7 +553,7 @@ def test_hard_failure_envelope_suppressed_when_disabled() -> None:
 def test_hard_failure_envelope_publish_is_best_effort() -> None:
     worker = _FakeWorker(error=HardFailureException("unparseable"))
     publisher = _FakePublisher(error=RuntimeError("broker gone"))
-    manager, conn = _manager(worker, publishers=[publisher])
+    manager, conn = _manager(worker, control_publisher=publisher)
 
     _process(manager, _msg(_BODY, offset=7))
 
@@ -562,6 +567,10 @@ def test_hard_failure_envelope_publish_is_best_effort() -> None:
 
 class _FakeRMQMessage:
     """AbstractIncomingMessage stand-in (ack/nack/reject recording)."""
+
+    # Arrival routing key stamped into soft-failure envelopes; "" is what a
+    # fanout publish carries, matching the Kafka consumer's stamp.
+    routing_key = ""
 
     def __init__(self) -> None:
         self.acked = False
@@ -592,7 +601,7 @@ def _rmq_manager(
         config,
         object(),  # type: ignore[arg-type]  # connection manager unused here
         worker,  # type: ignore[arg-type]
-        publishers=[publisher],  # type: ignore[arg-type]
+        control_publisher=publisher,  # type: ignore[arg-type]
         retry_config=retry_config,
     )
 
@@ -607,7 +616,7 @@ def _parity_envelopes(
     kafka_worker = _FakeWorker(error=error)
     kafka_publisher = _FakePublisher()
     manager, conn = _manager(
-        kafka_worker, publishers=[kafka_publisher], retry_config=retry_config
+        kafka_worker, control_publisher=kafka_publisher, retry_config=retry_config
     )
 
     rmq_worker = _FakeWorker(error=error)
@@ -715,7 +724,7 @@ def test_shutdown_drains_in_flight_message() -> None:
             return None
 
     publisher = _FakePublisher()
-    manager, conn = _manager(_BlockingWorker(), publishers=[publisher])
+    manager, conn = _manager(_BlockingWorker(), data_publisher=publisher)
 
     async def scenario() -> None:
         conn.kafka_consumer.feed(_msg(_BODY, offset=7))
@@ -825,7 +834,9 @@ def test_shutdown_tears_down_publishers_best_effort() -> None:
 
     ok_publisher = _FakePublisher()
     manager, conn = _manager(
-        _FakeWorker(), publishers=[_ExplodingPublisher(), ok_publisher]
+        _FakeWorker(),
+        data_publisher=_ExplodingPublisher(),
+        control_publisher=ok_publisher,
     )
 
     async def scenario() -> None:

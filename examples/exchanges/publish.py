@@ -1,14 +1,23 @@
 """
-Publish fake documents for the fake E2E scenario.
+Publish synthetic documents into a **fanout or topic** exchange example.
 
-Creates a job entry, publishes synthetic documents via
-``FakeE2EPublisher``, and reports the outcome. Prints the
-store-generated job ID to stdout for capture by the caller.
+Creates a job entry, publishes the stand-in documents via
+``MockDocumentsPublisher``, and reports the outcome. The exchange is taken
+from whatever ``--pipeline-spec`` points at, so this one publisher serves
+both the fanout and the topic example (the direct example has its own
+publisher — it needs a routing plan).
 
 Usage:
-    python -m examples.fake.publish_jobs \
-        --job-name e2e-test-001 \
-        --config-file examples/fake/config.yaml
+    # fanout (default)
+    python -m examples.exchanges.publish \
+        --job-name demo-001 \
+        --config-file examples/exchanges/fanout/config.yaml
+
+    # topic
+    python -m examples.exchanges.publish \
+        --job-name demo-001 \
+        --pipeline-spec ./examples/exchanges/topic \
+        --config-file examples/exchanges/topic/config.yaml
 """
 
 import argparse
@@ -20,17 +29,19 @@ from pathlib import Path
 from basics.logging import get_logger
 from pymongo import AsyncMongoClient
 
-from examples.fake.data import FAKE_DOCUMENTS
-from examples.fake.e2e_publisher import (
-    FakeE2EPublisher,
+from examples.exchanges.data import FAKE_DOCUMENTS
+from examples.exchanges.documents_publisher import (
+    MockDocumentsPublisher,
 )
-from examples.fake.pipeline_spec import PIPELINE
 from runtime_scripts.lib.logging_setup import (
     configure_logging,
     resolve_log_level,
 )
+from runtime_scripts.lib.pipeline import load_pipeline
+from warren.pubsub.routing import observer_route_func
 from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
+from warren.runtime.spec import PipelineSpec
 from warren.storage.jobs.mongodb import (
     MongoDBJobStore,
 )
@@ -41,7 +52,9 @@ from warren.storage.publishing_tracker.mongodb import (
 
 module_logger: logging.Logger = get_logger(__name__)
 
-DEFAULT_CONFIG_PATH: Path = Path(__file__).parent / "config.yaml"
+# Configs live per-exchange (each writes to its own database); the fanout
+# one is the default. Override with --config-file for the topic example.
+DEFAULT_CONFIG_PATH: Path = Path(__file__).parent / "fanout" / "config.yaml"
 
 
 async def _as_async_iterable(
@@ -52,7 +65,11 @@ async def _as_async_iterable(
         yield (doc_id, content)
 
 
-async def _publish(config: RuntimeConfig, job_name: str) -> str:
+async def _publish(
+    config: RuntimeConfig,
+    pipeline: PipelineSpec,
+    job_name: str,
+) -> str:
     """Create job, publish fake documents, report results.
 
     :return: The store-generated job ID.
@@ -76,29 +93,32 @@ async def _publish(config: RuntimeConfig, job_name: str) -> str:
     # without scraping the store-generated job_id from logs,
     # which is fragile.
     job_id = await job_store.create_job(
-        final_data_type=PIPELINE.final_data_type,
+        final_data_type=pipeline.final_data_type,
         metadata={"job_name": job_name},
     )
 
     connection_manager = backends.create_connection_manager(config)
+    exchange_config = pipeline.exchange
+
     publisher = backends.create_publisher(
         config,
         connection_manager,
-        name="fake-e2e-publisher",
+        exchange=exchange_config,
+        route_func=observer_route_func(exchange_config),
     )
 
     try:
         await connection_manager.setup()
         await publisher.setup()
 
-        e2e_publisher = FakeE2EPublisher(
+        documents_publisher = MockDocumentsPublisher(
             publisher=publisher,
             tracker=tracker,
             job_store=job_store,
-            name="fake-e2e-publisher",
+            name="mock-documents-publisher",
         )
 
-        result = await e2e_publisher.publish_job(
+        result = await documents_publisher.publish_job(
             job_id=job_id,
             sources=_as_async_iterable(FAKE_DOCUMENTS),
         )
@@ -118,15 +138,25 @@ async def _publish(config: RuntimeConfig, job_name: str) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Publish fake E2E test messages to the configured backend",
+        description="Publish synthetic documents to a fanout/topic exchange example",
     )
-    # job_name is stored in metadata so callers (check_completion)
+    # job_name is stored in metadata so other tools (e.g. inspect_job)
     # can look up the job without scraping the store-generated
     # job_id from logs.
     parser.add_argument(
         "--job-name",
         required=True,
         help="Human-readable job name (stored in metadata).",
+    )
+    parser.add_argument(
+        "--pipeline-spec",
+        type=str,
+        default="./examples/exchanges/fanout",
+        help=(
+            "Pipeline spec location (same format as start_worker). Determines "
+            "the exchange the documents are published to. "
+            "Default: ./examples/exchanges/fanout"
+        ),
     )
     parser.add_argument(
         "--config-file",
@@ -151,8 +181,9 @@ def main() -> None:
     module_logger = get_logger(__name__, log_level=log_level)
 
     config = RuntimeConfig.from_yaml(args.config_file)
+    pipeline, _ = load_pipeline(args.pipeline_spec, module_logger)
 
-    asyncio.run(_publish(config, args.job_name))
+    asyncio.run(_publish(config, pipeline, args.job_name))
 
 
 if __name__ == "__main__":

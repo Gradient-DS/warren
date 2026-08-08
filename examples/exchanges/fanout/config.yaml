@@ -1,13 +1,11 @@
 rabbitmq:
+  # Exchange definitions live in the pipeline spec (pipeline_spec.py),
+  # not here — config holds only per-environment infra settings.
   connection:
     host: localhost
     port: 5672
     login: guest
     password: guest
-  exchange:
-    name: jobs
-    type: fanout
-    durable: true
   consumer:
     prefetch_count: 1
     on_shutdown_timeout: 30.0
@@ -15,7 +13,7 @@ rabbitmq:
 mongodb:
   host: localhost
   port: 27017
-  database: e2e_test
+  database: warren_fanout
 
 redis:
   host: localhost

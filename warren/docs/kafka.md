@@ -1,10 +1,20 @@
 # Kafka: Topic, Consumer Groups & Workers
 
-Warren's Kafka backend is a drop-in alternative to RabbitMQ. Select it with
-`backend: kafka` in your `RuntimeConfig` YAML — nothing else in your pipeline
-spec, workers, or launcher scripts changes. The runtime builds the connection
-manager, publishers, and consumer managers through
-`warren.runtime.backends`, which switches on `config.backend`.
+Warren's Kafka backend is a drop-in alternative to RabbitMQ **for fanout
+pipelines**. Select it with `backend: kafka` in your `RuntimeConfig` YAML —
+nothing else in your pipeline spec, workers, or launcher scripts changes. The
+runtime builds the connection manager, publishers, and consumer managers
+through `warren.runtime.backends`, which switches on `config.backend`.
+
+> **Limitation: fanout only.** The flexible-routing model (`topic`/`direct`
+> exchanges, binding keys, route functions — see [`routing.md`](routing.md))
+> is RabbitMQ-only for now. A pipeline whose exchange is `topic` or `direct`
+> fails fast on `backend: kafka` with a clear error. Broker-side routing on
+> Kafka is deferred until there is a real use case.
+
+Kafka-wire-compatible brokers — Redpanda, Azure Event Hubs (Kafka endpoint) —
+work with the same `backend: kafka` configuration; Warren speaks the Kafka
+protocol via `aiokafka` and doesn't depend on broker internals.
 
 For the RabbitMQ topology this mirrors, see [`rabbitmq.md`](rabbitmq.md).
 

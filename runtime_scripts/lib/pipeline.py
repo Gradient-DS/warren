@@ -12,6 +12,8 @@ from pathlib import Path
 
 from basics.logging import get_logger
 
+from warren.pubsub.rabbitmq.config import RMQExchangeConfig
+from warren.pubsub.routing import observer_exchange
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.spec import PipelineSpec
 
@@ -165,6 +167,16 @@ def resolve_config_path(
         "from a Python module (no directory to infer config.yaml from)"
     )
     raise ValueError(msg)
+
+
+def resolve_observation_exchange(pipeline: PipelineSpec) -> RMQExchangeConfig:
+    """Return the exchange a support worker should observe.
+
+    For fanout/topic this is the pipeline exchange itself (observed in place);
+    for direct it's the framework-derived fanout observer exchange. See
+    ``observer_exchange`` and warren/docs/routing.md.
+    """
+    return observer_exchange(pipeline.exchange)
 
 
 def load_config(config_file: Path) -> RuntimeConfig:

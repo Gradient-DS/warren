@@ -29,6 +29,7 @@ from warren.pubsub.kafka.aiokafka.topology import (
 from warren.pubsub.kafka.config import (
     KafkaConsumerManagerConfig,
 )
+from warren.pubsub.routing import REPLAY_ROUTING_KEY_FIELD
 from warren.workers.messages import (
     ExtractMessageIdentityFunc,
     extract_message_identity,
@@ -73,15 +74,31 @@ class KafkaConsumerManager(ConsumerManagerBase):
         connection_manager: KafkaConnectionManager,
         consumer: MessageConsumerInterface,
         *,
-        publishers: list[PublisherInterface] | None = None,
+        data_publisher: PublisherInterface | None = None,
+        control_publisher: PublisherInterface | None = None,
+        observer_publisher: PublisherInterface | None = None,
         retry_config: RetryConfig | None = None,
         extract_identity_func: ExtractMessageIdentityFunc | None = None,
         publish_hard_failures: bool = True,
     ) -> None:
+        # Same three publishing paths as RMQConsumerManager (see
+        # warren/docs/routing.md): data (successful results downstream),
+        # control (soft/hard-failure envelopes), observer (result echo —
+        # never set on Kafka, which is fanout-only and observed in place).
+        # The base tracks all of them for setup/teardown.
+        all_publishers = [
+            p
+            for p in (data_publisher, control_publisher, observer_publisher)
+            if p is not None
+        ]
         super().__init__(
             consumer,
-            publishers=publishers,
+            publishers=all_publishers,
         )
+
+        self._data_publisher = data_publisher
+        self._control_publisher = control_publisher
+        self._observer_publisher = observer_publisher
 
         self._config = config
         self._connection_manager: KafkaConnectionManager = connection_manager
@@ -365,9 +382,15 @@ class KafkaConsumerManager(ConsumerManagerBase):
                     body,
                 )
 
-            # Publish downstream if publishers configured and result returned
-            if result is not None and self._publishers:
-                await self._handle_publish(result)
+            if result is not None:
+                # Route the result downstream (terminal workers have no
+                # data publisher).
+                if self._data_publisher is not None:
+                    await self._data_publisher(result)
+                # Echo to the observer exchange when set (never on Kafka
+                # itself — kept for constructor parity with RMQ).
+                if self._observer_publisher is not None:
+                    await self._observer_publisher(result)
 
             await self._commit(message)  # ≙ ack
 
@@ -383,11 +406,6 @@ class KafkaConsumerManager(ConsumerManagerBase):
         except Exception as e:
             await self._handle_hard_failure(message, body, e)
 
-    async def _handle_publish(self, result: dict) -> None:
-        """Publish a result to all configured publishers."""
-        for publisher in self._publishers:
-            await publisher(result)
-
     async def _handle_soft_failure(
         self,
         message: ConsumerRecord,
@@ -397,19 +415,22 @@ class KafkaConsumerManager(ConsumerManagerBase):
         """Handle a soft (retryable) failure.
 
         Wraps the failed message in a ``data_type: "soft-failure"``
-        envelope and publishes it through the regular downstream
-        publishers. A RetryWorker (or JobManagerWorker) on the same
-        topic picks it up.
+        envelope and publishes it — exactly once — through the control
+        publisher. A RetryWorker (or JobManagerWorker) on the same topic
+        picks it up. The replay routing key is stamped as ``""``: Kafka
+        messages carry no routing key, and Kafka pipelines are fanout-only
+        (fanout re-delivery ignores keys, and ``ReplayRouter`` replays
+        ``""``). Keeps the envelope shape identical to the RMQ consumer's.
 
-        If no publishers are configured, falls back to seek-back
+        If no control publisher is configured, falls back to seek-back
         (redelivery) with a delay.
         """
         identity = self._extract_identity(body)
 
-        if not self._publishers:
+        if self._control_publisher is None:
             delay = self._retry_config.fallback_requeue_delay
             self._log.warning(
-                f"[{identity}] No publishers for retry, "
+                f"[{identity}] No control publisher for retry, "
                 f"redelivered after {delay}s: "
                 f"{summarize_exception_chain(error)}"
             )
@@ -456,7 +477,9 @@ class KafkaConsumerManager(ConsumerManagerBase):
                 f"(no retry slot consumed): {error.reason}"
             )
 
-        # Embed retry metadata in the failed message
+        # Embed retry metadata in the failed message, and stamp an empty
+        # replay key (Kafka messages carry no routing key; fanout ignores
+        # it) so the envelope shape matches the RMQ consumer's.
         body["retry"] = {
             **existing_retry,
             "count": new_count,
@@ -464,6 +487,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
             "reason": error.reason,
             "max": retry_max,
         }
+        body[REPLAY_ROUTING_KEY_FIELD] = ""
 
         soft_failure_msg: dict = {
             "data_type": "soft-failure",
@@ -476,7 +500,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
         }
 
         try:
-            await self._handle_publish(soft_failure_msg)
+            await self._control_publisher(soft_failure_msg)
             await self._commit(message)  # ≙ ack
         except PublishFailureException as e:
             self._log.warning(
@@ -513,10 +537,11 @@ class KafkaConsumerManager(ConsumerManagerBase):
     ) -> None:
         """Handle a hard (permanent) failure.
 
-        Publishes a ``data_type: "hard-failure"`` envelope to make the
-        failure visible on the topic (for the JobStatusWorker), then
-        commits past the original message. The envelope is best-effort —
-        if publishing fails, the offset is still committed.
+        Publishes a ``data_type: "hard-failure"`` envelope — exactly once,
+        via the control publisher — to make the failure visible on the
+        topic (for the JobStatusWorker), then commits past the original
+        message. The envelope is best-effort — if publishing fails, the
+        offset is still committed.
         """
         identity = self._extract_identity(body)
         self._log.error(
@@ -524,7 +549,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
             f"{summarize_exception_chain(error)}"
         )
 
-        if self._publish_hard_failures and self._publishers:
+        if self._publish_hard_failures and self._control_publisher is not None:
             hard_failure_msg: dict = {
                 "data_type": "hard-failure",
                 "data": body,
@@ -536,7 +561,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
                 "error": summarize_exception_chain(error),
             }
             try:
-                await self._handle_publish(hard_failure_msg)
+                await self._control_publisher(hard_failure_msg)
             except Exception as pub_error:
                 self._log.warning(
                     f"[{identity}] Failed to publish hard-failure envelope: "

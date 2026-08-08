@@ -5,7 +5,7 @@ Receives pdf_document messages, looks up fake markdown content,
 stores the result, and publishes a markdown_document message.
 """
 
-from examples.fake.data import FAKE_DOCUMENTS
+from examples.exchanges.data import FAKE_DOCUMENTS
 from warren.storage.results.interface import (
     ResultsStoreInterface,
 )

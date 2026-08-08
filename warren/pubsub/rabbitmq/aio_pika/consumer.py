@@ -33,6 +33,7 @@ from warren.pubsub.rabbitmq.config import (
     RetryConfig,
     RMQConsumerManagerConfig,
 )
+from warren.pubsub.routing import REPLAY_ROUTING_KEY_FIELD
 from warren.workers.messages import (
     ExtractMessageIdentityFunc,
     extract_message_identity,
@@ -57,16 +58,36 @@ class RMQConsumerManager(ConsumerManagerBase):
         connection_manager: RMQConnectionManager,
         consumer: MessageConsumerInterface,
         *,
-        publishers: list[PublisherInterface] | None = None,
+        data_publisher: PublisherInterface | None = None,
+        control_publisher: PublisherInterface | None = None,
+        observer_publisher: PublisherInterface | None = None,
         retry_config: RetryConfig | None = None,
         extract_identity_func: ExtractMessageIdentityFunc | None = None,
         publish_hard_failures: bool = True,
     ) -> None:
+        # Three publishing paths (see warren/docs/routing.md):
+        # - data_publisher: the successful result routes downstream on the data
+        #   exchange (the worker's `publish` route). None if the worker is
+        #   terminal.
+        # - control_publisher: lifecycle envelopes (soft/hard-failure) go to the
+        #   observer exchange so the retry/status workers pick them up.
+        # - observer_publisher: echoes successful results to the observer
+        #   exchange — set only when the data exchange can't be observed in place
+        #   (direct). None for fanout/topic, so they don't double their traffic.
+        # The base tracks all of them for setup/teardown.
+        all_publishers = [
+            p
+            for p in (data_publisher, control_publisher, observer_publisher)
+            if p is not None
+        ]
         super().__init__(
             consumer,
-            publishers=publishers,
+            publishers=all_publishers,
         )
 
+        self._data_publisher = data_publisher
+        self._control_publisher = control_publisher
+        self._observer_publisher = observer_publisher
         self._config = config
         self._connection_manager: RMQConnectionManager = connection_manager
         self._retry_config = retry_config or RetryConfig()
@@ -243,9 +264,15 @@ class RMQConsumerManager(ConsumerManagerBase):
                     body,
                 )
 
-            # Publish downstream if publishers configured and result returned
-            if result is not None and self._publishers:
-                await self._handle_publish(result)
+            # Route the result downstream (terminal workers have no data
+            # publisher). Lifecycle envelopes go through the control publisher.
+            if result is not None:
+                if self._data_publisher is not None:
+                    await self._data_publisher(result)
+                # Echo to the observer exchange when it can't observe the data
+                # exchange in place (direct). None for fanout/topic.
+                if self._observer_publisher is not None:
+                    await self._observer_publisher(result)
 
             await message.ack()
 
@@ -260,11 +287,6 @@ class RMQConsumerManager(ConsumerManagerBase):
 
         except Exception as e:
             await self._handle_hard_failure(message, body, e)
-
-    async def _handle_publish(self, result: dict) -> None:
-        """Publish a result to all configured publishers."""
-        for publisher in self._publishers:
-            await publisher(result)
 
     async def _handle_soft_failure(
         self,
@@ -284,10 +306,10 @@ class RMQConsumerManager(ConsumerManagerBase):
         """
         identity = self._extract_identity(body)
 
-        if not self._publishers:
+        if self._control_publisher is None:
             delay = self._retry_config.fallback_requeue_delay
             self._log.warning(
-                f"[{identity}] No publishers for retry, "
+                f"[{identity}] No control publisher for retry, "
                 f"requeued after {delay}s: "
                 f"{summarize_exception_chain(error)}"
             )
@@ -334,7 +356,9 @@ class RMQConsumerManager(ConsumerManagerBase):
                 f"(no retry slot consumed): {error.reason}"
             )
 
-        # Embed retry metadata in the failed message
+        # Embed retry metadata in the failed message, and stamp the routing key
+        # it arrived with so the retry worker can replay it back to this queue
+        # regardless of routing scheme (D10).
         body["retry"] = {
             **existing_retry,
             "count": new_count,
@@ -342,6 +366,7 @@ class RMQConsumerManager(ConsumerManagerBase):
             "reason": error.reason,
             "max": retry_max,
         }
+        body[REPLAY_ROUTING_KEY_FIELD] = message.routing_key
 
         soft_failure_msg: dict = {
             "data_type": "soft-failure",
@@ -354,7 +379,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         }
 
         try:
-            await self._handle_publish(soft_failure_msg)
+            await self._control_publisher(soft_failure_msg)
             await message.ack()
         except PublishFailureException as e:
             self._log.warning(
@@ -402,7 +427,7 @@ class RMQConsumerManager(ConsumerManagerBase):
             f"{summarize_exception_chain(error)}"
         )
 
-        if self._publish_hard_failures and self._publishers:
+        if self._publish_hard_failures and self._control_publisher is not None:
             hard_failure_msg: dict = {
                 "data_type": "hard-failure",
                 "data": body,
@@ -414,7 +439,7 @@ class RMQConsumerManager(ConsumerManagerBase):
                 "error": summarize_exception_chain(error),
             }
             try:
-                await self._handle_publish(hard_failure_msg)
+                await self._control_publisher(hard_failure_msg)
             except Exception as pub_error:
                 self._log.warning(
                     f"[{identity}] Failed to publish hard-failure envelope: "

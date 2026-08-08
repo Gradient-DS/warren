@@ -18,6 +18,13 @@ from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
+from warren.pubsub.rabbitmq.config import (
+    RMQExchangeConfig,
+)
+from warren.pubsub.routing import (
+    ReplayRouter,
+    observer_binding_key,
+)
 from warren.retry_management.retry_worker import (
     RetryWorker,
 )
@@ -58,12 +65,12 @@ class RetryWorkerRunner(WorkerRunnerBase):
     :param worker_name: unique identifier for this retry worker.
     :param retry_store: optional override for the retry envelope store.
         Default: ``CachedDocumentStore`` wrapping MongoDB + Redis.
-    :param republish_publisher: optional override for the republish
-        publisher. Default: the configured backend's publisher targeting
-        the processing exchange/topic.
+    :param republish_publisher: optional override for the exchange
+        publisher. Default: ``RMQPublisher`` targeting the processing
+        exchange.
     :param consumer_manager_factory: optional override for the consumer
-        manager factory. Default: factory creating the configured
-        backend's consumer manager on the retry queue/group.
+        manager factory. Default: factory creating ``RMQConsumerManager``
+        on the retry queue.
     :param message_key_func: optional function to extract a composite
         key from a message dict. Passed to ``RetryWorker``.
     """
@@ -73,6 +80,8 @@ class RetryWorkerRunner(WorkerRunnerBase):
         config: RuntimeConfig,
         worker_name: str,
         *,
+        exchange: RMQExchangeConfig,
+        republish_exchange: RMQExchangeConfig | None = None,
         retry_store: DocumentStoreInterface | None = None,
         republish_publisher: PublisherInterface | None = None,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
@@ -81,6 +90,12 @@ class RetryWorkerRunner(WorkerRunnerBase):
         super().__init__(name=worker_name)
         self._worker_name = worker_name
         self._config = config
+        # Observe soft-failures on ``exchange`` (the observer exchange);
+        # republish retried messages to ``republish_exchange`` (the data
+        # exchange). They coincide for fanout/topic; for direct the observer is
+        # a separate fanout exchange while republish targets the direct exchange.
+        self._exchange = exchange
+        self._republish_exchange = republish_exchange or exchange
         self._retry_store = retry_store
         self._republish_publisher = republish_publisher
         self._consumer_manager_factory = consumer_manager_factory
@@ -91,7 +106,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
     async def setup(self) -> None:
         """Create infrastructure, build defaults, wire the worker.
 
-        1. Create infrastructure (MongoDB, Redis, pubsub backend)
+        1. Create infrastructure (MongoDB, Redis, RabbitMQ)
         2. Build default retry store, publisher, consumer factory
            for any components not injected
         3. Set up the republish publisher
@@ -99,7 +114,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
         5. Create and set up the consumer manager
         6. Schedule pending retries from the store
         """
-        with self._exception_wrapping("Infrastructure setup (pubsub/MongoDB/Redis)"):
+        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
             self._infra = await create_runtime_infrastructure(self._config)
 
         if self._retry_store is None:
@@ -174,9 +189,15 @@ class RetryWorkerRunner(WorkerRunnerBase):
         return CachedDocumentStore(mongo_store, cache)
 
     def _create_default_publisher(self) -> PublisherInterface:
+        # Republish to the DATA exchange, replaying the original routing key
+        # (stamped on the failed message) so a retried message lands back in the
+        # worker that failed, for any routing scheme. See D10. (On Kafka —
+        # fanout-only — the replay key is dropped; fanout ignores keys.)
         return backends.create_publisher(
             self._config,
             self._infra.pubsub_connection_manager,
+            exchange=self._republish_exchange,
+            route_func=ReplayRouter(),
         )
 
     def _create_default_consumer_factory(self) -> ConsumerManagerFactory:
@@ -186,7 +207,9 @@ class RetryWorkerRunner(WorkerRunnerBase):
             return backends.create_consumer_manager(
                 self._config,
                 self._infra.pubsub_connection_manager,
+                exchange=self._exchange,
                 worker_type=RETRY_WORKER_TYPE,
+                binding_key=observer_binding_key(self._exchange),
                 consumer=consumer,
             )
 

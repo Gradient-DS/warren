@@ -1,9 +1,10 @@
 """
 Protocols, type aliases, and exceptions for document fetching.
 
-Defines the contract between workers and the document fetching layer.
-Workers depend on ``GetDocumentFunc`` — they don't know about caching,
-resolvers, or storage backends.
+Defines the contract between workers and the payload-fetching layer (the
+claim-check pattern: messages carry a location, not bytes). Workers depend
+on ``GetDocumentFunc`` — they don't know about caching, resolvers, or
+storage backends.
 
 Exception hierarchy for error handling in workers::
 

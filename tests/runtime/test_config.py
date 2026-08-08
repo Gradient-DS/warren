@@ -33,9 +33,6 @@ rabbitmq:
   connection:
     host: rabbit.example
     port: 5672
-  exchange:
-    name: jobs
-    type: fanout
 mongodb:
   database: e2e_test
 """,
@@ -45,7 +42,6 @@ mongodb:
 
     assert config.backend == "rabbitmq"
     assert config.rabbitmq.connection.host == "rabbit.example"
-    assert config.rabbitmq.exchange.name == "jobs"
     # Kafka section still gets its defaults even when unused.
     assert config.kafka.topic.name == "jobs"
 
@@ -103,5 +99,7 @@ def test_empty_config_defaults_to_rabbitmq() -> None:
     config = RuntimeConfig()
 
     assert config.backend == "rabbitmq"
-    assert config.rabbitmq.exchange.name == "jobs"
+    # The exchange is pipeline topology and lives in the PipelineSpec,
+    # not here — config carries only per-environment infrastructure.
+    assert config.rabbitmq.connection.host == "localhost"
     assert config.kafka.topic.name == "jobs"

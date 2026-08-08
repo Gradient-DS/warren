@@ -1,8 +1,10 @@
 """
-Concrete publisher for the fake E2E scenario.
+Concrete publisher for the synthetic exchange examples.
 
-Publishes synthetic documents from ``FAKE_DOCUMENTS`` — no actual file
-loading or document store registration. Each doc_id is pre-assigned.
+Publishes the stand-in documents from ``FAKE_DOCUMENTS`` — no actual file
+loading or document store registration. Each doc_id is pre-assigned. (The
+``examples/rag`` pipeline shows the real path: registering documents by
+location and fetching their bytes.)
 """
 
 from typing import Any
@@ -20,8 +22,8 @@ from warren.storage.publishing_tracker.interface import (
 )
 
 
-class FakeE2EPublisher(JobDocumentsPublisher):
-    """Publishes fake documents for E2E testing.
+class MockDocumentsPublisher(JobDocumentsPublisher):
+    """Publishes synthetic documents for the exchange examples.
 
     Sources are ``(doc_id, content)`` tuples from ``FAKE_DOCUMENTS``.
     No actual file loading or document store registration — the
@@ -71,19 +73,19 @@ class FakeE2EPublisher(JobDocumentsPublisher):
         """Create a pdf_document message for the exchange.
 
         ``job_parameters`` is accepted for base-class conformance but
-        ignored — the fake scenario exercises only the in-memory happy
+        ignored — the synthetic scenario exercises only the in-memory happy
         path and has no settings that parametrise message construction.
         """
         return {
             "data_type": "pdf_document",
             "data": {
                 "doc_id": doc_id,
-                "path": f"/fake/path/{doc_id}.pdf",
+                "path": f"/synthetic/path/{doc_id}.pdf",
             },
             "job_id": job_id,
             "origin": {
                 "type": PUBLISHER_ORIGIN_TYPE,
-                "name": "e2e-fake-publisher",
+                "name": "mock-documents-publisher",
             },
         }
 

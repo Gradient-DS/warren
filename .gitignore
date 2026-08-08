@@ -23,3 +23,6 @@ venv/
 
 # Thoughts files
 thoughts/
+
+# Local working notes (planning, design scratchpads)
+tasks/

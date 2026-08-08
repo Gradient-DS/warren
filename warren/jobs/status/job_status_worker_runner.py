@@ -2,8 +2,8 @@
 Runner for the job status worker.
 
 Manages the JobStatusWorker lifecycle: creates infrastructure, builds
-stores and consumer, observes all messages on the fanout exchange / topic
-and records per-document processing results.
+stores and consumer, observes all messages on the fanout exchange and
+records per-document processing results.
 
 Accepts ``RuntimeConfig`` and manages its own infrastructure. Custom
 components can be injected to override the defaults (e.g. for testing).
@@ -18,6 +18,13 @@ from warren.jobs.status.job_status_worker import (
 from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
+)
+from warren.pubsub.rabbitmq.config import (
+    RMQExchangeConfig,
+)
+from warren.pubsub.routing import (
+    observer_binding_key,
+    observer_route_func,
 )
 from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
@@ -61,9 +68,9 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
     :param job_results_store: optional override for the per-document
         results store. Default: ``MongoDBJobResultsStore``.
     :param consumer_manager_factory: optional override for the consumer
-        manager factory. Default: factory creating the configured
-        backend's consumer manager on the job status queue/group with a
-        publisher for the ``job-completed`` signal.
+        manager factory. Default: factory creating ``RMQConsumerManager``
+        on the job status queue with a publisher for the
+        ``job-completed`` signal.
     """
 
     def __init__(
@@ -71,6 +78,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         config: RuntimeConfig,
         worker_name: str,
         *,
+        exchange: RMQExchangeConfig,
         job_store: JobStoreInterface | None = None,
         job_results_store: JobResultsStoreInterface | None = None,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
@@ -78,6 +86,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         super().__init__(name=worker_name)
         self._worker_name = worker_name
         self._config = config
+        self._exchange = exchange
         self._job_store = job_store
         self._job_results_store = job_results_store
         self._consumer_manager_factory = consumer_manager_factory
@@ -87,12 +96,12 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
     async def setup(self) -> None:
         """Create infrastructure, build defaults, wire the worker.
 
-        1. Create infrastructure (MongoDB, Redis, pubsub backend)
+        1. Create infrastructure (MongoDB, Redis, RabbitMQ)
         2. Build default stores and consumer factory for any not injected
         3. Create the JobStatusWorker
         4. Create and set up the consumer manager
         """
-        with self._exception_wrapping("Infrastructure setup (pubsub/MongoDB/Redis)"):
+        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
             self._infra = await create_runtime_infrastructure(self._config)
 
         if self._job_store is None:
@@ -157,20 +166,22 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         return backends.create_publisher(
             self._config,
             self._infra.pubsub_connection_manager,
+            exchange=self._exchange,
+            route_func=observer_route_func(self._exchange),
         )
 
     def _create_default_consumer_factory(self) -> ConsumerManagerFactory:
-        publishers = [self._publisher] if self._publisher is not None else []
-
         def factory(
             consumer: MessageConsumerInterface,
         ) -> ConsumerManagerInterface:
             return backends.create_consumer_manager(
                 self._config,
                 self._infra.pubsub_connection_manager,
+                exchange=self._exchange,
                 worker_type=JOB_STATUS_WORKER_TYPE,
+                binding_key=observer_binding_key(self._exchange),
                 consumer=consumer,
-                publishers=publishers,
+                data_publisher=self._publisher,
                 publish_hard_failures=False,
             )
 

@@ -7,9 +7,9 @@ application-specific ``JobDocumentsPublisher``.
 
 Accepts ``RuntimeConfig`` and manages its own infrastructure. The
 documents publisher is created via an injected factory that receives
-the runner's shared pubsub publisher and infrastructure connections,
+the runner's shared RMQ publisher and infrastructure connections,
 so the application can build its stores from the same MongoDB client
-and publish through the same backend connection.
+and publish through the same RMQ channel.
 """
 
 from abc import abstractmethod
@@ -27,6 +27,13 @@ from warren.jobs.publishing.job_publication_worker import (
 from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
+)
+from warren.pubsub.rabbitmq.config import (
+    RMQExchangeConfig,
+)
+from warren.pubsub.routing import (
+    observer_binding_key,
+    observer_route_func,
 )
 from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
@@ -52,10 +59,10 @@ class DocumentsPublisherFactoryFunc:
     is responsible for creating all components the publisher needs
     (stores, adapters, etc.).
 
-    :param publisher: pubsub publisher for downstream messages, shared
+    :param publisher: RMQ publisher for downstream messages, shared
         with the consumer manager. Already created but not yet set up
         — setup happens when the consumer manager starts.
-    :param infra: runtime connections (MongoDB, Redis, pubsub backend).
+    :param infra: runtime connections (MongoDB, Redis, RabbitMQ).
         Use ``infra.mongo_client`` to create stores that share the
         runner's connection rather than opening a second one.
     :param config: runtime configuration. Use
@@ -81,7 +88,7 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
     Creates infrastructure from ``RuntimeConfig``, then calls the
     injected ``documents_publisher_factory`` to build the
     application-specific publisher. The factory receives the runner's
-    shared pubsub publisher and infrastructure so it can create stores
+    shared RMQ publisher and infrastructure so it can create stores
     from the same connections.
 
     :param config: runtime infrastructure configuration.
@@ -90,8 +97,8 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         ``DocumentsPublisherFactoryFunc``. Called in ``setup()``
         after infrastructure is created.
     :param consumer_manager_factory: optional override for the consumer
-        manager factory. Default: factory creating the configured
-        backend's consumer manager on the publication queue/group.
+        manager factory. Default: factory creating ``RMQConsumerManager``
+        on the publication queue.
     :param create_source_generator: optional callable that receives
         the message ``data`` dict and returns an ``AsyncIterable``
         of document sources. When ``None``, defaults to iterating
@@ -103,6 +110,8 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         config: RuntimeConfig,
         worker_name: str,
         *,
+        exchange: RMQExchangeConfig,
+        publish_exchange: RMQExchangeConfig | None = None,
         documents_publisher_factory: DocumentsPublisherFactoryFunc,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
         create_source_generator: Callable[[dict], AsyncIterable] | None = None,
@@ -110,6 +119,11 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         super().__init__(name=worker_name)
         self._worker_name = worker_name
         self._config = config
+        # Consume job submissions on ``exchange`` (the observer exchange);
+        # publish per-document messages to ``publish_exchange`` (the data
+        # exchange). They coincide for fanout/topic.
+        self._exchange = exchange
+        self._publish_exchange = publish_exchange or exchange
         self._documents_publisher_factory = documents_publisher_factory
         self._consumer_manager_factory = consumer_manager_factory
         self._create_source_generator = create_source_generator
@@ -120,13 +134,13 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
     async def setup(self) -> None:
         """Create infrastructure, build publisher, wire the worker.
 
-        1. Create infrastructure (MongoDB, Redis, pubsub backend)
-        2. Create pubsub publisher for downstream messages
+        1. Create infrastructure (MongoDB, Redis, RabbitMQ)
+        2. Create RMQ publisher for downstream messages
         3. Call documents publisher factory with shared infrastructure
         4. Build default consumer factory if not injected
         5. Create the JobPublicationWorker and consumer manager
         """
-        with self._exception_wrapping("Infrastructure setup (pubsub/MongoDB/Redis)"):
+        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
             self._infra = await create_runtime_infrastructure(self._config)
 
         self._publisher = self._create_default_publisher()
@@ -171,9 +185,12 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
                 )
 
     def _create_default_publisher(self) -> PublisherInterface:
+        # Documents enter the pipeline on the data exchange.
         return backends.create_publisher(
             self._config,
             self._infra.pubsub_connection_manager,
+            exchange=self._publish_exchange,
+            route_func=observer_route_func(self._publish_exchange),
         )
 
     def _create_default_consumer_factory(self) -> ConsumerManagerFactory:
@@ -183,9 +200,11 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
             return backends.create_consumer_manager(
                 self._config,
                 self._infra.pubsub_connection_manager,
+                exchange=self._exchange,
                 worker_type=PUBLICATION_WORKER_TYPE,
+                binding_key=observer_binding_key(self._exchange),
                 consumer=consumer,
-                publishers=[self._publisher] if self._publisher else [],
+                data_publisher=self._publisher,
                 publish_hard_failures=False,
             )
 

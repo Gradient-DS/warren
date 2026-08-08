@@ -6,18 +6,20 @@ external dependencies. 4 fake documents produce 18 chunks and
 18 embeddings.
 """
 
-from examples.fake.workers.document_parser import (
+from examples.exchanges.workers.document_parser import (
     DocumentParserWorker,
 )
-from examples.fake.workers.embedding_generator import (
+from examples.exchanges.workers.embedding_generator import (
     EmbeddingGeneratorWorker,
 )
-from examples.fake.workers.text_chunker import (
+from examples.exchanges.workers.text_chunker import (
     TextChunkerWorker,
 )
 from warren.common import MessageConsumerInterface
+from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 from warren.runtime.spec import (
     PipelineSpec,
+    PublishSpec,
     WorkerFactoryContext,
     WorkerSpec,
 )
@@ -50,19 +52,28 @@ async def _create_embedding_generator(
     )
 
 
+# A single fanout exchange: every worker receives every message and
+# self-selects via should_process(). No routing keys (binding_key=None,
+# publish carries no route).
 PIPELINE: PipelineSpec = PipelineSpec(
+    exchange=RMQExchangeConfig(name="jobs", type="fanout"),
     workers={
         "document_parser": WorkerSpec(
             collections={"write": "parsed_documents"},
             factory=_create_document_parser,
+            publish=PublishSpec(),
         ),
         "text_chunker": WorkerSpec(
             collections={"read": "parsed_documents", "write": "chunks"},
             factory=_create_text_chunker,
+            publish=PublishSpec(),
         ),
         "embedding_generator": WorkerSpec(
             collections={"read": "chunks", "write": "embeddings"},
             factory=_create_embedding_generator,
+            # Not terminal: still publishes "embedded_document" so the
+            # job-status worker can observe completion.
+            publish=PublishSpec(),
         ),
     },
     result_collections=["parsed_documents", "chunks", "embeddings"],

@@ -21,7 +21,10 @@ The interface uses a generic type parameter `T` to support different value types
 ```python
 class CacheInterface(Protocol[T]):
     async def get(self, key: str) -> Optional[T]: ...
-    async def set(self, key: str, value: T, ttl_seconds: Optional[int] = None) -> None: ...
+    async def set(
+        self, key: str, value: T, ttl_seconds: Optional[int] = None
+    ) -> None: ...
+
     # ... etc
 ```
 
@@ -144,8 +147,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
         default_ttl_seconds: Optional[int] = None,
         key_separator: str = ":",
         name: Optional[str] = None,
-    ) -> None:
-        ...
+    ) -> None: ...
 ```
 
 ### Specializations
@@ -154,10 +156,10 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
 ```python
 class RedisDictCache(RedisCacheBase[Dict]):
     def _serialize(self, value: Dict) -> bytes:
-        return json.dumps(value).encode('utf-8')
+        return json.dumps(value).encode("utf-8")
 
     def _deserialize(self, data: bytes) -> Dict:
-        return json.loads(data.decode('utf-8'))
+        return json.loads(data.decode("utf-8"))
 ```
 
 **BinaryCache** (for raw bytes like PDFs):
@@ -201,6 +203,7 @@ Wrap Redis exceptions in `CacheOperationError`. The original exception is preser
 in the chain via `from e`, so no need to duplicate the message:
 ```python
 from redis.exceptions import RedisError
+
 
 async def get(self, key: str) -> Optional[T]:
     try:

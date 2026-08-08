@@ -1,13 +1,11 @@
 """
 Default worker runner for the distributed processing framework.
 
-``DefaultWorkerRunner`` wires the configured pubsub backend (RabbitMQ or
-Kafka), MongoDB, and Redis for any worker type defined in a
-``PipelineSpec``. The backend is selected by ``config.backend`` and the
-publisher / consumer manager are built through
-:mod:`warren.runtime.backends`, so the runner never branches on backend.
+``DefaultWorkerRunner`` wires the pubsub backend (RabbitMQ or Kafka,
+selected by ``config.backend`` via :mod:`warren.runtime.backends`),
+MongoDB, and Redis for any worker type defined in a ``PipelineSpec``.
 All worker-specific decisions are driven by the ``WorkerSpec`` — no
-branching on worker type name.
+branching on worker type or backend name.
 
 Subclasses can override ``_wrap_worker()`` to intercept the worker
 after factory creation (e.g. for failure injection in tests), or
@@ -28,6 +26,8 @@ from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
 )
+from warren.pubsub.rabbitmq.config import RMQExchangeConfig
+from warren.pubsub.routing import observer_exchange, observer_route_func
 from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import (
@@ -96,12 +96,10 @@ async def _resolve_cloud(
 
 
 class DefaultWorkerRunner(WorkerRunnerBase):
-    """Concrete runner that wires pubsub + MongoDB + Redis for a worker.
+    """Concrete runner that wires RMQ + MongoDB + Redis for a worker.
 
-    The pubsub backend (RabbitMQ or Kafka) is selected by
-    ``config.backend`` via :mod:`warren.runtime.backends`. All
-    worker-specific decisions are driven by the ``WorkerSpec`` — no
-    branching on worker type or backend name.
+    All worker-specific decisions are driven by the ``WorkerSpec`` —
+    no branching on worker type name.
 
     Creates infrastructure from ``RuntimeConfig`` and builds default
     components in ``setup()``. Inject custom components to override
@@ -109,9 +107,11 @@ class DefaultWorkerRunner(WorkerRunnerBase):
 
     :param config: runtime infrastructure configuration.
     :param worker_name: unique worker instance identifier.
-    :param worker_type: name of the worker type (used for queue/group
-        naming).
-    :param worker_spec: spec defining collections, factory, and flags.
+    :param worker_type: name of the worker type (used for queue naming).
+    :param worker_spec: spec defining collections, factory, exchange
+        wiring (binding_key, publish), and flags.
+    :param exchange: the pipeline's exchange (from ``PipelineSpec.exchange``)
+        this worker consumes from and publishes to.
     :param document_fetcher: optional override for the document fetcher.
         Default: ``CachedDocumentFetcher`` with path + GCS resolvers
         (created when ``worker_spec.needs_document_fetcher`` is True).
@@ -131,6 +131,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         *,
         worker_type: str,
         worker_spec: WorkerSpec,
+        exchange: RMQExchangeConfig,
         document_fetcher: GetDocumentFunc | None = None,
         document_store: DocumentStoreInterface | None = None,
         results_stores: dict[str, ResultsStoreInterface] | None = None,
@@ -140,6 +141,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         self._worker_name = worker_name
         self._config = config
         self._worker_spec: WorkerSpec = worker_spec
+        self._exchange = exchange
         self._document_fetcher = document_fetcher
         self._document_store = document_store
         self._results_stores = results_stores
@@ -149,7 +151,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
     async def setup(self) -> None:
         """Wire connections, stores, worker, publishers, and consumer.
 
-        1. Set up infrastructure (MongoDB, Redis, pubsub backend)
+        1. Set up infrastructure (MongoDB, Redis, RabbitMQ)
         2. Build default stores/fetcher for any not injected
         3. Create worker via spec's factory (async)
         4. Wrap worker (subclass hook, e.g. for failure injection)
@@ -157,7 +159,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         6. Create publishers for downstream routing
         7. Create and set up the consumer manager
         """
-        with self._exception_wrapping("Infrastructure setup (pubsub/MongoDB/Redis)"):
+        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
             self._infra = await create_runtime_infrastructure(self._config)
 
         if self._results_stores is None:
@@ -184,10 +186,11 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             await self._worker.setup()
 
         with self._exception_wrapping("Consumer manager creation"):
-            publishers = self._create_publishers()
             self._consumer_manager = self._create_consumer_manager(
                 self._worker,
-                publishers,
+                self._create_data_publisher(),
+                self._create_control_publisher(),
+                self._create_observer_publisher(),
             )
         with self._exception_wrapping("Consumer manager setup"):
             await self._consumer_manager.setup()
@@ -362,35 +365,80 @@ class DefaultWorkerRunner(WorkerRunnerBase):
     ) -> MessageConsumerInterface:
         context = WorkerFactoryContext(
             worker_name=self._worker_name,
+            worker_type=self._worker_type,
             stores=stores,
             mongo_client=self._infra.mongo_client,
             redis_client=self._infra.redis_client,
             database_name=self._config.mongodb.database,
+            accepts=self._worker_spec.accepts,
+            produces=self._worker_spec.produces,
             get_document_func=get_document_func,
             document_store=document_store,
         )
         return await self._worker_spec.factory(context)
 
-    def _create_publishers(self) -> list[PublisherInterface]:
-        if self._worker_spec.terminal:
-            return []
+    def _create_data_publisher(self) -> PublisherInterface | None:
+        """The worker's downstream publisher, or ``None`` if it's terminal."""
+        publish = self._worker_spec.publish
+        if publish is None:
+            return None
+        return backends.create_publisher(
+            self._config,
+            self._infra.pubsub_connection_manager,
+            exchange=self._exchange,
+            route=publish.route,
+            route_func=publish.route_func,
+        )
 
-        return [
-            backends.create_publisher(
-                self._config,
-                self._infra.pubsub_connection_manager,
-            )
-        ]
+    def _create_control_publisher(self) -> PublisherInterface:
+        """Single publisher for lifecycle envelopes (soft/hard-failure).
+
+        Publishes to the **observer** exchange so the retry/status workers pick
+        them up. For a fanout/topic pipeline the observer exchange is the data
+        exchange itself; for a direct pipeline it's the derived fanout observer
+        exchange.
+        """
+        observer = observer_exchange(self._exchange)
+        return backends.create_publisher(
+            self._config,
+            self._infra.pubsub_connection_manager,
+            exchange=observer,
+            route_func=observer_route_func(observer),
+        )
+
+    def _create_observer_publisher(self) -> PublisherInterface | None:
+        """Echoes successful results to the observer exchange — direct only.
+
+        When the data exchange can't be observed in place (direct), workers also
+        publish their result to the derived fanout observer exchange so the
+        status worker sees every stage. For fanout/topic the data publish is
+        already observable, so this returns ``None`` (no echo, no doubling).
+        """
+        observer = observer_exchange(self._exchange)
+        if observer.name == self._exchange.name:
+            return None
+        return backends.create_publisher(
+            self._config,
+            self._infra.pubsub_connection_manager,
+            exchange=observer,
+            route_func=observer_route_func(observer),
+        )
 
     def _create_consumer_manager(
         self,
         consumer: MessageConsumerInterface,
-        publishers: list[PublisherInterface],
+        data_publisher: PublisherInterface | None,
+        control_publisher: PublisherInterface,
+        observer_publisher: PublisherInterface | None,
     ) -> ConsumerManagerInterface:
         return backends.create_consumer_manager(
             self._config,
             self._infra.pubsub_connection_manager,
+            exchange=self._exchange,
             worker_type=self._worker_type,
+            binding_key=self._worker_spec.binding_key,
             consumer=consumer,
-            publishers=publishers,
+            data_publisher=data_publisher,
+            control_publisher=control_publisher,
+            observer_publisher=observer_publisher,
         )

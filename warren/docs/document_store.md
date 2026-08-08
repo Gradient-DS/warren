@@ -44,7 +44,7 @@ A document registry provides the foundation for tracking document lifecycle: reg
 
 3. **Resolver dispatch is injectable.** The fetcher receives a mapping of `location_type -> resolver function`. New location types are added by registering a resolver — no existing code changes.
 
-4. **Cache key is `doc:<doc_id>`.** Since document registration is job-agnostic, caching is keyed only on `doc_id`. The same cached bytes serve all jobs processing that document.
+4. **Cache key is `doc:<doc_id>:<job_id>`.** Document registration is job-agnostic, but the byte cache is job-scoped: re-submitting the same `doc_id` with updated content (a new job) must never serve bytes cached by a previous job, while retries within a job still hit the cache. Callers that pass no `job_id` fall back to the legacy shared `doc:<doc_id>` key (and accept its cross-job staleness).
 
 5. **Default cache TTL is 24 hours.** Indefinite caching is not feasible for production workloads. A 24h default balances reprocessing speed with memory pressure. TTL is configurable via the factory function.
 
@@ -196,16 +196,20 @@ class CachedDocumentFetcher(Base):
         self,
         doc_id: str,
         document_location: DocumentLocation,
+        *,
+        job_id: str | None = None,
     ) -> bytes:
-        cache_key = self._build_cache_key(doc_id)
+        cache_key = self._build_cache_key(doc_id, job_id)
         return await get_or_set(
             self._cache,
             cache_key,
             factory=lambda: self._resolve(document_location),
         )
 
-    def _build_cache_key(self, doc_id: str) -> str:
-        return f"doc:{doc_id}"
+    def _build_cache_key(self, doc_id: str, job_id: str | None) -> str:
+        if job_id is None:
+            return f"doc:{doc_id}"
+        return f"doc:{doc_id}:{job_id}"
 
     async def _resolve(self, document_location: DocumentLocation) -> bytes:
         resolver = self._resolvers.get(document_location.location_type)
@@ -216,7 +220,7 @@ class CachedDocumentFetcher(Base):
         return await resolver(document_location)
 ```
 
-**Cache key format**: `doc:<doc_id>` — simple, job-agnostic. The `RedisBinaryCache` base_key (e.g., `"documents"`) provides namespace isolation.
+**Cache key format**: `doc:<doc_id>:<job_id>` (job-scoped; `doc:<doc_id>` when no `job_id` is passed). The `RedisBinaryCache` base_key (e.g., `"documents"`) provides namespace isolation.
 
 **File**: `storage/documents/fetcher.py`
 
@@ -467,8 +471,8 @@ document is, not what it contains.
 2. should_process(): Check data_type, format support, OCR flag
 3. process():
    a. Deserialize location dict -> DocumentPathLocation (via AnyDocumentLocation)
-   b. Call get_document_func(doc_id, location)
-      - CachedDocumentFetcher checks Redis binary cache for key "doc:<doc_id>"
+   b. Call get_document_func(doc_id, location, job_id=job_id)
+      - CachedDocumentFetcher checks Redis binary cache for key "doc:<doc_id>:<job_id>"
       - On miss: dispatch to resolve_path -> read file -> cache in Redis -> return bytes
       - On hit: return cached bytes directly
    c. Dispatch to format processor (PdfProcessor)
@@ -476,10 +480,18 @@ document is, not what it contains.
    e. Publish downstream message (unchanged)
 ```
 
-### Second invocation of same document (e.g., retry, different job)
+### Retry within the same job
 
 ```
-1. ParserWorker calls get_document_func(doc_id, location)
-2. CachedDocumentFetcher finds bytes in Redis for "doc:<doc_id>" -> returns immediately
+1. ParserWorker calls get_document_func(doc_id, location, job_id=job_id)
+2. CachedDocumentFetcher finds bytes in Redis for "doc:<doc_id>:<job_id>" -> returns immediately
 3. No filesystem/network read needed
+```
+
+### Re-submission of the same doc_id (new job, possibly updated content)
+
+```
+1. ParserWorker calls get_document_func(doc_id, location, job_id=<new job_id>)
+2. Key "doc:<doc_id>:<new job_id>" is a miss -> resolver fetches fresh bytes
+3. Stale bytes cached by the previous job are never served
 ```

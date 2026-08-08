@@ -18,18 +18,18 @@ Persistence: MongoDB document store keyed on ``(doc_id, job_id,
 part_idx)``. BSON handles ``bytes`` natively as BSON Binary.
 
 Cache: ``RedisBinaryCache`` under the ``"documents"`` base key, using
-the doc-id-scoped key ``doc:<doc_id>`` — identical to what
-``CachedDocumentFetcher`` reads from. This lets ``ParserWorker`` (which
-reads via ``GetDocumentFunc``) transparently hit the cache populated
-by an upstream byte-producing stage. No fetcher signature change
-required.
+the job-scoped key ``doc:<doc_id>:<job_id>`` — identical to what
+``CachedDocumentFetcher`` reads from when callers pass ``job_id``.
+This lets ``ParserWorker`` (which reads via ``GetDocumentFunc``)
+transparently hit the cache populated by an upstream byte-producing
+stage within the same job.
 
-**Trade-off (by design, for v1):** cache is doc-id-scoped, persistence
-is (doc_id, job_id, part_idx)-scoped. For a single-job run this is
-fine. If multiple concurrent jobs process the same ``doc_id``, cache
-reads aren't job-isolated (they'll see whichever job wrote last).
-Widening ``GetDocumentFunc`` to include ``job_id`` would close this;
-deferred until operational pressure appears.
+Job scoping closed the v1 trade-off (doc-id-scoped cache vs
+(doc_id, job_id, part_idx)-scoped persistence): re-submitting the same
+``doc_id`` with updated content (a new job) no longer serves the
+previous job's cached bytes, and concurrent jobs on the same ``doc_id``
+are cache-isolated. When ``job_id`` is ``None`` the legacy shared
+``doc:<doc_id>`` key is used.
 """
 
 from typing import Any
@@ -115,10 +115,10 @@ class BinaryResultsStore(Base):
     ) -> str:
         """Persist ``payload`` and populate the cache.
 
-        The cache write uses the *shared* document cache key
-        (``doc:<doc_id>``) so downstream consumers using
-        ``GetDocumentFunc`` hit it transparently. See module docstring
-        for the trade-off this implies.
+        The cache write uses the job-scoped document cache key
+        (``doc:<doc_id>:<job_id>``) so downstream consumers using
+        ``GetDocumentFunc`` with the same ``job_id`` hit it
+        transparently. See module docstring for the key semantics.
 
         :return: Result ID from the document store.
         """
@@ -133,7 +133,7 @@ class BinaryResultsStore(Base):
         result_id = await self._document_store.insert(doc, overwrite_existing)
 
         if do_cache:
-            await self._safe_cache_set(doc_id, payload)
+            await self._safe_cache_set(doc_id, payload, job_id=job_id)
 
         return result_id
 
@@ -148,7 +148,7 @@ class BinaryResultsStore(Base):
 
         :raises ResultNotFound: If no record exists for the given keys.
         """
-        cached = await self._safe_cache_get(doc_id)
+        cached = await self._safe_cache_get(doc_id, job_id=job_id)
         if cached is not None:
             return cached
 
@@ -163,7 +163,7 @@ class BinaryResultsStore(Base):
                 )
                 raise ResultNotFound(msg)
             payload_bytes = bytes(payload)
-            await self._safe_cache_set(doc_id, payload_bytes)
+            await self._safe_cache_set(doc_id, payload_bytes, job_id=job_id)
             return payload_bytes
 
         msg = (
@@ -190,22 +190,33 @@ class BinaryResultsStore(Base):
             doc.pop(_PAYLOAD_FIELD, None)
             yield doc
 
-    async def _safe_cache_set(self, doc_id: str, payload: bytes) -> None:
+    async def _safe_cache_set(
+        self,
+        doc_id: str,
+        payload: bytes,
+        *,
+        job_id: str | None,
+    ) -> None:
         if self._cache is None:
             return
         try:
-            await self._cache.set(build_document_cache_key(doc_id), payload)
+            await self._cache.set(build_document_cache_key(doc_id, job_id), payload)
         except Exception as exc:
             self._log.warning(
                 f"BinaryResultsStore cache set failed for doc_id={doc_id}: "
                 f"{summarize_exception_chain(exc)}"
             )
 
-    async def _safe_cache_get(self, doc_id: str) -> bytes | None:
+    async def _safe_cache_get(
+        self,
+        doc_id: str,
+        *,
+        job_id: str | None,
+    ) -> bytes | None:
         if self._cache is None:
             return None
         try:
-            return await self._cache.get(build_document_cache_key(doc_id))
+            return await self._cache.get(build_document_cache_key(doc_id, job_id))
         except Exception as exc:
             self._log.warning(
                 f"BinaryResultsStore cache get failed for doc_id={doc_id}: "

@@ -33,12 +33,12 @@ All retrieval uses business keys `(doc_id, part_idx, job_id)`, not internal stor
 
 ```python
 {
-    "doc_id": "original-doc-id",        # Required, for document association
-    "part_idx": 0,                      # Part index (0 for single-part results)
-    "job_id": None,                     # Optional (None if no job grouping)
-    "result": {...},                    # The actual processing result
-    "result_metadata": {...},           # Optional metadata about processing
-    "created_at": "ISO-8601-timestamp", # Audit field
+    "doc_id": "original-doc-id",  # Required, for document association
+    "part_idx": 0,  # Part index (0 for single-part results)
+    "job_id": None,  # Optional (None if no job grouping)
+    "result": {...},  # The actual processing result
+    "result_metadata": {...},  # Optional metadata about processing
+    "created_at": "ISO-8601-timestamp",  # Audit field
     "result_id": "store-generated-id",  # Added after storage, from doc_id_field
 }
 ```
@@ -143,13 +143,16 @@ class ResultsStoreInterface(Protocol):
 # Type alias for index specification
 IndexSpec = Union[str, Tuple[str, ...]]
 
+
 def get_document_type(self) -> str:
     """Returns the document type identifier for this store."""
     ...
 
+
 def get_doc_id_field(self) -> str:
     """Returns the field name used for document IDs."""
     ...
+
 
 def has_unique_index(self, index_spec: IndexSpec) -> bool:
     """Check if a unique index exists on the given fields."""

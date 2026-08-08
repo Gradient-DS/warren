@@ -118,7 +118,7 @@ runner = DefaultWorkerRunner(
 )
 
 await runner.setup()
-await runner.run()      # blocks until SIGINT/SIGTERM
+await runner.run()  # blocks until SIGINT/SIGTERM
 await runner.teardown()
 ```
 

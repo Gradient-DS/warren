@@ -62,8 +62,8 @@ PipelineSpec(
 WorkerSpec(
     collections={"read": "chunks", "write": "embeddings"},
     factory=create_embedder,
-    binding_key=None,         # required for topic/direct, None for fanout
-    publish=PublishSpec(),    # None = no downstream data (terminal)
+    binding_key=None,  # required for topic/direct, None for fanout
+    publish=PublishSpec(),  # None = no downstream data (terminal)
 )
 ```
 
@@ -116,8 +116,8 @@ step from it.
 
 ```python
 class RoutingPlan(BaseModel):
-    entry: list[str]              # worker-type id(s) the document enters at
-    edges: dict[str, list[str]]   # producer-id -> successor-id(s); [] = terminal
+    entry: list[str]  # worker-type id(s) the document enters at
+    edges: dict[str, list[str]]  # producer-id -> successor-id(s); [] = terminal
 ```
 
 Each worker binds its queue to its own worker-type id (exact match → direct

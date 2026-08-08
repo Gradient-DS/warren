@@ -61,21 +61,28 @@ A discriminated union of Pydantic models representing *where* a document lives. 
 ```python
 class DocumentLocation(BaseModel):
     """Where a document lives."""
+
     model_config = ConfigDict(frozen=True)
     location_type: str  # Pydantic discriminator
 
+
 class DocumentPathLocation(DocumentLocation):
     """Document on the local filesystem."""
+
     location_type: Literal["path"] = "path"
     relative_path: str
 
+
 class DocumentURLLocation(DocumentLocation):
     """Document at an HTTP(S) URL."""
+
     location_type: Literal["url"] = "url"
     url: str
 
+
 class DocumentCloudLocation(DocumentLocation):
     """Document in cloud object storage (S3, GCS)."""
+
     location_type: Literal["cloud"] = "cloud"
     provider: Literal["s3", "gcs"]
     bucket: str
@@ -106,8 +113,8 @@ A `MongoDBDocumentStore` collection (`"documents"`) that records what documents 
     "format": "pdf",
     "location": {
         "location_type": "path",
-        "relative_path": "data/test_pdfs/report-123.pdf"
-    }
+        "relative_path": "data/test_pdfs/report-123.pdf",
+    },
 }
 ```
 
@@ -151,8 +158,7 @@ class GetDocumentFunc(Protocol):
         self,
         doc_id: str,
         document_location: DocumentLocation,
-    ) -> bytes:
-        ...
+    ) -> bytes: ...
 ```
 
 **File**: `storage/documents/interface.py`
@@ -189,8 +195,7 @@ class CachedDocumentFetcher(Base):
         cache: CacheInterface[bytes],
         resolvers: Mapping[str, ResolveDocumentFunc],
         name: Optional[str] = None,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     async def __call__(
         self,
@@ -240,13 +245,13 @@ async def resolve_path(location: DocumentLocation, *, base_dir: Path = Path()) -
     path = base_dir / path_location.relative_path
     return await asyncio.to_thread(path.read_bytes)
 
+
 # URL resolver (future)
-async def resolve_url(location: DocumentLocation) -> bytes:
-    ...
+async def resolve_url(location: DocumentLocation) -> bytes: ...
+
 
 # Cloud resolver (future)
-async def resolve_cloud(location: DocumentLocation) -> bytes:
-    ...
+async def resolve_cloud(location: DocumentLocation) -> bytes: ...
 ```
 
 The dispatch table is assembled at wiring time:
@@ -363,6 +368,7 @@ WorkerFactory = Callable[
     [str, Dict[str, ResultsStoreInterface], Optional[GetDocumentFunc]],
     ConsumeMessageFunc,
 ]
+
 
 @dataclass(frozen=True)
 class WorkerSpec:

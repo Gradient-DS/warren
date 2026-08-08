@@ -50,7 +50,7 @@ A `WorkerSpec` describes one worker type — what it needs and how to build it:
 WorkerSpec(
     collections={"read": "chunks", "write": "embeddings"},
     factory=create_embedder,
-    binding_key=None,       # required for topic/direct, None for fanout
+    binding_key=None,  # required for topic/direct, None for fanout
     publish=PublishSpec(),  # None = no downstream data (terminal)
     needs_document_fetcher=False,
     needs_document_store=False,
@@ -71,15 +71,15 @@ The runner creates a `WorkerFactoryContext` and passes it to each factory functi
 ```python
 @dataclass(frozen=True)
 class WorkerFactoryContext:
-    worker_name: str                              # unique instance name
-    worker_type: str                              # the spec key (node id for routing)
-    stores: dict[str, ResultsStoreInterface]      # pre-built stores per role
-    mongo_client: AsyncMongoClient                # for creating additional stores
-    redis_client: Redis                           # for creating additional stores
-    database_name: str                            # MongoDB database name
-    accepts: frozenset[str]                       # declared input data_types (from the spec)
-    produces: str | None                          # declared output data_type
-    get_document_func: GetDocumentFunc | None      # when needs_document_fetcher=True
+    worker_name: str  # unique instance name
+    worker_type: str  # the spec key (node id for routing)
+    stores: dict[str, ResultsStoreInterface]  # pre-built stores per role
+    mongo_client: AsyncMongoClient  # for creating additional stores
+    redis_client: Redis  # for creating additional stores
+    database_name: str  # MongoDB database name
+    accepts: frozenset[str]  # declared input data_types (from the spec)
+    produces: str | None  # declared output data_type
+    get_document_func: GetDocumentFunc | None  # when needs_document_fetcher=True
     document_store: DocumentStoreInterface | None  # when needs_document_store=True
 ```
 
@@ -159,8 +159,10 @@ Each worker module owns a `create(ctx: WorkerFactoryContext)` factory function. 
 ```python
 # my_pipeline/workers/parser_worker.py
 
+
 class ParserWorker(FilteringWorkerBase):
     """The worker class — processing logic."""
+
     ...
 
 
@@ -216,6 +218,7 @@ Workers that need external services (LLM endpoints, API keys, K8s parameters) re
 ```python
 async def create(ctx: WorkerFactoryContext) -> EmbedderWorker:
     import os
+
     api_key = os.environ["OPENAI_API_KEY"]
     ...
 ```

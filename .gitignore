@@ -24,5 +24,14 @@ venv/
 # Thoughts files
 thoughts/
 
+# Local collab-memory wiring + personal Claude tooling — never committed
+# (installed by shared-knowledge/collab/.system/setup.sh; memory lives in the
+# shared-knowledge repo, see its README)
+collab
+.collab-config
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/hooks/
+
 # Local working notes (planning, design scratchpads)
 tasks/

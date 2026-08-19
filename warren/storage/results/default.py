@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
@@ -15,7 +16,6 @@ from warren.storage.results.interface import (
     ResultNotFound,
     ResultsStoreInterface,
 )
-from warren.storage.utils import current_time_str
 from warren.workers.messages import (
     build_message_key,
     build_message_key_prefix,
@@ -115,7 +115,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
             "job_id": job_id,
             "result": result,
             "result_metadata": result_metadata,
-            "created_at": current_time_str(),
+            "created_at": datetime.now(UTC),
         }
 
         result_id = await self._document_store.insert(doc, overwrite_existing)

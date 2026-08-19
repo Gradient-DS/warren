@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "warren"
-version = "0.2.3"
+version = "0.2.4"
 description = "Message-driven document processing framework — self-selecting workers on a RabbitMQ or Kafka backend with MongoDB/Redis-backed storage"
 readme = "README.md"
 requires-python = ">=3.12"

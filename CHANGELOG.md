@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **The HTTP(S) URL resolver now follows redirects.** `httpx` defaults
+  `follow_redirects` to `False`, so a `307` or `303` reached
+  `raise_for_status()` and surfaced as a document resolution failure rather
+  than as the document. Document URLs redirect routinely: repository
+  permalinks to a CDN, DOIs to a publisher, a landing path to the file
+  itself. Measured on a real corpus, 91 of 96 download failures in one
+  500-document run were redirects whose target was the requested PDF.
+
+### Added
+
+- `resolve_http.build_client()` constructs the resolver's `AsyncClient` and
+  owns its redirect and timeout policy, configurable by environment:
+  `HTTP_FOLLOW_REDIRECTS` (default `true`), `HTTP_TIMEOUT_S` (default `60`)
+  and `HTTP_MAX_REDIRECTS` (default `20`). An unparseable
+  `HTTP_FOLLOW_REDIRECTS` raises rather than reading as `false`, so a typo
+  cannot silently switch redirect following off.
+
 ## [0.3.0] — 2026-08-08
 
 ### Added

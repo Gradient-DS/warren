@@ -296,13 +296,18 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             resolvers["cloud"] = partial(_resolve_cloud, by_provider=cloud_by_provider)
 
         try:
-            import httpx
-
-            from warren.storage.documents.resolve_http import resolve_http
-
-            resolvers["url"] = partial(
-                resolve_http, client=httpx.AsyncClient(timeout=60.0)
+            # resolve_http imports httpx at module level (it is only ever
+            # imported once the extra is present), so this import is itself
+            # the probe the bare `import httpx` used to be.
+            from warren.storage.documents.resolve_http import (
+                build_client,
+                resolve_http,
             )
+
+            # build_client owns the redirect/timeout policy — see
+            # resolve_http's module docstring. Redirects are followed by
+            # default; HTTP_FOLLOW_REDIRECTS=false restores httpx's own.
+            resolvers["url"] = partial(resolve_http, client=build_client())
         except ImportError:
             # Optional 'http' extra. The 'url' resolver is only attempted,
             # never required — pipelines that never resolve URL documents

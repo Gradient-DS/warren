@@ -16,10 +16,11 @@ import asyncio
 import os
 import uuid
 from collections.abc import AsyncGenerator
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
+from warren.storage.cache.redis import RedisDictCache
 from warren.storage.results.binary import BinaryResultsStore
 from warren.storage.results.default import DefaultResultsStore
 from warren.storage.results.interface import ResultDoc
@@ -56,6 +57,27 @@ class _RecordingDocumentStore:
         return True
 
 
+class _SerialisingCache:
+    """In-memory cache that stores exactly what ``RedisDictCache`` would store.
+
+    It runs the production serializer, so a value the real Redis cache cannot
+    encode fails here too. That matters: ``DefaultResultsStore._cache_set``
+    swallows cache failures with a log line, so an unencodable value defeats
+    the cache in silence.
+    """
+
+    def __init__(self) -> None:
+        self._codec = RedisDictCache(client=None, base_key="results:test")
+        self.entries: dict[str, bytes] = {}
+
+    async def get(self, key: str) -> dict | None:
+        raw = self.entries.get(key)
+        return None if raw is None else self._codec._deserialize(raw)
+
+    async def set(self, key: str, value: dict, ttl_seconds: int | None = None) -> None:
+        self.entries[key] = self._codec._serialize(value)
+
+
 def _default_store(document_store: _RecordingDocumentStore) -> DefaultResultsStore:
     return DefaultResultsStore(document_store=document_store, cache=None)
 
@@ -84,6 +106,43 @@ def test_the_result_doc_surfaces_it_as_a_datetime() -> None:
     doc = asyncio.run(run())
 
     assert isinstance(doc.created_at, datetime)
+
+
+def test_storing_a_result_still_populates_a_json_cache() -> None:
+    cache = _SerialisingCache()
+    store = DefaultResultsStore(document_store=_RecordingDocumentStore(), cache=cache)
+
+    asyncio.run(store.store(result={"x": 1}, doc_id="doc-1", job_id="job-1"))
+
+    assert cache.entries, (
+        "nothing reached the cache: the cached dict carries created_at, and "
+        "DefaultResultsStore._cache_set swallows a serialization failure as a "
+        "log line, so a cache that cannot encode it goes dead in silence"
+    )
+
+
+def test_a_result_read_back_from_the_cache_still_has_a_datetime() -> None:
+    document_store = _RecordingDocumentStore()
+    store = DefaultResultsStore(
+        document_store=document_store, cache=_SerialisingCache()
+    )
+
+    async def run() -> ResultDoc:
+        await store.store(result={"x": 1}, doc_id="doc-1", job_id="job-1")
+        document_store.docs.clear()  # only the cache can answer now
+        return await store.get_result(doc_id="doc-1", job_id="job-1")
+
+    doc = asyncio.run(run())
+
+    assert isinstance(doc.created_at, datetime)
+
+
+def test_a_result_doc_still_accepts_an_iso_string_written_before_0_2_4() -> None:
+    doc = ResultDoc(
+        doc_id="doc-1", result={"x": 1}, created_at="2026-08-19T15:05:07+00:00"
+    )
+
+    assert doc.created_at == datetime(2026, 8, 19, 15, 5, 7, tzinfo=UTC)
 
 
 def test_a_stored_byte_payload_records_a_bson_date() -> None:

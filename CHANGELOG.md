@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads the field. Rows written before this change keep their ISO string
   and are not expired; `ResultDoc` still parses them into a `datetime`.
   (Forward-port of 0.2.4.)
+- **`RedisDictCache` renders `datetime` values as ISO 8601 text** instead of
+  refusing them. `DefaultResultsStore` caches the same dict it writes to
+  MongoDB, so without this the cache write raised a `TypeError` that the
+  store swallows as a log line — the results cache would have gone quietly
+  dead. (Forward-port of 0.2.4.)
 
 - **The HTTP(S) URL resolver now follows redirects.** `httpx` defaults
   `follow_redirects` to `False`, so a `307` or `303` reached
@@ -48,6 +53,14 @@ Maintenance release, cut from `v0.2.3` (not from `main`).
   index over a string field is inert. MongoDB's TTL monitor deletes only BSON
   Dates and skips every other type without logging a word, so a retention
   backstop declared over `created_at` deleted nothing. Nothing reads the field.
+  Rows written before 0.2.4 keep their ISO string and are not expired by a TTL
+  index; `ResultDoc` still parses them into a `datetime` on read.
+- `RedisDictCache` renders `datetime` values as ISO 8601 text instead of
+  refusing them. `DefaultResultsStore` caches the same dict it writes to
+  MongoDB, so without this the cache write raised a `TypeError` that the store
+  swallows as a log line — the results cache would have gone quietly dead.
+  Cached dicts therefore carry `created_at` as ISO text; models that declare a
+  `datetime` field parse it back on validation.
 
 ### Removed
 

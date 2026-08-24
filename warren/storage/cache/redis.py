@@ -2,6 +2,7 @@ from typing import TypeVar
 
 import json
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 from basics.base import Base
 from redis.asyncio import Redis
@@ -270,17 +271,35 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
         return keys
 
 
+def _as_json_scalar(value: object) -> str:
+    """
+    Render a value JSON cannot encode natively.
+
+    Datetimes become ISO 8601 text; anything else raises, as plain
+    ``json.dumps`` would.
+
+    :raises TypeError: If the value has no JSON rendering.
+    """
+    if isinstance(value, datetime):
+        return value.isoformat()
+
+    msg = f"Object of type {type(value).__name__} is not JSON serializable"
+    raise TypeError(msg)
+
+
 class RedisDictCache(RedisCacheBase[dict]):
     """
     Async Redis cache for Dict values using JSON serialization.
 
     Suitable for caching document metadata, extracted text, processing results,
-    and other JSON-serializable data.
+    and other JSON-serializable data. Datetime values are stored as ISO 8601
+    text and read back as strings; models that declare a datetime field (such
+    as ``ResultDoc.created_at``) parse them back on validation.
     """
 
     def _serialize(self, value: dict) -> bytes:
         """Serialize Dict to JSON bytes."""
-        return json.dumps(value).encode("utf-8")
+        return json.dumps(value, default=_as_json_scalar).encode("utf-8")
 
     def _deserialize(self, data: bytes) -> dict:
         """Deserialize JSON bytes to Dict."""

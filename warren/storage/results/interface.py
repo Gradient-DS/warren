@@ -1,6 +1,7 @@
 from typing import Protocol
 
 from collections.abc import AsyncGenerator
+from datetime import datetime
 
 from pydantic import BaseModel
 
@@ -17,7 +18,7 @@ class ResultDoc(BaseModel):
     job_id: str | None = None
     result: dict
     result_metadata: dict | None = None
-    created_at: str | None = None
+    created_at: datetime | None = None
     result_id: str | None = None
 
 

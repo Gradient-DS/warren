@@ -35,6 +35,7 @@ are cache-isolated. When ``job_id`` is ``None`` the legacy shared
 from typing import Any
 
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
@@ -51,7 +52,6 @@ from warren.storage.documents.fetcher import (
 from warren.storage.results.interface import (
     ResultNotFound,
 )
-from warren.storage.utils import current_time_str
 
 
 _PAYLOAD_FIELD: str = "payload"
@@ -128,7 +128,7 @@ class BinaryResultsStore(Base):
             "job_id": job_id,
             _PAYLOAD_FIELD: payload,
             "metadata": metadata,
-            "created_at": current_time_str(),
+            "created_at": datetime.now(UTC),
         }
         result_id = await self._document_store.insert(doc, overwrite_existing)
 

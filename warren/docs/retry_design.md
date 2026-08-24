@@ -141,11 +141,13 @@ def build_message_key(
 ) -> str:
     """Returns 'job:{job_id}:doc:{doc_id}:part:{part_idx}'."""
 
+
 def build_message_key_prefix(
     doc_id: Optional[str],
     job_id: Optional[str],
 ) -> str:
     """Returns 'job:{job_id}:doc:{doc_id}:' for prefix queries."""
+
 
 def extract_message_identity(message: Dict) -> str:
     """Returns 'job={job_id} doc={doc_id} part={part_idx}' for logging."""
@@ -161,12 +163,12 @@ Configuration for retry behavior, owned by the consumer manager:
 
 ```python
 class RetryConfig(BaseModel):
-    initial_delay: int = 30       # Default delay when worker doesn't specify
-    max_retries: int = 5          # Default max retries when worker doesn't specify
-    backoff_base: float = 2.0     # Exponential backoff base
-    jitter: bool = True           # Add random jitter to delays
-    max_delay_cap: int = 300      # Maximum delay in seconds (caps backoff)
-    max_retries_cap: int = 10     # Maximum retries allowed (overrides worker request)
+    initial_delay: int = 30  # Default delay when worker doesn't specify
+    max_retries: int = 5  # Default max retries when worker doesn't specify
+    backoff_base: float = 2.0  # Exponential backoff base
+    jitter: bool = True  # Add random jitter to delays
+    max_delay_cap: int = 300  # Maximum delay in seconds (caps backoff)
+    max_retries_cap: int = 10  # Maximum retries allowed (overrides worker request)
     fallback_requeue_delay: float = 2.0  # Delay before nack+requeue when no publishers
 ```
 
@@ -204,6 +206,7 @@ def _resolve_retry_after(self, error: SoftFailureException, attempt: int) -> int
     if use_jitter:
         delay *= random.uniform(0.5, 1.5)
     return min(int(delay), self._retry_config.max_delay_cap)
+
 
 def _resolve_retry_max(self, error: SoftFailureException) -> int:
     requested = error.retry_max or self._retry_config.max_retries

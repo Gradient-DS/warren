@@ -67,12 +67,12 @@ The runner creates a `WorkerFactoryContext` and passes it to each factory functi
 ```python
 @dataclass(frozen=True)
 class WorkerFactoryContext:
-    worker_name: str                              # unique instance name
-    stores: dict[str, ResultsStoreInterface]      # pre-built stores per role
-    mongo_client: AsyncMongoClient                # for creating additional stores
-    redis_client: Redis                           # for creating additional stores
-    database_name: str                            # MongoDB database name
-    get_document_func: GetDocumentFunc | None      # when needs_document_fetcher=True
+    worker_name: str  # unique instance name
+    stores: dict[str, ResultsStoreInterface]  # pre-built stores per role
+    mongo_client: AsyncMongoClient  # for creating additional stores
+    redis_client: Redis  # for creating additional stores
+    database_name: str  # MongoDB database name
+    get_document_func: GetDocumentFunc | None  # when needs_document_fetcher=True
     document_store: DocumentStoreInterface | None  # when needs_document_store=True
 ```
 
@@ -155,8 +155,10 @@ Each worker module owns a `create(ctx: WorkerFactoryContext)` factory function. 
 ```python
 # my_pipeline/workers/parser_worker.py
 
+
 class ParserWorker(FilteringWorkerBase):
     """The worker class — processing logic."""
+
     ...
 
 
@@ -209,6 +211,7 @@ Workers that need external services (LLM endpoints, API keys, K8s parameters) re
 ```python
 async def create(ctx: WorkerFactoryContext) -> EmbedderWorker:
     import os
+
     api_key = os.environ["OPENAI_API_KEY"]
     ...
 ```

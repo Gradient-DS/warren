@@ -1,0 +1,31 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'
+
+jobs:
+  source:
+    uses: Gradient-DS/.github/.github/workflows/security-source.yml@v1
+    permissions:
+      contents: read
+      issues: write
+    with:
+      python-paths: 'warren/'
+      python-uv: true
+
+  gate:
+    needs: [source]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every security job succeeded
+        env:
+          SOURCE: ${{ needs.source.result }}
+        run: |
+          echo "source=$SOURCE"
+          [ "$SOURCE" = "success" ]

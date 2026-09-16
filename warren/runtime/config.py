@@ -22,6 +22,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel
 
+from warren.pubsub.common import RetryConfig
 from warren.pubsub.kafka.config import (
     KafkaConnectionConfig,
     KafkaConsumerConfig,
@@ -69,8 +70,18 @@ class RedisConfig(BaseModel):
 
 
 class RuntimeRetryConfig(BaseModel):
+    """Retry worker toggle plus the retry policy every consumer manager applies.
+
+    :param enabled: Whether the retry worker runs.
+    :param collection_name: MongoDB collection for messages awaiting retry.
+    :param policy: Defaults and caps for soft-failure retries. Passed to
+        every consumer manager the runner builds, so ``max_delay_cap`` and
+        friends are deployment settings rather than library constants.
+    """
+
     enabled: bool = False
     collection_name: str = "retries"
+    policy: RetryConfig = RetryConfig()
 
 
 class RuntimeConfig(BaseModel):

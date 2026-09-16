@@ -446,4 +446,5 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             data_publisher=data_publisher,
             control_publisher=control_publisher,
             observer_publisher=observer_publisher,
+            retry_config=self._config.retry.policy,
         )

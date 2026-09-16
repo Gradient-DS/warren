@@ -165,3 +165,62 @@ def make_manager(
 def process(manager: RMQConsumerManager, message: FakeIncomingMessage) -> None:
     """Run one delivery through the manager's decision matrix."""
     asyncio.run(manager._process_message(message))  # type: ignore[arg-type]
+
+
+class FakeTransport:
+    """``UnderlayConnection`` stand-in; ``ready()`` hangs while ``blocked``."""
+
+    def __init__(self, *, blocked: bool = False) -> None:
+        self.blocked = blocked
+
+    async def ready(self) -> None:
+        if self.blocked:
+            await asyncio.Event().wait()
+
+
+class FakeConnection:
+    """``AbstractRobustConnection`` stand-in for the fields health() reads."""
+
+    def __init__(
+        self, *, transport: FakeTransport | None = None, connected: bool = True
+    ) -> None:
+        self.transport = transport if transport is not None else FakeTransport()
+        self.connected = asyncio.Event()
+        if connected:
+            self.connected.set()
+        self.is_closed = False
+
+
+class FakeUnderlayChannel:
+    """aiormq ``Channel`` stand-in: only ``consumers`` is read."""
+
+    def __init__(self, consumers: dict | None) -> None:
+        if consumers is not None:
+            self.consumers = consumers
+
+
+class FakeChannel:
+    """aio-pika ``AbstractChannel`` stand-in for the fields health() reads."""
+
+    def __init__(
+        self,
+        *,
+        is_closed: bool = False,
+        underlay: FakeUnderlayChannel | None = None,
+        hangs: bool = False,
+    ) -> None:
+        self.is_closed = is_closed
+        self._underlay = underlay if underlay is not None else FakeUnderlayChannel({})
+        self._hangs = hangs
+
+    async def get_underlay_channel(self) -> FakeUnderlayChannel:
+        if self._hangs:
+            await asyncio.Event().wait()
+        return self._underlay
+
+
+class FakeConnectionManager:
+    """``RMQConnectionManager`` stand-in exposing ``connection``."""
+
+    def __init__(self, connection: FakeConnection | None) -> None:
+        self.connection = connection

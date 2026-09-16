@@ -1,9 +1,10 @@
-from typing import Literal
+from typing import Any, Literal
 
 import asyncio
 import inspect
 import json
 import random
+from collections.abc import Awaitable
 
 from aio_pika.abc import (
     AbstractChannel,
@@ -21,6 +22,7 @@ from warren.common import (
 )
 from warren.pubsub.base import ConsumerManagerBase
 from warren.pubsub.common import (
+    ConsumerHealth,
     PublisherInterface,
     PublishFailureException,
     PubSubSetupError,
@@ -53,6 +55,15 @@ _SETTLE_ERRORS: tuple[type[BaseException], ...] = (
     ConnectionError,
     OSError,
 )
+
+
+async def _completes(awaitable: Awaitable[Any], within: float) -> bool:
+    # Named `within`, not `timeout`: ruff ASYNC109 rejects that parameter name.
+    try:
+        await asyncio.wait_for(awaitable, timeout=within)
+    except TimeoutError:
+        return False
+    return True
 
 
 class RMQConsumerManager(ConsumerManagerBase):
@@ -239,6 +250,74 @@ class RMQConsumerManager(ConsumerManagerBase):
 
         # Consumer stopped.
         # Connection is owned by RMQConnectionManager — not our responsibility to close.
+
+    async def health(self, *, probe_timeout: float = 1.0) -> ConsumerHealth:
+        """Observe transport state without touching the broker.
+
+        Reads public aio-pika surface, plus ``consumers`` on the underlying
+        aiormq channel — a plain attribute that is not on aiormq's ABC, so
+        its absence reads as unknown, never as lost.
+        """
+        conn = self._connection_manager.connection
+        connected = (
+            conn is not None
+            and not conn.is_closed
+            and conn.transport is not None
+            and conn.connected.is_set()
+        )
+        if not connected:
+            return ConsumerHealth(
+                connected=False,
+                blocked=False,
+                channel_open=False,
+                consumer_registered=None,
+                detail="connection down or reconnecting",
+            )
+        # transport.ready() waits on the event Connection.Blocked clears —
+        # the only signal aio-pika exposes for a blocked connection.
+        blocked = not await _completes(conn.transport.ready(), probe_timeout)
+        channel = self._channel
+        channel_open = channel is not None and not channel.is_closed
+        registered = (
+            await self._consumer_registered(channel, probe_timeout)
+            if channel_open
+            else None
+        )
+        if blocked:
+            detail = "broker blocked this connection (Connection.Blocked)"
+        elif not channel_open:
+            detail = "consume channel closed"
+        elif registered is False:
+            detail = (
+                f"consumer tag {self._consumer_tag!r} not registered on the channel"
+            )
+        elif registered is None:
+            detail = (
+                "consumer registration unknown (probe timed out or attribute missing)"
+            )
+        else:
+            detail = ""
+        return ConsumerHealth(
+            connected=True,
+            blocked=blocked,
+            channel_open=channel_open,
+            consumer_registered=registered,
+            detail=detail,
+        )
+
+    async def _consumer_registered(
+        self, channel: AbstractChannel, probe_timeout: float
+    ) -> bool | None:
+        try:
+            underlay = await asyncio.wait_for(
+                channel.get_underlay_channel(), timeout=probe_timeout
+            )
+        except (TimeoutError, ChannelInvalidStateError):
+            return None
+        consumers = getattr(underlay, "consumers", None)
+        if consumers is None:
+            return None
+        return self._consumer_tag in consumers
 
     async def _on_message(self, message: AbstractIncomingMessage) -> None:
         """Handle incoming RabbitMQ message delivery."""

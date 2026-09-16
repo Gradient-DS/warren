@@ -715,6 +715,26 @@ def test_first_deferral_without_retry_slot_is_not_halved() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_health_reflects_poll_loop() -> None:
+    manager, _ = _manager(_FakeWorker(result=None))
+
+    async def scenario() -> tuple:
+        before = await manager.health()
+        await manager.setup()
+        await manager.start_consuming()
+        running = await manager.health()
+        await manager.stop_consuming()
+        after = await manager.health()
+        return before, running, after
+
+    before, running, after = asyncio.run(scenario())
+
+    assert not before.connected
+    assert before.state == "reconnecting"
+    assert running.ready
+    assert after.consumer_lost  # consumer object still present, loop stopped
+
+
 def test_poll_loop_processes_messages_sequentially() -> None:
     worker = _FakeWorker(result=None)
     manager, conn = _manager(worker)

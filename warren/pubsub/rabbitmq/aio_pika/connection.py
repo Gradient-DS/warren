@@ -22,6 +22,11 @@ class RMQConnectionManager(Base):
         self._config = config
         self._connection: AbstractRobustConnection | None = None
 
+    @property
+    def connection(self) -> AbstractRobustConnection | None:
+        """The robust connection, or None before ``setup()``."""
+        return self._connection
+
     async def setup(self) -> None:
         self._connection = await aio_pika.connect_robust(
             host=self._config.host,

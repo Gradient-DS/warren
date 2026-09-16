@@ -521,3 +521,37 @@ would eliminate the sync-to-async gap entirely, making the generation counter un
 
 - **Retry metrics:** Track retry counts, delays, success/failure rates per worker type for
   operational visibility.
+
+## Deferring on throttling (2026-09)
+
+A source that answers 429 (or 503 with `Retry-After`) is asking for a delay,
+not reporting a failure. The URL resolver raises `DocumentThrottledError`
+with `retry_after` (seconds, or None). A worker defers the document without
+spending a retry slot by raising:
+
+```python
+raise SoftFailureException(
+    f"throttled by source: {exc}",
+    retry_after=int(exc.retry_after or host_default),
+    backoff_base=1.0,  # take retry_after verbatim, no exponent
+    jitter=False,  # no ±50 % on a server-stated delay
+    retry_count_consumed=False,  # no retry slot consumed
+)
+```
+
+The delay is then exactly `retry_after`, capped by `RetryConfig.max_delay_cap`
+(`retry.policy.max_delay_cap` in the runtime YAML). The worker still owns
+progress: with `retry_count_consumed=False` warren never gives up on its
+behalf, so keep a deferral counter or raise a hard failure after N deferrals.
+
+Note the exponent clamp: a deferral on a never-retried message has count 0,
+and `_resolve_retry_after` computes `base * backoff_base ** max(count - 1, 0)`
+so the requested delay is not halved.
+
+## Delivery counting (2026-09)
+
+`RMQConsumerManager` reuses this path for poison messages: a redelivered
+message with `max_deliveries` set is re-published as a soft-failure envelope
+(`retry_count_consumed=False`, `retry.after = redelivery_delay`) with
+`delivery_count` in its body, so the count survives the next requeue. See
+`warren/docs/rabbitmq.md`, "Redelivery counting".

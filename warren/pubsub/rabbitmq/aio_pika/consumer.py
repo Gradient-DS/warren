@@ -410,7 +410,11 @@ class RMQConsumerManager(ConsumerManagerBase):
         """
         identity = self._extract_identity(body)
         if self._delivery_channel_is_closed(message):
-            self._log_delivery_lost(identity, "failure not recorded")
+            # The reason is logged here because nothing else will record it.
+            self._log_delivery_lost(
+                identity,
+                f"failure not recorded: {summarize_exception_chain(error)}",
+            )
             return
 
         if self._control_publisher is None:
@@ -534,7 +538,11 @@ class RMQConsumerManager(ConsumerManagerBase):
         """
         identity = self._extract_identity(body)
         if self._delivery_channel_is_closed(message):
-            self._log_delivery_lost(identity, "failure not recorded")
+            # The reason is logged here because nothing else will record it.
+            self._log_delivery_lost(
+                identity,
+                f"failure not recorded: {summarize_exception_chain(error)}",
+            )
             return
         self._log.error(
             f"[{identity}] Hard failure (message rejected): "

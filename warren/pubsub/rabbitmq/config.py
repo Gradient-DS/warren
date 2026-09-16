@@ -16,7 +16,7 @@ compatibility.
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 
 from warren.pubsub.common import RetryConfig
 
@@ -32,7 +32,17 @@ __all__ = [
 
 
 class RMQConnectionConfig(BaseModel):
-    """Connection-specific parameters for ``aio_pika.connect_robust()``."""
+    """Connection-specific parameters for ``aio_pika.connect_robust()``.
+
+    :param heartbeat: AMQP heartbeat timeout in seconds, sent as the
+        client's ``Tune-Ok`` value — which RabbitMQ adopts as-is, so this
+        setting alone decides the negotiated timeout. ``None`` keeps
+        aiormq's default of 60; ``0`` disables heartbeats. The bounds are
+        aiormq's own: anything outside ``0 <= v < 65535`` would be read as
+        0 (heartbeats off), which is never what a typo means. A long
+        timeout also delays aiormq's detection of a silent broker to
+        ``(heartbeat + 1) * 3`` seconds.
+    """
 
     host: str = "localhost"
     port: int = 5672
@@ -44,6 +54,7 @@ class RMQConnectionConfig(BaseModel):
     ssl_context: Any | None = None  # ssl.SSLContext
     timeout: float | None = None
     client_properties: dict[str, Any] | None = None
+    heartbeat: int | None = Field(default=None, ge=0, lt=65535)
 
 
 class RMQExchangeConfig(BaseModel):

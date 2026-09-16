@@ -34,6 +34,18 @@ class RMQConnectionManager(Base):
             ssl_context=self._config.ssl_context,
             timeout=self._config.timeout,
             client_properties=self._config.client_properties,
+            # Unknown kwargs become URL query parameters, which is where
+            # aiormq reads the heartbeat; None is dropped by make_url.
+            heartbeat=self._config.heartbeat,
+        )
+        heartbeat = (
+            "aiormq default"
+            if self._config.heartbeat is None
+            else f"{self._config.heartbeat}s"
+        )
+        self._log.info(
+            f"AMQP connection to {self._config.host}:{self._config.port} up "
+            f"(heartbeat={heartbeat}, connection.blocked notifications on)"
         )
 
     async def teardown(self) -> None:

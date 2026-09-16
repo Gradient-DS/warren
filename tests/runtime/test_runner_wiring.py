@@ -14,6 +14,7 @@ from warren.runtime import backends
 from warren.runtime.config import RuntimeConfig, RuntimeRetryConfig
 from warren.runtime.runner import DefaultWorkerRunner
 from warren.runtime.spec import WorkerSpec
+from warren.workers.health import HealthConfig
 
 
 class _FakeWorker:
@@ -53,3 +54,16 @@ def test_runner_passes_retry_policy_to_consumer_manager(
     runner._create_consumer_manager(_FakeWorker(), None, None, None)
 
     assert captured["retry_config"].max_delay_cap == 900
+
+
+def test_runner_takes_health_config_from_runtime_config() -> None:
+    config = RuntimeConfig(health=HealthConfig(port=9090))
+    runner = DefaultWorkerRunner(
+        config,
+        "worker-1",
+        worker_type="test_worker",
+        worker_spec=WorkerSpec(collections={}, factory=_factory),
+        exchange=RMQExchangeConfig(name="jobs", type="fanout"),
+    )
+
+    assert runner._health.port == 9090

@@ -9,22 +9,29 @@ Lifecycle: setup() -> run() -> teardown()
 - setup() initializes connections, creates worker/consumer (subclass-specific)
 - run() starts consuming and waits for shutdown signal
 - teardown() cleans up resources
+
+``run()`` also runs a watchdog: it polls ``consumer_manager.health()`` and,
+when the consumer has been lost with a live connection for longer than
+``HealthConfig.consumer_lost_grace_s``, ends the run with ``WarrenError`` so
+the process exits non-zero and the orchestrator restarts it. Blocked and
+reconnecting states are logged and left to the transport. The last sample
+is served on the readiness endpoint when ``HealthConfig.enabled``.
 """
 
 import asyncio
+import logging
 import signal
 from abc import ABCMeta, abstractmethod
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
 
 from warren.common import MessageConsumerInterface
 from warren.exceptions import WarrenError
-from warren.pubsub.common import (
-    ConsumerManagerInterface,
-)
+from warren.pubsub.common import ConsumerHealth, ConsumerManagerInterface
+from warren.workers.health import HealthConfig, HealthServer
 
 
 ConsumerManagerFactory = Callable[
@@ -39,6 +46,15 @@ The factory encapsulates transport-specific wiring (exchange, queue,
 connection) so runners stay transport-agnostic. The consumer carries
 its own identity (name and type) for use on failure envelopes.
 """
+
+
+# Only consumer_lost is grounds for exiting; blocked is the broker's back-pressure.
+_HEALTH_LOG_LEVEL: dict[str, int] = {
+    "ready": logging.INFO,
+    "reconnecting": logging.INFO,
+    "blocked": logging.WARNING,
+    "consumer_lost": logging.ERROR,
+}
 
 
 class WorkerRunnerBase(Base, metaclass=ABCMeta):
@@ -61,10 +77,18 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
         await runner.teardown() # cleanup
     """
 
-    def __init__(self, *, name: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        name: str | None = None,
+        health: HealthConfig | None = None,
+    ) -> None:
         super().__init__(pybase_logger_name=name)
         self._consumer_manager: ConsumerManagerInterface | None = None
         self._setup_succeeded: bool = False
+        self._health = health or HealthConfig()
+        self._last_health: ConsumerHealth | None = None
+        self._fatal_health: str | None = None
 
     @abstractmethod
     async def setup(self) -> None:
@@ -76,8 +100,10 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
         ...
 
     async def run(self) -> None:
-        """Start consuming and wait for shutdown signal
-        (SIGINT/SIGTERM)."""
+        """Start consuming and wait for shutdown signal (SIGINT/SIGTERM).
+
+        :raises WarrenError: If the watchdog declared the consumer lost.
+        """
         if not self._setup_succeeded:
             msg = "Must call setup() successfully before run()"
             raise RuntimeError(msg)
@@ -91,9 +117,75 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
         signal.signal(signal.SIGINT, _signal_handler)
         signal.signal(signal.SIGTERM, _signal_handler)
 
+        server: HealthServer | None = None
+        if self._health.enabled:
+            server = HealthServer(
+                lambda: self._last_health,
+                host=self._health.host,
+                port=self._health.port,
+            )
+            await server.start()  # a failed bind is logged inside; never fatal
+
         await self._consumer_manager.start_consuming()
         self._log.info("Worker started, waiting for messages...")
-        await shutdown_event.wait()
+        watchdog = asyncio.create_task(self._watch_health(shutdown_event))
+        try:
+            await shutdown_event.wait()
+        finally:
+            watchdog.cancel()
+            with suppress(asyncio.CancelledError):
+                await watchdog
+            if server is not None:
+                await server.stop()
+
+        if self._fatal_health is not None:
+            raise WarrenError(self._fatal_health)
+
+    async def _watch_health(self, shutdown_event: asyncio.Event) -> None:
+        """Poll consumer health; end the run when the consumer is lost.
+
+        Only ``consumer_lost`` (connection alive and unblocked, consumer
+        gone) is grounds for exiting: a blocked or reconnecting connection
+        is the transport's to recover and a restart would not help it.
+        """
+        loop = asyncio.get_running_loop()
+        lost_since: float | None = None
+        previous: ConsumerHealth | None = None
+        while True:
+            await asyncio.sleep(self._health.check_interval_s)
+            try:
+                health = await self._consumer_manager.health(
+                    probe_timeout=self._health.probe_timeout_s
+                )
+            except Exception as e:
+                self._log.error(f"Health check failed: {summarize_exception_chain(e)}")
+                continue
+            self._last_health = health
+            self._log_health_transition(previous, health)
+            previous = health
+            if not health.consumer_lost:
+                lost_since = None
+                continue
+            if lost_since is None:
+                lost_since = loop.time()
+            if loop.time() - lost_since >= self._health.consumer_lost_grace_s:
+                self._fatal_health = (
+                    f"Consumer lost for {self._health.consumer_lost_grace_s:g}s with a "
+                    f"live connection ({health.detail}); exiting so the orchestrator "
+                    f"restarts this worker"
+                )
+                self._log.error(self._fatal_health)
+                shutdown_event.set()
+                return
+
+    def _log_health_transition(
+        self, previous: ConsumerHealth | None, current: ConsumerHealth
+    ) -> None:
+        if previous is not None and previous.state == current.state:
+            return
+        level = _HEALTH_LOG_LEVEL.get(current.state, logging.WARNING)
+        detail = f" ({current.detail})" if current.detail else ""
+        self._log.log(level, f"Consumer state: {current.state}{detail}")
 
     async def teardown(self) -> None:
         """Stop consuming, run subclass cleanup, and reset state.

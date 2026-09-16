@@ -120,3 +120,20 @@ retry:
 
     assert config.retry.policy.max_delay_cap == 900
     assert config.retry.policy.max_retries == 5  # untouched defaults survive
+
+
+def test_health_from_yaml(tmp_path: Path) -> None:
+    path = _write_yaml(
+        tmp_path,
+        """
+health:
+  port: 9090
+  consumer_lost_grace_s: 30
+""",
+    )
+
+    config = RuntimeConfig.from_yaml(path)
+
+    assert config.health.enabled is True
+    assert config.health.port == 9090
+    assert config.health.consumer_lost_grace_s == 30.0

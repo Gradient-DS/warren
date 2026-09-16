@@ -32,6 +32,7 @@ from warren.pubsub.rabbitmq.config import (
     RMQConnectionConfig,
     RMQConsumerConfig,
 )
+from warren.workers.health import HealthConfig
 
 
 class RuntimeRMQConfig(BaseModel):
@@ -95,6 +96,7 @@ class RuntimeConfig(BaseModel):
     :param mongodb: MongoDB connection settings.
     :param redis: Redis connection settings.
     :param retry: Retry worker toggle and collection name.
+    :param health: Watchdog and readiness endpoint settings.
     """
 
     backend: Literal["rabbitmq", "kafka"] = "rabbitmq"
@@ -103,6 +105,7 @@ class RuntimeConfig(BaseModel):
     mongodb: MongoDBConfig = MongoDBConfig()
     redis: RedisConfig = RedisConfig()
     retry: RuntimeRetryConfig = RuntimeRetryConfig()
+    health: HealthConfig = HealthConfig()
 
     @classmethod
     def from_yaml(cls, path: Path) -> "RuntimeConfig":

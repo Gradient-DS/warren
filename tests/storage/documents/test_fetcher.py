@@ -7,10 +7,13 @@ previous job: the cache key was ``doc:{doc_id}`` with no job scoping.
 
 import asyncio
 
+import pytest
+
 from warren.storage.documents.fetcher import (
     CachedDocumentFetcher,
     build_document_cache_key,
 )
+from warren.storage.documents.interface import DocumentThrottledError
 from warren.storage.documents.location import DocumentPathLocation
 from warren.storage.results.binary import BinaryResultsStore
 
@@ -130,3 +133,22 @@ def test_binary_results_store_prepopulates_job_scoped_key() -> None:
     assert asyncio.run(run()) == b"rendered html"
     assert resolver.calls == 0
     assert list(cache.data) == ["doc:doc-1:job-a"]
+
+
+def test_throttled_error_passes_through_unwrapped() -> None:
+    """The fetcher wraps unknown exceptions; a DocumentThrottledError must
+    reach the worker as the same object, retry_after intact."""
+    error = DocumentThrottledError("slow down", retry_after=30, status_code=429)
+
+    class _Throttling:
+        async def __call__(self, location) -> bytes:
+            raise error
+
+    fetcher = CachedDocumentFetcher(
+        cache=_FakeBytesCache(), resolvers={"path": _Throttling()}
+    )
+
+    with pytest.raises(DocumentThrottledError) as excinfo:
+        asyncio.run(fetcher("doc-1", _LOCATION, job_id="job-a"))
+
+    assert excinfo.value is error

@@ -1,3 +1,5 @@
+from typing import Literal
+
 import asyncio
 import inspect
 import json
@@ -9,6 +11,7 @@ from aio_pika.abc import (
     AbstractIncomingMessage,
     AbstractQueue,
 )
+from aio_pika.exceptions import AMQPError, ChannelInvalidStateError
 from basics.logging_utils import summarize_exception_chain
 
 from warren.common import (
@@ -37,6 +40,18 @@ from warren.pubsub.routing import REPLAY_ROUTING_KEY_FIELD
 from warren.workers.messages import (
     ExtractMessageIdentityFunc,
     extract_message_identity,
+)
+
+
+# What a settle raises when the channel under the delivery is gone.
+# ChannelInvalidStateError is a RuntimeError and is named explicitly;
+# RuntimeError itself is not caught, that would hide bugs. AMQPError covers
+# ChannelClosed, ConnectionClosed and MessageProcessError.
+_SETTLE_ERRORS: tuple[type[BaseException], ...] = (
+    ChannelInvalidStateError,
+    AMQPError,
+    ConnectionError,
+    OSError,
 )
 
 
@@ -228,12 +243,24 @@ class RMQConsumerManager(ConsumerManagerBase):
     async def _on_message(self, message: AbstractIncomingMessage) -> None:
         """Handle incoming RabbitMQ message delivery."""
         if self._shutting_down:
-            await message.nack(requeue=True)
+            await self._settle(message, "requeue", identity="?")
             return
 
         task = asyncio.create_task(self._process_message(message))
         self._in_flight_tasks.add(task)
-        task.add_done_callback(self._in_flight_tasks.discard)
+        task.add_done_callback(self._on_task_done)
+
+    def _on_task_done(self, task: asyncio.Task) -> None:
+        # asyncio reports an unretrieved task exception only at garbage
+        # collection and without warren context; retrieve and log it here.
+        self._in_flight_tasks.discard(task)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            self._log.error(
+                f"Unhandled error in message task: {summarize_exception_chain(exc)}"
+            )
 
     async def _process_message(self, message: AbstractIncomingMessage) -> None:
         """Process a single message: deserialize, execute worker, handle ack/nack."""
@@ -244,8 +271,10 @@ class RMQConsumerManager(ConsumerManagerBase):
             self._log.error(
                 f"Failed to deserialize message: {summarize_exception_chain(e)}"
             )
-            await message.reject(requeue=False)
+            await self._settle(message, "reject", identity="?")
             return
+
+        identity = self._extract_identity(body)
 
         # Process — dispatch sync consumers to thread pool, await async directly.
         # iscoroutinefunction checks both plain async functions and callable
@@ -264,6 +293,13 @@ class RMQConsumerManager(ConsumerManagerBase):
                     body,
                 )
 
+            # The last point at which a duplicate downstream publish can be
+            # avoided: a dead channel means the broker redelivers this
+            # message, and the redelivery will publish the result.
+            if self._delivery_channel_is_closed(message):
+                self._log_delivery_lost(identity, "result not published, ack skipped")
+                return
+
             # Route the result downstream (terminal workers have no data
             # publisher). Lifecycle envelopes go through the control publisher.
             if result is not None:
@@ -274,7 +310,7 @@ class RMQConsumerManager(ConsumerManagerBase):
                 if self._observer_publisher is not None:
                     await self._observer_publisher(result)
 
-            await message.ack()
+            await self._settle(message, "ack", identity=identity)
 
         except SoftFailureException as e:
             await self._handle_soft_failure(message, body, e)
@@ -287,6 +323,74 @@ class RMQConsumerManager(ConsumerManagerBase):
 
         except Exception as e:
             await self._handle_hard_failure(message, body, e)
+
+    def _delivery_channel_is_closed(self, message: AbstractIncomingMessage) -> bool:
+        # IncomingMessage.channel raises once the channel it arrived on is
+        # closed — the only signal aio-pika gives for a stale delivery.
+        try:
+            message.channel  # noqa: B018
+        except ChannelInvalidStateError:
+            return True
+        return False
+
+    def _log_delivery_lost(self, identity: str, consequence: str) -> None:
+        self._log.warning(
+            f"[{identity}] Delivery channel closed while processing; {consequence}. "
+            f"The broker requeues unacked deliveries of a closed channel, so this "
+            f"message will be redelivered."
+        )
+
+    async def _settle(
+        self,
+        message: AbstractIncomingMessage,
+        action: Literal["ack", "requeue", "reject"],
+        *,
+        identity: str,
+    ) -> bool:
+        """Ack, nack-with-requeue or reject the delivery.
+
+        Transport failures are logged and absorbed, never raised: a settle
+        that cannot reach the broker means the channel is gone, and the
+        broker requeues every unacked delivery of a closed channel by
+        itself. Raising here turned a redelivery into a spurious hard
+        failure.
+
+        :param message: The delivery to settle.
+        :param action: ``ack``, ``requeue`` (nack with requeue) or ``reject``
+            (no requeue).
+        :param identity: Message identity for the log line.
+
+        :return: True if the settle was sent.
+        """
+        try:
+            if action == "ack":
+                await message.ack()
+            elif action == "requeue":
+                await message.nack(requeue=True)
+            else:
+                await message.reject(requeue=False)
+        except _SETTLE_ERRORS as e:
+            self._log.error(
+                f"[{identity}] Could not {action} delivery "
+                f"(delivery_tag={message.delivery_tag}, "
+                f"redelivered={message.redelivered}): "
+                f"{summarize_exception_chain(e)}. The broker will redeliver it."
+            )
+            return False
+        except asyncio.CancelledError:
+            # aiormq's basic_ack/nack/reject await a drain future that is
+            # cancelled when the channel closes mid-call; that arrives here
+            # as CancelledError without this task having been cancelled.
+            # Only that case is ours to absorb.
+            task = asyncio.current_task()
+            if task is None or task.cancelling():
+                raise
+            self._log.error(
+                f"[{identity}] {action} interrupted by a channel close; "
+                f"the broker will redeliver this delivery."
+            )
+            return False
+        return True
 
     async def _handle_soft_failure(
         self,
@@ -305,6 +409,9 @@ class RMQConsumerManager(ConsumerManagerBase):
         with a delay.
         """
         identity = self._extract_identity(body)
+        if self._delivery_channel_is_closed(message):
+            self._log_delivery_lost(identity, "failure not recorded")
+            return
 
         if self._control_publisher is None:
             delay = self._retry_config.fallback_requeue_delay
@@ -314,7 +421,7 @@ class RMQConsumerManager(ConsumerManagerBase):
                 f"{summarize_exception_chain(error)}"
             )
             await asyncio.sleep(delay)
-            await message.nack(requeue=True)
+            await self._settle(message, "requeue", identity=identity)
             return
 
         # Read existing retry state from message (may be a re-retry)
@@ -380,13 +487,14 @@ class RMQConsumerManager(ConsumerManagerBase):
 
         try:
             await self._control_publisher(soft_failure_msg)
-            await message.ack()
         except PublishFailureException as e:
             self._log.warning(
                 f"[{identity}] Failed to publish soft-failure message, "
                 f"nacking with requeue: {summarize_exception_chain(e)}"
             )
-            await message.nack(requeue=True)
+            await self._settle(message, "requeue", identity=identity)
+            return
+        await self._settle(message, "ack", identity=identity)
 
     async def _handle_publish_failure(
         self,
@@ -400,13 +508,16 @@ class RMQConsumerManager(ConsumerManagerBase):
         back to nack+requeue with a delay.
         """
         identity = self._extract_identity(body)
+        if self._delivery_channel_is_closed(message):
+            self._log_delivery_lost(identity, "not requeued")
+            return
         delay = self._retry_config.fallback_requeue_delay
         self._log.warning(
             f"[{identity}] Publish failed, requeued after {delay}s: "
             f"{summarize_exception_chain(error)}"
         )
         await asyncio.sleep(delay)
-        await message.nack(requeue=True)
+        await self._settle(message, "requeue", identity=identity)
 
     async def _handle_hard_failure(
         self,
@@ -422,6 +533,9 @@ class RMQConsumerManager(ConsumerManagerBase):
         publishing fails, the message is still rejected.
         """
         identity = self._extract_identity(body)
+        if self._delivery_channel_is_closed(message):
+            self._log_delivery_lost(identity, "failure not recorded")
+            return
         self._log.error(
             f"[{identity}] Hard failure (message rejected): "
             f"{summarize_exception_chain(error)}"
@@ -446,7 +560,7 @@ class RMQConsumerManager(ConsumerManagerBase):
                     f"{summarize_exception_chain(pub_error)}"
                 )
 
-        await message.reject(requeue=False)
+        await self._settle(message, "reject", identity=identity)
 
     def _resolve_retry_after(self, error: SoftFailureException, attempt: int) -> int:
         """Calculate delay for this retry attempt with exponential backoff and optional jitter."""

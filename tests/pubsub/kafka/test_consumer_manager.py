@@ -571,11 +571,17 @@ class _FakeRMQMessage:
     # Arrival routing key stamped into soft-failure envelopes; "" is what a
     # fanout publish carries, matching the Kafka consumer's stamp.
     routing_key = ""
+    delivery_tag = 1
+    redelivered = False
 
     def __init__(self) -> None:
         self.acked = False
         self.nacked: bool | None = None
         self.rejected: bool | None = None
+
+    @property
+    def channel(self) -> object:
+        return object()  # a live channel
 
     async def ack(self) -> None:
         self.acked = True

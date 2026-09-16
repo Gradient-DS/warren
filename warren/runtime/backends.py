@@ -248,6 +248,7 @@ def create_consumer_manager(
         name=f"{exchange.name}.{worker_type}",
         durable=True,
         routing_key=binding_key,
+        arguments=config.rabbitmq.consumer.queue_arguments,
     )
     manager_config = RMQConsumerManagerConfig(
         exchange=exchange,

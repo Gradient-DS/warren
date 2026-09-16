@@ -36,7 +36,7 @@ from warren.pubsub.rabbitmq.config import (
     RetryConfig,
     RMQConsumerManagerConfig,
 )
-from warren.pubsub.routing import REPLAY_ROUTING_KEY_FIELD
+from warren.pubsub.routing import DELIVERY_COUNT_FIELD, REPLAY_ROUTING_KEY_FIELD
 from warren.workers.messages import (
     ExtractMessageIdentityFunc,
     extract_message_identity,
@@ -276,6 +276,13 @@ class RMQConsumerManager(ConsumerManagerBase):
 
         identity = self._extract_identity(body)
 
+        if (
+            message.redelivered
+            and self._config.consumer.max_deliveries is not None
+            and await self._count_redelivery(message, body, identity)
+        ):
+            return
+
         # Process — dispatch sync consumers to thread pool, await async directly.
         # iscoroutinefunction checks both plain async functions and callable
         # objects with async __call__ (the latter requires checking __call__).
@@ -390,6 +397,45 @@ class RMQConsumerManager(ConsumerManagerBase):
                 f"the broker will redeliver this delivery."
             )
             return False
+        return True
+
+    async def _count_redelivery(
+        self,
+        message: AbstractIncomingMessage,
+        body: dict,
+        identity: str,
+    ) -> bool:
+        """Count a broker redelivery; dead-letter past ``max_deliveries``.
+
+        A requeue hands the message back unchanged, so the only place a
+        delivery count survives is a republished body — the same trip a
+        soft failure takes through the retry worker. The original is acked
+        once the counted copy is published.
+
+        :return: True if the message was dealt with here (deferred or
+            dead-lettered); False if it should be processed now.
+        """
+        limit = self._config.consumer.max_deliveries
+        count = int(body.get(DELIVERY_COUNT_FIELD, 1)) + 1
+        if count > limit:
+            msg = f"poison message: delivered {count} times (max_deliveries={limit})"
+            await self._handle_hard_failure(message, body, HardFailureException(msg))
+            return True
+        if self._control_publisher is None:
+            self._log.warning(
+                f"[{identity}] Redelivered (delivery {count}) but no control "
+                f"publisher to count it; processing"
+            )
+            return False
+        body[DELIVERY_COUNT_FIELD] = count
+        deferral = SoftFailureException(
+            f"redelivered; delivery {count} of {limit}",
+            retry_after=self._config.consumer.redelivery_delay,
+            backoff_base=1.0,
+            jitter=False,
+            retry_count_consumed=False,
+        )
+        await self._handle_soft_failure(message, body, deferral)
         return True
 
     async def _handle_soft_failure(

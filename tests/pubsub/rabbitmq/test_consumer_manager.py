@@ -12,6 +12,8 @@ import pytest
 
 from warren.common import HardFailureException, SoftFailureException
 from warren.pubsub.common import PublishFailureException
+from warren.pubsub.rabbitmq.config import RMQConsumerConfig
+from warren.pubsub.routing import DELIVERY_COUNT_FIELD
 
 from .fakes import (
     BODY,
@@ -219,3 +221,90 @@ def test_settle_reraises_real_cancellation() -> None:
 
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(scenario())
+
+
+# ---------------------------------------------------------------------------
+# Delivery counting (poison messages)
+# ---------------------------------------------------------------------------
+
+
+def _counting_manager(
+    worker: FakeWorker, control: FakePublisher | None, max_deliveries: int = 3
+):
+    return make_manager(
+        worker,
+        control_publisher=control,
+        consumer_config=RMQConsumerConfig(
+            max_deliveries=max_deliveries, redelivery_delay=5
+        ),
+    )
+
+
+def test_first_delivery_is_processed_normally() -> None:
+    worker = FakeWorker(result=None)
+    manager = _counting_manager(worker, FakePublisher())
+    message = FakeIncomingMessage(redelivered=False)
+
+    process(manager, message)
+
+    assert worker.calls == [BODY]
+    assert message.acked
+
+
+def test_redelivery_is_deferred_with_count() -> None:
+    worker, control = FakeWorker(result=None), FakePublisher()
+    manager = _counting_manager(worker, control)
+    message = FakeIncomingMessage(redelivered=True)
+
+    process(manager, message)
+
+    assert worker.calls == []
+    envelope = control.published[0]
+    assert envelope["data_type"] == "soft-failure"
+    assert envelope["data"][DELIVERY_COUNT_FIELD] == 2  # first delivery counted as 1
+    assert envelope["data"]["retry"]["after"] == 5
+    assert envelope["data"]["retry"]["count"] == 0  # no retry slot consumed
+    assert message.acked
+
+
+def test_redelivery_over_limit_is_hard_failure() -> None:
+    worker, control = FakeWorker(result=None), FakePublisher()
+    manager = _counting_manager(worker, control, max_deliveries=3)
+    message = FakeIncomingMessage({**BODY, DELIVERY_COUNT_FIELD: 3}, redelivered=True)
+
+    process(manager, message)
+
+    assert worker.calls == []
+    envelope = control.published[0]
+    assert envelope["data_type"] == "hard-failure"
+    assert "delivered 4 times" in envelope["error"]
+    assert message.rejected is False
+
+
+def test_redelivery_without_control_publisher_is_processed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    worker = FakeWorker(result=None)
+    manager = _counting_manager(worker, None)
+    message = FakeIncomingMessage(redelivered=True)
+
+    process(manager, message)
+
+    assert worker.calls == [BODY]
+    assert "no control publisher to count it" in caplog.text
+
+
+def test_max_deliveries_none_ignores_redelivered() -> None:
+    worker = FakeWorker(result=None)
+    manager = make_manager(worker, control_publisher=FakePublisher())
+    message = FakeIncomingMessage(redelivered=True)
+
+    process(manager, message)
+
+    assert worker.calls == [BODY]
+    assert message.acked
+
+
+def test_redelivery_delay_below_one_is_rejected() -> None:
+    with pytest.raises(ValueError, match="redelivery_delay"):
+        RMQConsumerConfig(redelivery_delay=0)

@@ -41,7 +41,9 @@ class HealthConfig(BaseModel):
     """
 
     enabled: bool = True
-    host: str = "0.0.0.0"  # noqa: S104 — a probe target must be reachable from the kubelet
+    # All interfaces on purpose: a kubelet probe must reach it. Flagged by
+    # ruff S104 and bandit B104, both silenced here for that reason.
+    host: str = "0.0.0.0"  # noqa: S104  # nosec B104
     port: int = Field(default=8080, ge=0, le=65535)
     check_interval_s: float = Field(default=5.0, gt=0)
     probe_timeout_s: float = Field(default=1.0, gt=0)

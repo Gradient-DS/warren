@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-> The next release is **0.4.0**: `ConsumerManagerInterface` gains `health()`
-> and `WorkerRunnerBase.run()` gains a watchdog that can end the process.
+## [0.4.0] — 2026-09-18
+
+> `ConsumerManagerInterface` gains `health()` and `WorkerRunnerBase.run()`
+> gains a watchdog that can end the process.
 
 ### Added
 

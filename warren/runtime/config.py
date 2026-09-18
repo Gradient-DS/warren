@@ -22,6 +22,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel
 
+from warren.pubsub.common import RetryConfig
 from warren.pubsub.kafka.config import (
     KafkaConnectionConfig,
     KafkaConsumerConfig,
@@ -31,6 +32,7 @@ from warren.pubsub.rabbitmq.config import (
     RMQConnectionConfig,
     RMQConsumerConfig,
 )
+from warren.workers.health import HealthConfig
 
 
 class RuntimeRMQConfig(BaseModel):
@@ -69,8 +71,18 @@ class RedisConfig(BaseModel):
 
 
 class RuntimeRetryConfig(BaseModel):
+    """Retry worker toggle plus the retry policy every consumer manager applies.
+
+    :param enabled: Whether the retry worker runs.
+    :param collection_name: MongoDB collection for messages awaiting retry.
+    :param policy: Defaults and caps for soft-failure retries. Passed to
+        every consumer manager the runner builds, so ``max_delay_cap`` and
+        friends are deployment settings rather than library constants.
+    """
+
     enabled: bool = False
     collection_name: str = "retries"
+    policy: RetryConfig = RetryConfig()
 
 
 class RuntimeConfig(BaseModel):
@@ -84,6 +96,7 @@ class RuntimeConfig(BaseModel):
     :param mongodb: MongoDB connection settings.
     :param redis: Redis connection settings.
     :param retry: Retry worker toggle and collection name.
+    :param health: Watchdog and readiness endpoint settings.
     """
 
     backend: Literal["rabbitmq", "kafka"] = "rabbitmq"
@@ -92,6 +105,7 @@ class RuntimeConfig(BaseModel):
     mongodb: MongoDBConfig = MongoDBConfig()
     redis: RedisConfig = RedisConfig()
     retry: RuntimeRetryConfig = RuntimeRetryConfig()
+    health: HealthConfig = HealthConfig()
 
     @classmethod
     def from_yaml(cls, path: Path) -> "RuntimeConfig":

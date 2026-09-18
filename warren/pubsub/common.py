@@ -5,7 +5,7 @@ Defines the protocols and types used within the pubsub package hierarchy.
 For shared contracts between pubsub and workers, see distributed/common.py.
 """
 
-from typing import Protocol
+from typing import Literal, Protocol
 
 from dataclasses import dataclass
 
@@ -30,6 +30,64 @@ class PubSubSetupError(WarrenError):
     """
 
     pass
+
+
+@dataclass(frozen=True)
+class ConsumerHealth:
+    """One observation of a consumer manager's transport state.
+
+    Built for two readers: a watchdog deciding whether the process should
+    exit, and a readiness endpoint. ``consumer_lost`` is the only condition
+    a restart fixes; a blocked or reconnecting connection is left to the
+    transport's own recovery.
+
+    :param connected: The transport is up (not closed, not reconnecting).
+    :param blocked: Connected, but the broker holds this connection in
+        ``Connection.Blocked``; publishes and acks stall until it lifts.
+    :param channel_open: The consume channel is initialised and open.
+    :param consumer_registered: Our consumer tag is registered on the
+        underlying channel; None when that could not be determined within
+        the probe timeout (never treated as lost).
+    :param detail: Why the state is what it is, for logs and the endpoint.
+    """
+
+    connected: bool
+    blocked: bool
+    channel_open: bool
+    consumer_registered: bool | None
+    detail: str = ""
+
+    @property
+    def ready(self) -> bool:
+        return (
+            self.connected
+            and not self.blocked
+            and self.channel_open
+            and self.consumer_registered is True
+        )
+
+    @property
+    def consumer_lost(self) -> bool:
+        """Connection alive and unblocked, but no live consumer on it."""
+        return (
+            self.connected
+            and not self.blocked
+            and (not self.channel_open or self.consumer_registered is False)
+        )
+
+    @property
+    def state(
+        self,
+    ) -> Literal["ready", "reconnecting", "blocked", "consumer_lost", "unknown"]:
+        if self.ready:
+            return "ready"
+        if not self.connected:
+            return "reconnecting"
+        if self.blocked:
+            return "blocked"
+        if self.consumer_lost:
+            return "consumer_lost"
+        return "unknown"
 
 
 class RetryConfig(BaseModel):
@@ -119,4 +177,12 @@ class ConsumerManagerInterface(Protocol):
 
     async def stop_consuming(self) -> None:
         """Stop the consumption."""
+        ...
+
+    async def health(self, *, probe_timeout: float = 1.0) -> ConsumerHealth:
+        """Observe transport state; must not raise for transport reasons.
+
+        :param probe_timeout: Upper bound, in seconds, on any wait the
+            observation needs (a blocked connection never becomes ready).
+        """
         ...

@@ -16,7 +16,7 @@ compatibility.
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 
 from warren.pubsub.common import RetryConfig
 
@@ -32,7 +32,17 @@ __all__ = [
 
 
 class RMQConnectionConfig(BaseModel):
-    """Connection-specific parameters for ``aio_pika.connect_robust()``."""
+    """Connection-specific parameters for ``aio_pika.connect_robust()``.
+
+    :param heartbeat: AMQP heartbeat timeout in seconds, sent as the
+        client's ``Tune-Ok`` value — which RabbitMQ adopts as-is, so this
+        setting alone decides the negotiated timeout. ``None`` keeps
+        aiormq's default of 60; ``0`` disables heartbeats. The bounds are
+        aiormq's own: anything outside ``0 <= v < 65535`` would be read as
+        0 (heartbeats off), which is never what a typo means. A long
+        timeout also delays aiormq's detection of a silent broker to
+        ``(heartbeat + 1) * 3`` seconds.
+    """
 
     host: str = "localhost"
     port: int = 5672
@@ -44,6 +54,7 @@ class RMQConnectionConfig(BaseModel):
     ssl_context: Any | None = None  # ssl.SSLContext
     timeout: float | None = None
     client_properties: dict[str, Any] | None = None
+    heartbeat: int | None = Field(default=None, ge=0, lt=65535)
 
 
 class RMQExchangeConfig(BaseModel):
@@ -55,17 +66,44 @@ class RMQExchangeConfig(BaseModel):
 
 
 class RMQQueueConfig(BaseModel):
+    """Queue declaration parameters.
+
+    :param arguments: Extra ``x-`` arguments forwarded verbatim to the
+        declaration (queue type, delivery limit, dead-letter exchange, …).
+        Not validated here; the broker refuses to re-declare an existing
+        queue with different arguments.
+    """
+
     name: str
     durable: bool = True
     exclusive: bool = False
     auto_delete: bool = False
     routing_key: str | None = None
+    arguments: dict[str, Any] | None = None
 
 
 class RMQConsumerConfig(BaseModel):
+    """Consumer-side settings, one set per worker process.
+
+    :param prefetch_count: Unacked deliveries the broker pushes at once.
+    :param on_shutdown_timeout: Seconds to wait for in-flight work on stop.
+    :param max_deliveries: Dead-letter a message after this many broker
+        deliveries (the first counts as 1). Every requeue costs one — a
+        channel loss mid-flight included — so this is a count of chances.
+        None keeps redelivery unbounded.
+    :param redelivery_delay: Seconds before a counted redelivery is replayed
+        through the retry worker. At least 1: a ``retry_after`` of 0 reads
+        as "unset" to the retry policy and would fall back to its default.
+    :param queue_arguments: Forwarded into ``RMQQueueConfig.arguments`` for
+        the worker's queue; None declares the queue as today.
+    """
+
     # TODO: prefetch count is influenced by the worker's concurrency level. How to handle this?
     prefetch_count: int = 1
     on_shutdown_timeout: float = 30.0
+    max_deliveries: int | None = Field(default=None, ge=1)
+    redelivery_delay: int = Field(default=5, ge=1)
+    queue_arguments: dict[str, Any] | None = None
 
 
 class RMQConsumerManagerConfig(BaseModel):

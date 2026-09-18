@@ -15,6 +15,7 @@ from warren.common import (
 )
 from warren.pubsub.base import ConsumerManagerBase
 from warren.pubsub.common import (
+    ConsumerHealth,
     PublisherInterface,
     PublishFailureException,
     PubSubSetupError,
@@ -259,6 +260,18 @@ class KafkaConsumerManager(ConsumerManagerBase):
 
         # Consumer stopped.
         # Admin client is owned by KafkaConnectionManager — not our responsibility to close.
+
+    async def health(self, *, probe_timeout: float = 1.0) -> ConsumerHealth:
+        """Kafka has no channel and no blocked state; liveness is the poll loop."""
+        started = self._kafka_consumer is not None
+        polling = self._poll_task is not None and not self._poll_task.done()
+        return ConsumerHealth(
+            connected=started,
+            blocked=False,
+            channel_open=started,
+            consumer_registered=polling if started else None,
+            detail="" if started and polling else "poll loop not running",
+        )
 
     async def _poll_loop(self) -> None:
         """Sequential poll loop: fetch one message, process it, repeat.
@@ -578,7 +591,9 @@ class KafkaConsumerManager(ConsumerManagerBase):
             error.jitter if error.jitter is not None else self._retry_config.jitter
         )
 
-        delay = base * (exp_base ** (attempt - 1))
+        # attempt is 0 for a deferral that consumed no retry slot; clamp so
+        # the exponent never goes negative and halves the requested delay.
+        delay = base * (exp_base ** max(attempt - 1, 0))
 
         if use_jitter:
             delay *= random.uniform(0.5, 1.5)

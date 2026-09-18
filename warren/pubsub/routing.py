@@ -35,6 +35,12 @@ REPLAY_ROUTING_KEY_FIELD = "_replay_routing_key"
 retry worker can replay the message back to the worker that failed."""
 
 
+DELIVERY_COUNT_FIELD = "delivery_count"
+"""Message field carrying how many times the broker has delivered this message.
+A requeue hands a message back unchanged, so the consumer manager republishes
+a redelivered message with the count in its body (see ``max_deliveries``)."""
+
+
 class MessageFieldRouter:
     """A :class:`RouteFunc` that routes by a single field of the message body.
 

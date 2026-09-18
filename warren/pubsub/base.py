@@ -4,6 +4,7 @@ from basics.base import Base
 
 from warren.common import MessageConsumerInterface
 from warren.pubsub.common import (
+    ConsumerHealth,
     ConsumerManagerInterface,
     PublisherInterface,
     Route,
@@ -82,4 +83,13 @@ class ConsumerManagerBase(Base, ConsumerManagerInterface, metaclass=ABCMeta):
     @abstractmethod
     async def stop_consuming(self) -> None:
         """Stop the consumption of messages by consumer."""
+        ...
+
+    @abstractmethod
+    async def health(self, *, probe_timeout: float = 1.0) -> ConsumerHealth:
+        """Observe transport state; must not raise for transport reasons.
+
+        :param probe_timeout: Upper bound, in seconds, on any wait the
+            observation needs (a blocked connection never becomes ready).
+        """
         ...

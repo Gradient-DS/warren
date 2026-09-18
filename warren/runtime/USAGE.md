@@ -97,12 +97,24 @@ rabbitmq:
     port: 5672
     login: guest
     password: guest
+    heartbeat: 600          # seconds; unset keeps aiormq's 60
   consumer:
     prefetch_count: 4
     on_shutdown_timeout: 30.0
-  retry:
-    enabled: true
-    collection_name: retries
+    max_deliveries: 3       # dead-letter after N broker deliveries; unset = unbounded
+    redelivery_delay: 5     # seconds before a counted redelivery is replayed
+    queue_arguments: null   # e.g. {x-queue-type: quorum}; forwarded verbatim
+
+retry:
+  enabled: true
+  collection_name: retries
+  policy:                   # RetryConfig: defaults and caps for soft-failure retries
+    max_delay_cap: 900
+
+health:                     # on by default
+  enabled: true
+  port: 8080
+  consumer_lost_grace_s: 60
 
 mongodb:
   host: localhost
@@ -115,6 +127,12 @@ redis:
 ```
 
 All fields have sensible defaults. Load via `RuntimeConfig.from_yaml("config.yaml")`.
+
+The worker serves `GET /ready` (200 while it holds a live consumer on an
+unblocked connection, else 503) and `GET /live` (200 while the process runs)
+on `health.port`. When the consumer is lost while the connection is alive for
+longer than `health.consumer_lost_grace_s`, the worker exits non-zero so the
+orchestrator restarts it; a blocked or reconnecting connection is waited out.
 
 Note: MongoDB and Redis currently only accept `host`/`port` pairs. Connection string support (`mongodb://...`, `redis://...`) is planned but not yet implemented.
 

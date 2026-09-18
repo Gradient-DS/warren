@@ -7,7 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> The next release is **0.4.0**: `ConsumerManagerInterface` gains `health()`
+> and `WorkerRunnerBase.run()` gains a watchdog that can end the process.
+
+### Added
+
+- **Configurable AMQP heartbeat**: `rabbitmq.connection.heartbeat` (seconds)
+  on `RMQConnectionConfig`. RabbitMQ adopts the client's `Tune-Ok` value
+  as-is, so this setting alone decides the negotiated timeout; unset keeps
+  aiormq's 60. aiormq's silent-broker detection scales with it
+  (`(heartbeat + 1) × 3` s).
+- **Consumer health**: `ConsumerHealth` and `health()` on both consumer
+  managers (connected / blocked / channel open / consumer registered), a
+  watchdog in `WorkerRunnerBase.run()` that ends the run with `WarrenError`
+  when the consumer has been lost with a live connection for longer than
+  `health.consumer_lost_grace_s` (default 60 s), and a stdlib readiness
+  endpoint (`GET /ready`, `GET /live`; `health.port`, default 8080, **on by
+  default** — a failed bind is logged and the worker carries on). Blocked
+  connections (`Connection.Blocked`) are reported as not ready and logged
+  on entry and exit; they never trigger an exit.
+- **Typed throttling in the URL resolver**: `DocumentThrottledError`
+  (`retry_after`, `status_code`) on HTTP 429, or 503 carrying `Retry-After`;
+  `parse_retry_after` handles delay-seconds and HTTP-dates. A bare 503 keeps
+  the slot-consuming retry ladder. Per-host rate limiting is left to the
+  pipeline (`build_client(transport=...)`).
+- **Retry policy from YAML**: `retry.policy` (a `RetryConfig`) now reaches
+  every consumer manager the runner builds; previously the library defaults
+  (`max_delay_cap: 300`) applied everywhere.
+- **Delivery counting**: `rabbitmq.consumer.max_deliveries` dead-letters a
+  message after N broker deliveries by replaying each redelivery through
+  the retry worker with a `delivery_count` in the body (a requeue carries
+  the message back unchanged). `redelivery_delay` (default 5 s) is the
+  replay delay. Off unless set. The hard-failure envelope's error text names
+  the mechanism (`poison message: delivered N times`).
+- `rabbitmq.consumer.queue_arguments` — forwarded verbatim into the worker
+  queue declaration (`x-queue-type`, `x-delivery-limit`, a DLX, …). Not
+  validated; the broker refuses to re-declare an existing queue with
+  different arguments.
+
+- `resolve_http.build_client()` constructs the resolver's `AsyncClient` and
+  owns its redirect and timeout policy, configurable by environment:
+  `HTTP_FOLLOW_REDIRECTS` (default `true`), `HTTP_TIMEOUT_S` (default `60`)
+  and `HTTP_MAX_REDIRECTS` (default `20`). An unparseable
+  `HTTP_FOLLOW_REDIRECTS` raises rather than reading as `false`, so a typo
+  cannot silently switch redirect following off.
+
 ### Fixed
+
+- **A delivery whose channel is dead is never settled or published for.**
+  After a reconnect every in-flight delivery pins a closed channel; `ack()`
+  raised out of the success path into the hard-failure handler, which
+  published a false failure record and then raised again — unlogged, since
+  the task's exception was never retrieved. The consumer manager now checks
+  the channel before publishing, absorbs transport errors from
+  ack/nack/reject with one ERROR line, and logs task exceptions. The
+  broker's own requeue redelivers the message.
+- **Retry delay was halved on the first deferral.** With
+  `retry_count_consumed=False` on a never-retried message the backoff
+  exponent was `-1`; it now clamps at 0 (both backends).
 
 - **`ResultDoc.created_at` is stored as a BSON `Date`, not an ISO string.**
   A TTL index over a string field is inert: MongoDB's TTL monitor deletes
@@ -29,15 +86,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   permalinks to a CDN, DOIs to a publisher, a landing path to the file
   itself. Measured on a real corpus, 91 of 96 download failures in one
   500-document run were redirects whose target was the requested PDF.
-
-### Added
-
-- `resolve_http.build_client()` constructs the resolver's `AsyncClient` and
-  owns its redirect and timeout policy, configurable by environment:
-  `HTTP_FOLLOW_REDIRECTS` (default `true`), `HTTP_TIMEOUT_S` (default `60`)
-  and `HTTP_MAX_REDIRECTS` (default `20`). An unparseable
-  `HTTP_FOLLOW_REDIRECTS` raises rather than reading as `false`, so a typo
-  cannot silently switch redirect following off.
 
 ### Removed
 

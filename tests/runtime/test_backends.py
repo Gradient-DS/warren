@@ -24,9 +24,9 @@ from warren.pubsub.kafka.config import KafkaConsumerConfig
 from warren.pubsub.rabbitmq.aio_pika.connection import RMQConnectionManager
 from warren.pubsub.rabbitmq.aio_pika.consumer import RMQConsumerManager
 from warren.pubsub.rabbitmq.aio_pika.publisher import RMQPublisher
-from warren.pubsub.rabbitmq.config import RMQExchangeConfig
+from warren.pubsub.rabbitmq.config import RMQConsumerConfig, RMQExchangeConfig
 from warren.runtime import backends
-from warren.runtime.config import RuntimeConfig, RuntimeKafkaConfig
+from warren.runtime.config import RuntimeConfig, RuntimeKafkaConfig, RuntimeRMQConfig
 
 
 WORKER_TYPE = "document_parser"
@@ -187,3 +187,20 @@ def test_consumer_manager_forwards_publish_hard_failures() -> None:
     )
 
     assert manager._publish_hard_failures is False
+
+
+def test_consumer_manager_rabbitmq_forwards_queue_arguments() -> None:
+    config = RuntimeConfig(
+        rabbitmq=RuntimeRMQConfig(
+            consumer=RMQConsumerConfig(queue_arguments={"x-queue-type": "quorum"})
+        )
+    )
+    manager = backends.create_consumer_manager(
+        config,
+        object(),
+        exchange=FANOUT,
+        worker_type=WORKER_TYPE,
+        consumer=_FakeConsumer(),
+    )
+
+    assert manager._config.queue.arguments == {"x-queue-type": "quorum"}

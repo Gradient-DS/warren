@@ -29,15 +29,25 @@ Environment overrides, read once at wiring time:
 ``HTTP_TIMEOUT_S``           ``60``    total request timeout, seconds
 ``HTTP_MAX_REDIRECTS``       ``20``    httpx's own default; guards redirect loops
 ===========================  ========  =======================================
+
+A 429, or a 503 that carries ``Retry-After``, raises
+``DocumentThrottledError`` so the worker can defer on the server's delay
+instead of spending a retry slot. Per-host rate limiting is the pipeline's
+concern: wrap the client via ``build_client(transport=...)``.
 """
 
 from typing import cast
 
 import os
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 
 import httpx
 
-from warren.storage.documents.interface import DocumentNotFoundError
+from warren.storage.documents.interface import (
+    DocumentNotFoundError,
+    DocumentThrottledError,
+)
 from warren.storage.documents.location import (
     DocumentLocation,
     DocumentURLLocation,
@@ -79,6 +89,31 @@ def _env_flag(name: str, *, default: bool) -> bool:
         return False
     msg = f"{name} must be one of {sorted(_TRUE | _FALSE)}; got {raw!r}"
     raise ValueError(msg)
+
+
+def parse_retry_after(
+    value: str | None, *, now: datetime | None = None
+) -> float | None:
+    """Seconds asked for by a ``Retry-After`` header (delay-seconds or HTTP-date).
+
+    :param value: Raw header value, or None when the header is absent.
+    :param now: Reference instant for an HTTP-date; defaults to the clock.
+
+    :return: Non-negative seconds, or None when absent or unparseable.
+    """
+    if value is None:
+        return None
+    text = value.strip()
+    if text.isdigit():
+        return float(text)
+    try:
+        when = parsedate_to_datetime(text)
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    reference = now or datetime.now(UTC)
+    return max(0.0, (when - reference).total_seconds())
 
 
 def build_client(
@@ -136,6 +171,7 @@ async def resolve_http(
     :return: Raw document bytes.
 
     :raises DocumentNotFoundError: If the server responds 404 (hard failure).
+    :raises DocumentThrottledError: On 429, or 503 carrying Retry-After (soft failure).
     """
     url_location = cast("DocumentURLLocation", location)
 
@@ -143,5 +179,18 @@ async def resolve_http(
     if response.status_code == httpx.codes.NOT_FOUND:
         msg = f"Document not found at URL: {url_location.url}"
         raise DocumentNotFoundError(msg)
+    if response.status_code == httpx.codes.TOO_MANY_REQUESTS or (
+        response.status_code == httpx.codes.SERVICE_UNAVAILABLE
+        and "Retry-After" in response.headers
+    ):
+        msg = (
+            f"Throttled by {response.url.host} ({response.status_code}): "
+            f"{url_location.url}"
+        )
+        raise DocumentThrottledError(
+            msg,
+            retry_after=parse_retry_after(response.headers.get("Retry-After")),
+            status_code=response.status_code,
+        )
     response.raise_for_status()
     return response.content

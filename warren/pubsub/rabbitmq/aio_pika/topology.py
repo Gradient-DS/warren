@@ -61,6 +61,7 @@ async def declare_queue(
             durable=config.durable,
             exclusive=config.exclusive,
             auto_delete=config.auto_delete,
+            arguments=config.arguments,
         )
         await queue.bind(exchange.name, routing_key=config.routing_key or "")
     except Exception as e:

@@ -102,3 +102,42 @@ The queue is a **server-side object** on the broker. When each worker calls `dec
 ## Open Questions
 - Do workers declare exchanges / queues / bindings themselves, or are these managed separately, and worker connects with just url, queue_name, prefetch?
 - Who handles publishing? Worker needs to know where to publish next, or is everything contained in the publish function? (worker gets next step from the metadata?)
+
+## Health, blocked connections and redelivery
+
+**What warren observes.** `RMQConsumerManager.health()` reports `connected`
+(transport present, `connected` event set), `blocked` (the broker sent
+`Connection.Blocked`; detected because `transport.ready()` does not complete
+within the probe timeout), `channel_open` and `consumer_registered` (our
+consumer tag on the underlying aiormq channel). The runner polls it every
+`health.check_interval_s` and serves the last sample on `/ready`.
+
+**Blocked.** A blocked connection backs up aiormq's 10-frame write queue;
+every publish and every ack then waits, and the heartbeat sender tears the
+connection down after `(heartbeat + 1) × 3` seconds. aiormq logs
+`Connection … was blocked by: …` at WARNING through `aiormq.connection`;
+the runtime scripts' logging passes it. Warren logs the transition too.
+Nothing restarts: a restart cannot help a blocked broker.
+
+**Consumer lost with a live connection.** aio-pika restores channels and
+consumers after a *connection* drop and after a broker-initiated
+`Channel.Close`; it does not when the restore itself fails, and a
+`Basic.Cancel` from the broker (queue deleted) leaves the channel open with
+no consumer. Warren does not try to repair these in place: after
+`health.consumer_lost_grace_s` the runner ends with `WarrenError`, the
+process exits non-zero and the orchestrator restarts it.
+
+**In-flight deliveries after a channel loss.** Every delivery pins the
+channel it arrived on; once that channel is closed, ack/nack/reject raise.
+Warren treats such a delivery as no longer its own — nothing is published
+for it, nothing is settled, one line is logged — because the broker requeues
+every unacked delivery of a closed channel and will redeliver it.
+
+**Redelivery counting.** With `rabbitmq.consumer.max_deliveries` set, a
+redelivered message (`redelivered=true`) is not processed but replayed
+through the retry worker with `delivery_count` in its body, and dead-lettered
+(hard-failure envelope, reject) once the count exceeds the limit. Every
+requeue — a channel loss mid-flight, a shutdown nack — costs one delivery.
+Quorum queues offer the same broker-side (`x-delivery-limit`, default 20 in
+RabbitMQ 4.x, with a DLX); pass their arguments via
+`rabbitmq.consumer.queue_arguments`.

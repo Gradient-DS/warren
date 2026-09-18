@@ -136,7 +136,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         document_store: DocumentStoreInterface | None = None,
         results_stores: dict[str, ResultsStoreInterface] | None = None,
     ) -> None:
-        super().__init__(name=worker_name)
+        super().__init__(name=worker_name, health=config.health)
         self._worker_type = worker_type
         self._worker_name = worker_name
         self._config = config
@@ -446,4 +446,5 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             data_publisher=data_publisher,
             control_publisher=control_publisher,
             observer_publisher=observer_publisher,
+            retry_config=self._config.retry.policy,
         )

@@ -103,3 +103,37 @@ def test_empty_config_defaults_to_rabbitmq() -> None:
     # not here — config carries only per-environment infrastructure.
     assert config.rabbitmq.connection.host == "localhost"
     assert config.kafka.topic.name == "jobs"
+
+
+def test_retry_policy_from_yaml(tmp_path: Path) -> None:
+    path = _write_yaml(
+        tmp_path,
+        """
+retry:
+  enabled: true
+  policy:
+    max_delay_cap: 900
+""",
+    )
+
+    config = RuntimeConfig.from_yaml(path)
+
+    assert config.retry.policy.max_delay_cap == 900
+    assert config.retry.policy.max_retries == 5  # untouched defaults survive
+
+
+def test_health_from_yaml(tmp_path: Path) -> None:
+    path = _write_yaml(
+        tmp_path,
+        """
+health:
+  port: 9090
+  consumer_lost_grace_s: 30
+""",
+    )
+
+    config = RuntimeConfig.from_yaml(path)
+
+    assert config.health.enabled is True
+    assert config.health.port == 9090
+    assert config.health.consumer_lost_grace_s == 30.0

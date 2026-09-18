@@ -10,7 +10,8 @@ Exception hierarchy for error handling in workers::
 
     DocumentResolutionError          # base — soft failure (transient/unknown)
     ├── DocumentNotFoundError        # hard failure (document doesn't exist)
-    └── UnknownLocationTypeError     # hard failure (no resolver registered)
+    ├── UnknownLocationTypeError     # hard failure (no resolver registered)
+    └── DocumentThrottledError       # soft failure; the source asked for a delay
 """
 
 from typing import Protocol
@@ -57,6 +58,33 @@ class UnknownLocationTypeError(DocumentResolutionError):
     Treated as a hard failure (non-retryable) by workers — a missing
     resolver is a configuration error, not a transient issue.
     """
+
+
+class DocumentThrottledError(DocumentResolutionError):
+    """The source asked us to slow down: HTTP 429, or 503 with ``Retry-After``.
+
+    Soft failure. Workers that defer the document instead of spending a
+    retry slot read ``retry_after`` — see ``warren/docs/retry_design.md``,
+    "Deferring on throttling".
+
+    :param message: Error description.
+    :param retry_after: Server-requested delay in seconds, or None when the
+        response carried no usable ``Retry-After``.
+    :param status_code: The HTTP status that carried the request.
+    :param doc_id: Document identifier, if known.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        retry_after: float | None,
+        status_code: int,
+        doc_id: str | None = None,
+    ) -> None:
+        super().__init__(message, doc_id=doc_id)
+        self.retry_after = retry_after
+        self.status_code = status_code
 
 
 ResolveDocumentFunc = Callable[[DocumentLocation], Awaitable[bytes]]

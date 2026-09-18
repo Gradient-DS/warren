@@ -571,11 +571,17 @@ class _FakeRMQMessage:
     # Arrival routing key stamped into soft-failure envelopes; "" is what a
     # fanout publish carries, matching the Kafka consumer's stamp.
     routing_key = ""
+    delivery_tag = 1
+    redelivered = False
 
     def __init__(self) -> None:
         self.acked = False
         self.nacked: bool | None = None
         self.rejected: bool | None = None
+
+    @property
+    def channel(self) -> object:
+        return object()  # a live channel
 
     async def ack(self) -> None:
         self.acked = True
@@ -690,9 +696,43 @@ def test_max_retries_hard_failure_envelope_matches_rmq_path() -> None:
     assert kafka_consumer.commits == [{TP: 8}]
 
 
+def test_first_deferral_without_retry_slot_is_not_halved() -> None:
+    """A deferral (retry_count_consumed=False) on a never-retried message keeps
+    the count at 0. The backoff exponent must clamp at 0 there: ``2 ** -1``
+    silently halved the requested delay (30 → 15) on both backends."""
+    error = SoftFailureException(
+        "throttled", retry_after=30, retry_count_consumed=False
+    )
+
+    kafka_envelopes, rmq_envelopes, _, _ = _parity_envelopes(_BODY, error)
+
+    assert kafka_envelopes[0]["data"]["retry"]["after"] == 30
+    assert rmq_envelopes == kafka_envelopes
+
+
 # ---------------------------------------------------------------------------
 # Poll loop and shutdown
 # ---------------------------------------------------------------------------
+
+
+def test_health_reflects_poll_loop() -> None:
+    manager, _ = _manager(_FakeWorker(result=None))
+
+    async def scenario() -> tuple:
+        before = await manager.health()
+        await manager.setup()
+        await manager.start_consuming()
+        running = await manager.health()
+        await manager.stop_consuming()
+        after = await manager.health()
+        return before, running, after
+
+    before, running, after = asyncio.run(scenario())
+
+    assert not before.connected
+    assert before.state == "reconnecting"
+    assert running.ready
+    assert after.consumer_lost  # consumer object still present, loop stopped
 
 
 def test_poll_loop_processes_messages_sequentially() -> None:

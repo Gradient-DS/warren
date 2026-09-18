@@ -1,13 +1,21 @@
 """Unit tests for the HTTP(S) document resolver."""
 
 import asyncio
+from datetime import UTC, datetime
 
 import httpx
 import pytest
 
-from warren.storage.documents.interface import DocumentNotFoundError
+from warren.storage.documents.interface import (
+    DocumentNotFoundError,
+    DocumentThrottledError,
+)
 from warren.storage.documents.location import DocumentURLLocation
-from warren.storage.documents.resolve_http import build_client, resolve_http
+from warren.storage.documents.resolve_http import (
+    build_client,
+    parse_retry_after,
+    resolve_http,
+)
 
 
 def _client(handler) -> httpx.AsyncClient:
@@ -154,3 +162,77 @@ def test_resolve_http_surfaces_the_redirect_when_following_is_off() -> None:
 
     with pytest.raises(httpx.HTTPStatusError):
         asyncio.run(run())
+
+
+# ---------------------------------------------------------------------------
+# Throttling
+# ---------------------------------------------------------------------------
+
+
+def _resolve(handler, url: str = "https://example.com/doc.pdf"):
+    loc = DocumentURLLocation(url=url)
+
+    async def run() -> bytes:
+        async with _client(handler) as client:
+            return await resolve_http(loc, client=client)
+
+    return asyncio.run(run())
+
+
+def test_429_raises_throttled_with_retry_after_seconds() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, headers={"Retry-After": "30"})
+
+    with pytest.raises(DocumentThrottledError) as excinfo:
+        _resolve(handler)
+
+    assert excinfo.value.retry_after == 30.0
+    assert excinfo.value.status_code == 429
+
+
+def test_429_without_retry_after_has_none() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429)
+
+    with pytest.raises(DocumentThrottledError) as excinfo:
+        _resolve(handler)
+
+    assert excinfo.value.retry_after is None
+
+
+def test_503_with_retry_after_is_throttled() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, headers={"Retry-After": "120"})
+
+    with pytest.raises(DocumentThrottledError) as excinfo:
+        _resolve(handler)
+
+    assert excinfo.value.retry_after == 120.0
+
+
+def test_503_without_retry_after_stays_a_status_error() -> None:
+    """Only an explicit request to slow down is throttling; a bare 503 keeps
+    the slot-consuming retry ladder (spec D4)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        _resolve(handler)
+
+
+def test_parse_retry_after_http_date() -> None:
+    now = datetime(2026, 9, 16, 12, 0, 0, tzinfo=UTC)
+
+    assert parse_retry_after("Wed, 16 Sep 2026 12:01:30 GMT", now=now) == 90.0
+
+
+def test_parse_retry_after_past_date_clamps_to_zero() -> None:
+    now = datetime(2026, 9, 16, 12, 0, 0, tzinfo=UTC)
+
+    assert parse_retry_after("Wed, 16 Sep 2026 11:00:00 GMT", now=now) == 0.0
+
+
+@pytest.mark.parametrize("raw", [None, "", "soon", "-5"])
+def test_parse_retry_after_garbage_is_none(raw: str | None) -> None:
+    assert parse_retry_after(raw) is None

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `JobStatusWorkerRunner`, `RetryWorkerRunner` and `JobPublicationWorkerRunner`
+  ignored the `health:` section of `RuntimeConfig` and always served the health
+  endpoint with default settings (enabled, port 8080). They now honour it, as
+  `DefaultWorkerRunner` already did.
+
 ## [0.4.0] — 2026-09-18
 
 > `ConsumerManagerInterface` gains `health()` and `WorkerRunnerBase.run()`

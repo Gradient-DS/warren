@@ -116,7 +116,7 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         consumer_manager_factory: ConsumerManagerFactory | None = None,
         create_source_generator: Callable[[dict], AsyncIterable] | None = None,
     ) -> None:
-        super().__init__(name=worker_name)
+        super().__init__(name=worker_name, health=config.health)
         self._worker_name = worker_name
         self._config = config
         # Consume job submissions on ``exchange`` (the observer exchange);

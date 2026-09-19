@@ -1,7 +1,7 @@
 """
 Run the RAG example in a single process, with no infrastructure.
 
-    pip install "warren[examples]"
+    pip install -e ".[examples]"
     export OPENAI_API_KEY=...
     python -m examples.rag.run_local
 

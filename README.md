@@ -12,7 +12,7 @@ Warren separates the **framework** (worker base classes, storage interfaces, pub
 
 ## Installation
 
-The transport backends and cloud storage are optional extras — install the ones you use. The Quickstart below runs on RabbitMQ, so install the `rmq` extra:
+The transport backends and cloud storage are optional extras — install the ones you use. The Docker Quickstart below runs on RabbitMQ, so install the `rmq` extra:
 
 ```bash
 pip install "warren[rmq]"
@@ -32,10 +32,10 @@ pip install -e ".[dev,rmq,kafka]"
 
 ### Try it without any infrastructure
 
-From the repo root, install the example extras and set your OpenAI key:
+From a clone of the repo, install the example extras and set your OpenAI key:
 
 ```bash
-pip install "warren[examples]"
+pip install -e ".[examples]"
 export OPENAI_API_KEY=...
 python -m examples.rag.run_local
 ```

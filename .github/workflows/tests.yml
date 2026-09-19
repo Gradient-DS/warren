@@ -45,6 +45,9 @@ jobs:
       - name: Import surface with no extras
         run: python -c "import warren, warren.runtime.config, warren.pubsub.common, warren.pubsub.rabbitmq, warren.pubsub.kafka"
 
+      - name: Memory backend works with no extras
+        run: python -c "import asyncio; from warren.runtime import backends; from warren.runtime.config import RuntimeConfig; asyncio.run(backends.create_connection_manager(RuntimeConfig(backend='memory')).setup())"
+
       # In a genuinely-bare env neither transport library is installed, so
       # selecting either backend must surface the friendly
       # OptionalDependencyError — not a raw ImportError, and not nothing.

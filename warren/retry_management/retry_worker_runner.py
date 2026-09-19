@@ -34,6 +34,7 @@ from warren.runtime.infrastructure import (
     RuntimeInfra,
     close_runtime_infrastructure,
     create_runtime_infrastructure,
+    require_injected,
 )
 from warren.storage.cache.redis import RedisDictCache
 from warren.storage.cached_document_store import (
@@ -73,6 +74,9 @@ class RetryWorkerRunner(WorkerRunnerBase):
         on the retry queue.
     :param message_key_func: optional function to extract a composite
         key from a message dict. Passed to ``RetryWorker``.
+    :param infra: optional shared infrastructure. When given, the runner
+        uses it and does not close it; the caller owns its lifetime. Needed
+        when several runners share one process (``backend: memory``).
     """
 
     def __init__(
@@ -86,6 +90,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
         republish_publisher: PublisherInterface | None = None,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
         message_key_func: Callable[[dict], str] | None = None,
+        infra: RuntimeInfra | None = None,
     ) -> None:
         super().__init__(name=worker_name)
         self._worker_name = worker_name
@@ -100,7 +105,8 @@ class RetryWorkerRunner(WorkerRunnerBase):
         self._republish_publisher = republish_publisher
         self._consumer_manager_factory = consumer_manager_factory
         self._message_key_func = message_key_func
-        self._infra: RuntimeInfra | None = None
+        self._infra: RuntimeInfra | None = infra
+        self._owns_infra: bool = infra is None
         self._retry_worker: RetryWorker | None = None
 
     async def setup(self) -> None:
@@ -114,8 +120,14 @@ class RetryWorkerRunner(WorkerRunnerBase):
         5. Create and set up the consumer manager
         6. Schedule pending retries from the store
         """
-        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
-            self._infra = await create_runtime_infrastructure(self._config)
+        if self._infra is None:
+            with self._exception_wrapping(
+                "Infrastructure setup (RabbitMQ/MongoDB/Redis)"
+            ):
+                self._infra = await create_runtime_infrastructure(self._config)
+
+        with self._exception_wrapping("Store injection check"):
+            require_injected(self._config, retry_store=self._retry_store)
 
         if self._retry_store is None:
             with self._exception_wrapping("Retry store creation"):
@@ -164,7 +176,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
                     f"Publisher teardown failed: {summarize_exception_chain(exc)}"
                 )
 
-        if self._infra is not None:
+        if self._infra is not None and self._owns_infra:
             try:
                 await close_runtime_infrastructure(self._infra)
             except Exception as exc:

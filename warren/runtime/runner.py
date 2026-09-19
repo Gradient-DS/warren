@@ -34,6 +34,7 @@ from warren.runtime.infrastructure import (
     RuntimeInfra,
     close_runtime_infrastructure,
     create_runtime_infrastructure,
+    require_injected,
 )
 from warren.runtime.spec import (
     WorkerFactoryContext,
@@ -95,6 +96,103 @@ async def _resolve_cloud(
     return await resolver(cloud_location)
 
 
+def create_default_resolvers() -> dict[str, ResolveDocumentFunc]:
+    """Build the default document resolver registry.
+
+    ``path`` always; ``cloud`` (GCS, S3) and ``url`` when their optional
+    extras are installed. A module function so callers that are not a
+    runner instance can build a document fetcher too.
+
+    :return: Mapping of location type to resolver function.
+    """
+    resolvers: dict[str, ResolveDocumentFunc] = {"path": resolve_path}
+
+    cloud_by_provider: dict[str, ResolveDocumentFunc] = {}
+
+    try:
+        from google.cloud.storage import Client as GCSClient
+
+        from warren.storage.documents.resolve_gcs import (
+            resolve_gcs,
+        )
+
+        cloud_by_provider["gcs"] = partial(resolve_gcs, client=GCSClient())
+    except ImportError:
+        # Optional 'gcs' extra. The 'cloud' resolver is only attempted,
+        # never required — pipelines that never resolve cloud documents
+        # run fine without it, so we degrade gracefully rather than
+        # raise. Selecting a 'cloud' document location without the
+        # resolver later fails with UnknownLocationTypeError.
+        module_logger.debug(
+            "google-cloud-storage not installed — GCS cloud resolver "
+            'disabled; install with: pip install "warren[gcs]"'
+        )
+    except Exception as exc:
+        module_logger.warning(
+            "Could not initialise GCS client — GCS cloud resolver "
+            f"disabled: {summarize_exception_chain(exc)}"
+        )
+
+    try:
+        import boto3
+
+        from warren.storage.documents.resolve_s3 import resolve_s3
+
+        s3_client = boto3.client(
+            "s3",
+            endpoint_url=os.environ.get("S3_ENDPOINT_URL") or None,
+            region_name=os.environ.get("S3_REGION") or None,
+        )
+        cloud_by_provider["s3"] = partial(resolve_s3, client=s3_client)
+    except ImportError:
+        # Optional 'S3' extra. Degrade gracefully — pipelines without S3
+        # documents run fine. Selecting an S3 location without the resolver
+        # later fails with UnknownLocationTypeError.
+        module_logger.debug(
+            "boto3 not installed — S3 cloud resolver "
+            'disabled; install with: pip install "warren[s3]"'
+        )
+    except Exception as exc:
+        module_logger.warning(
+            "Could not initialise S3 client — S3 cloud resolver "
+            f"disabled: {summarize_exception_chain(exc)}"
+        )
+
+    if cloud_by_provider:
+        resolvers["cloud"] = partial(_resolve_cloud, by_provider=cloud_by_provider)
+
+    try:
+        # resolve_http imports httpx at module level (it is only ever
+        # imported once the extra is present), so this import is itself
+        # the probe the bare `import httpx` used to be.
+        from warren.storage.documents.resolve_http import (
+            build_client,
+            resolve_http,
+        )
+
+        # build_client owns the redirect/timeout policy — see
+        # resolve_http's module docstring. Redirects are followed by
+        # default; HTTP_FOLLOW_REDIRECTS=false restores httpx's own.
+        resolvers["url"] = partial(resolve_http, client=build_client())
+    except ImportError:
+        # Optional 'http' extra. The 'url' resolver is only attempted,
+        # never required — pipelines that never resolve URL documents
+        # run fine without it, so we degrade gracefully rather than
+        # raise. Selecting a 'url' document location without the
+        # resolver later fails with UnknownLocationTypeError.
+        module_logger.debug(
+            "httpx not installed — HTTP(S) URL resolver "
+            'disabled; install with: pip install "warren[http]"'
+        )
+    except Exception as exc:
+        module_logger.warning(
+            "Could not initialise HTTP(S) URL resolver — "
+            f"disabled: {summarize_exception_chain(exc)}"
+        )
+
+    return resolvers
+
+
 class DefaultWorkerRunner(WorkerRunnerBase):
     """Concrete runner that wires RMQ + MongoDB + Redis for a worker.
 
@@ -122,6 +220,9 @@ class DefaultWorkerRunner(WorkerRunnerBase):
     :param results_stores: optional override for the results stores.
         Default: one ``DefaultResultsStore`` per collection in
         ``worker_spec.collections``.
+    :param infra: optional shared infrastructure. When given, the runner
+        uses it and does not close it; the caller owns its lifetime. Needed
+        when several runners share one process (``backend: memory``).
     """
 
     def __init__(
@@ -135,6 +236,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         document_fetcher: GetDocumentFunc | None = None,
         document_store: DocumentStoreInterface | None = None,
         results_stores: dict[str, ResultsStoreInterface] | None = None,
+        infra: RuntimeInfra | None = None,
     ) -> None:
         super().__init__(name=worker_name, health=config.health)
         self._worker_type = worker_type
@@ -145,7 +247,8 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         self._document_fetcher = document_fetcher
         self._document_store = document_store
         self._results_stores = results_stores
-        self._infra: RuntimeInfra | None = None
+        self._infra: RuntimeInfra | None = infra
+        self._owns_infra: bool = infra is None
         self._worker: MessageConsumerInterface | None = None
 
     async def setup(self) -> None:
@@ -159,8 +262,19 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         6. Create publishers for downstream routing
         7. Create and set up the consumer manager
         """
-        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
-            self._infra = await create_runtime_infrastructure(self._config)
+        if self._infra is None:
+            with self._exception_wrapping(
+                "Infrastructure setup (RabbitMQ/MongoDB/Redis)"
+            ):
+                self._infra = await create_runtime_infrastructure(self._config)
+
+        with self._exception_wrapping("Store injection check"):
+            required: dict[str, object] = {"results_stores": self._results_stores}
+            if self._worker_spec.needs_document_fetcher:
+                required["document_fetcher"] = self._document_fetcher
+            if self._worker_spec.needs_document_store:
+                required["document_store"] = self._document_store
+            require_injected(self._config, **required)
 
         if self._results_stores is None:
             with self._exception_wrapping("Results store creation"):
@@ -206,7 +320,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
                     f"Worker teardown failed: {summarize_exception_chain(exc)}"
                 )
 
-        if self._infra is not None:
+        if self._infra is not None and self._owns_infra:
             try:
                 await close_runtime_infrastructure(self._infra)
             except Exception as exc:
@@ -239,92 +353,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
 
         :return: Mapping of location type to resolver function.
         """
-        resolvers: dict[str, ResolveDocumentFunc] = {"path": resolve_path}
-
-        cloud_by_provider: dict[str, ResolveDocumentFunc] = {}
-
-        try:
-            from google.cloud.storage import Client as GCSClient
-
-            from warren.storage.documents.resolve_gcs import (
-                resolve_gcs,
-            )
-
-            cloud_by_provider["gcs"] = partial(resolve_gcs, client=GCSClient())
-        except ImportError:
-            # Optional 'gcs' extra. The 'cloud' resolver is only attempted,
-            # never required — pipelines that never resolve cloud documents
-            # run fine without it, so we degrade gracefully rather than
-            # raise. Selecting a 'cloud' document location without the
-            # resolver later fails with UnknownLocationTypeError.
-            module_logger.debug(
-                "google-cloud-storage not installed — GCS cloud resolver "
-                'disabled; install with: pip install "warren[gcs]"'
-            )
-        except Exception as exc:
-            module_logger.warning(
-                "Could not initialise GCS client — GCS cloud resolver "
-                f"disabled: {summarize_exception_chain(exc)}"
-            )
-
-        try:
-            import boto3
-
-            from warren.storage.documents.resolve_s3 import resolve_s3
-
-            s3_client = boto3.client(
-                "s3",
-                endpoint_url=os.environ.get("S3_ENDPOINT_URL") or None,
-                region_name=os.environ.get("S3_REGION") or None,
-            )
-            cloud_by_provider["s3"] = partial(resolve_s3, client=s3_client)
-        except ImportError:
-            # Optional 'S3' extra. Degrade gracefully — pipelines without S3
-            # documents run fine. Selecting an S3 location without the resolver
-            # later fails with UnknownLocationTypeError.
-            module_logger.debug(
-                "boto3 not installed — S3 cloud resolver "
-                'disabled; install with: pip install "warren[s3]"'
-            )
-        except Exception as exc:
-            module_logger.warning(
-                "Could not initialise S3 client — S3 cloud resolver "
-                f"disabled: {summarize_exception_chain(exc)}"
-            )
-
-        if cloud_by_provider:
-            resolvers["cloud"] = partial(_resolve_cloud, by_provider=cloud_by_provider)
-
-        try:
-            # resolve_http imports httpx at module level (it is only ever
-            # imported once the extra is present), so this import is itself
-            # the probe the bare `import httpx` used to be.
-            from warren.storage.documents.resolve_http import (
-                build_client,
-                resolve_http,
-            )
-
-            # build_client owns the redirect/timeout policy — see
-            # resolve_http's module docstring. Redirects are followed by
-            # default; HTTP_FOLLOW_REDIRECTS=false restores httpx's own.
-            resolvers["url"] = partial(resolve_http, client=build_client())
-        except ImportError:
-            # Optional 'http' extra. The 'url' resolver is only attempted,
-            # never required — pipelines that never resolve URL documents
-            # run fine without it, so we degrade gracefully rather than
-            # raise. Selecting a 'url' document location without the
-            # resolver later fails with UnknownLocationTypeError.
-            module_logger.debug(
-                "httpx not installed — HTTP(S) URL resolver "
-                'disabled; install with: pip install "warren[http]"'
-            )
-        except Exception as exc:
-            module_logger.warning(
-                "Could not initialise HTTP(S) URL resolver — "
-                f"disabled: {summarize_exception_chain(exc)}"
-            )
-
-        return resolvers
+        return create_default_resolvers()
 
     async def _create_default_results_stores(
         self,

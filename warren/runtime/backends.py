@@ -1,5 +1,5 @@
 """
-Pubsub backend factory: select RabbitMQ or Kafka from ``RuntimeConfig``.
+Pubsub backend factory: select RabbitMQ, Kafka or in-process memory from ``RuntimeConfig``.
 
 This module is the single place that switches on ``config.backend``.
 Every runner builds its connection manager, publishers, and consumer
@@ -20,6 +20,11 @@ On a fanout pipeline route functions compute keys the exchange ignores
 ``""``), so the Kafka paths drop ``route``/``route_func`` — semantically
 identical, and ``KafkaPublisher`` would reject them.
 
+**Memory is in-process.** ``backend: memory`` wires ``warren.pubsub.memory``:
+one broker inside this process, all three exchange types, no extra to
+install. It needs a single shared connection manager, so runners on this
+backend are given one injected ``RuntimeInfra``.
+
 **Lazy backend imports.** The transport implementations
 (``warren.pubsub.rabbitmq.aio_pika.*`` / ``warren.pubsub.kafka.aiokafka.*``)
 are imported *inside* the function bodies, not at module load. A
@@ -32,6 +37,7 @@ backend is actually selected.
 queue/group naming for all call sites:
 
 - RabbitMQ: queue ``f"{exchange.name}.{worker_type}"``.
+- Memory: queue ``f"{exchange.name}.{worker_type}"``, same as RabbitMQ.
 - Kafka: consumer group ``config.kafka.consumer.group_id or
   f"{topic.name}.{worker_type}"``.
 
@@ -83,10 +89,16 @@ def create_connection_manager(config: RuntimeConfig) -> Any:
 
     :param config: Runtime configuration; ``config.backend`` selects the
         backend.
-    :return: ``RMQConnectionManager`` or ``KafkaConnectionManager``.
+    :return: ``RMQConnectionManager``, ``KafkaConnectionManager`` or
+        ``MemoryConnectionManager``.
     :raises OptionalDependencyError: if the selected backend's transport
         extra is not installed.
     """
+    if config.backend == "memory":
+        from warren.pubsub.memory.connection import MemoryConnectionManager
+
+        return MemoryConnectionManager()
+
     if config.backend == "kafka":
         from warren.pubsub.kafka.aiokafka.connection import (
             KafkaConnectionManager,
@@ -123,11 +135,23 @@ def create_publisher(
         topic/direct; a no-op on fanout, dropped on Kafka — see module
         docstring).
     :param name: Optional publisher name for logging.
-    :return: An unset-up publisher implementing ``PublisherInterface``.
+    :return: An unset-up ``RMQPublisher``, ``KafkaPublisher`` or
+        ``MemoryPublisher`` implementing ``PublisherInterface``.
     :raises WarrenError: if ``exchange`` is not fanout on Kafka.
     :raises OptionalDependencyError: if the selected backend's transport
         extra is not installed.
     """
+    if config.backend == "memory":
+        from warren.pubsub.memory.publisher import MemoryPublisher
+
+        return MemoryPublisher(
+            connection_manager,
+            exchange,
+            route=route,
+            route_func=route_func,
+            name=name,
+        )
+
     if config.backend == "kafka":
         from warren.pubsub.kafka.aiokafka.publisher import KafkaPublisher
 
@@ -201,12 +225,29 @@ def create_consumer_manager(
     :param extract_identity_func: Message-identity extractor override.
     :param publish_hard_failures: Whether to publish a hard-failure
         envelope on terminal failure.
-    :return: An unset-up consumer manager implementing
-        ``ConsumerManagerInterface``.
+    :return: An unset-up ``RMQConsumerManager``, ``KafkaConsumerManager`` or
+        ``MemoryConsumerManager`` implementing ``ConsumerManagerInterface``.
     :raises WarrenError: if ``exchange`` is not fanout on Kafka.
     :raises OptionalDependencyError: if the selected backend's transport
         extra is not installed.
     """
+    if config.backend == "memory":
+        from warren.pubsub.memory.consumer import MemoryConsumerManager
+
+        return MemoryConsumerManager(
+            connection_manager,
+            consumer,
+            exchange=exchange,
+            queue_name=f"{exchange.name}.{worker_type}",
+            binding_key=binding_key,
+            data_publisher=data_publisher,
+            control_publisher=control_publisher,
+            observer_publisher=observer_publisher,
+            retry_config=retry_config,
+            extract_identity_func=extract_identity_func,
+            publish_hard_failures=publish_hard_failures,
+        )
+
     if config.backend == "kafka":
         from warren.pubsub.kafka.aiokafka.consumer import KafkaConsumerManager
         from warren.pubsub.kafka.config import KafkaConsumerManagerConfig

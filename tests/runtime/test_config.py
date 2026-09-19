@@ -137,3 +137,7 @@ health:
     assert config.health.enabled is True
     assert config.health.port == 9090
     assert config.health.consumer_lost_grace_s == 30.0
+
+
+def test_memory_backend_is_a_valid_choice() -> None:
+    assert RuntimeConfig.model_validate({"backend": "memory"}).backend == "memory"

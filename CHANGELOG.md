@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `JobStatusWorkerRunner`, `RetryWorkerRunner` and `JobPublicationWorkerRunner`
+  ignored the `health:` section of `RuntimeConfig` and always served the health
+  endpoint with default settings (enabled, port 8080). They now honour it, as
+  `DefaultWorkerRunner` already did.
 - `MongoDBJobResultsStore.get_stage_counts` reported `soft_failed: 0` for every
   stage. Field presence was tested by comparing `$type` output to `"missing"` as
   strings, which is false for array fields.

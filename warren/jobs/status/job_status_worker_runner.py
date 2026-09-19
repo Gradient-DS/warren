@@ -83,7 +83,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         job_results_store: JobResultsStoreInterface | None = None,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
     ) -> None:
-        super().__init__(name=worker_name)
+        super().__init__(name=worker_name, health=config.health)
         self._worker_name = worker_name
         self._config = config
         self._exchange = exchange

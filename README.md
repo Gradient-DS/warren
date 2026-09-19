@@ -28,7 +28,25 @@ cd warren
 pip install -e ".[dev,rmq,kafka]"
 ```
 
-## Quickstart — the synthetic fanout pipeline
+## Quickstart
+
+### Try it without any infrastructure
+
+From the repo root, install the example extras and set your OpenAI key:
+
+```bash
+pip install "warren[examples]"
+export OPENAI_API_KEY=...
+python -m examples.rag.run_local
+```
+
+This runs the real PDF -> chunks -> embeddings pipeline in a single process on
+the in-process `memory` backend: no RabbitMQ, MongoDB, Redis or Docker. It is for
+trying warren and for tests, not for production. See
+[`warren/docs/memory.md`](warren/docs/memory.md).
+The RAG instructions below run the same workers as separate processes.
+
+### The synthetic fanout pipeline with Docker
 
 `examples/exchanges/fanout/` is a minimal three-stage pipeline (parse → chunk → embed) over synthetic pre-baked data: 4 stand-in documents produce 18 chunks and 18 embeddings. No external data dependencies — just local infrastructure. (It's one of three sibling examples under `examples/exchanges/`, one per exchange type — see [Choosing an exchange](#choosing-an-exchange).)
 

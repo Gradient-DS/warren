@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- In-process `memory` backend: run a whole pipeline in one process with no
+  RabbitMQ, Kafka, MongoDB or Redis. Pure standard library, no extra to install.
+  Supports fanout, topic and direct exchanges with the same retry and
+  failure-envelope behaviour as the other backends. See `warren/docs/memory.md`
+  and `python -m examples.rag.run_local`.
+- In-process stores: `MemoryDocumentStore`, `MemoryJobStore`,
+  `MemoryJobResultsStore`, `MemoryCache`, shared through `MemoryStoreRegistry`.
+- `warren.runtime.in_process`: `create_in_process_runners` and `run_in_process`.
+- `DefaultWorkerRunner`, `JobStatusWorkerRunner` and `RetryWorkerRunner` accept an
+  optional `infra=` so several runners can share one `RuntimeInfra`.
+
+### Changed
+
+- `RuntimeInfra.mongo_client` / `redis_client` and
+  `WorkerFactoryContext.mongo_client` / `redis_client` are now typed as optional.
+  They are `None` only on `backend: memory`; on RabbitMQ and Kafka they are
+  always set, as before.
+
 ## [0.4.0] — 2026-09-18
 
 > `ConsumerManagerInterface` gains `health()` and `WorkerRunnerBase.run()`

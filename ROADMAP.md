@@ -64,8 +64,6 @@ and so pipelines can be composed dynamically against a live worker fleet.
 
 ## Developer experience and API polish
 
-- In-memory broker backend for tests — run a pipeline in a single process with
-  no infrastructure.
 - Connection-string configuration (`mongodb://`, `redis://`) alongside
   host/port fields.
 - Batch storage on the results-store interface (`batch_store`).

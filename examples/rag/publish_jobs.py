@@ -25,6 +25,7 @@ from basics.logging import get_logger
 from pymongo import AsyncMongoClient
 
 from examples.rag.pipeline_spec import PIPELINE
+from examples.rag.sources import DEFAULT_URLS, doc_id_for
 from runtime_scripts.lib.logging_setup import configure_logging, resolve_log_level
 from warren.constants import PUBLISHER_ORIGIN_TYPE
 from warren.pubsub.rabbitmq.aio_pika.connection import RMQConnectionManager
@@ -37,17 +38,6 @@ from warren.storage.jobs.mongodb import MongoDBJobStore
 module_logger: logging.Logger = get_logger(__name__)
 
 DEFAULT_CONFIG_PATH: Path = Path(__file__).parent / "config.yaml"
-
-# Two arXiv papers, so the example runs out of the box.
-DEFAULT_URLS: list[str] = [
-    "https://arxiv.org/pdf/1706.03762",  # Attention Is All You Need
-    "https://arxiv.org/pdf/2103.15348",  # LayoutParser
-]
-
-
-def _doc_id(url: str) -> str:
-    """Derive a readable doc_id from a URL (its last path segment)."""
-    return url.rstrip("/").rsplit("/", 1)[-1] or url
 
 
 async def _publish(
@@ -79,7 +69,7 @@ async def _publish(
             await publisher(
                 {
                     "data_type": "pdf_document",
-                    "data": {"doc_id": _doc_id(url), "url": url},
+                    "data": {"doc_id": doc_id_for(url), "url": url},
                     "job_id": job_id,
                     "origin": {"type": PUBLISHER_ORIGIN_TYPE, "name": "rag-publisher"},
                 }

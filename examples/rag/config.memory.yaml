@@ -1,0 +1,11 @@
+# Runs the whole pipeline in ONE process: no RabbitMQ, MongoDB, Redis or Docker.
+# Used by `python -m examples.rag.run_local`. Nothing is persisted.
+backend: memory
+
+health:
+  # Every runner shares this process, so they would all bind the same port.
+  enabled: false
+
+retry:
+  enabled: true
+  collection_name: retries

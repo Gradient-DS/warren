@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-19
+
+> Adds the in-process `memory` backend: a whole pipeline in one process, no
+> infrastructure and no new dependency. Minor, not patch: the `mongo_client` /
+> `redis_client` fields on `RuntimeInfra` and `WorkerFactoryContext` are now
+> typed as optional.
+
 ### Added
 
 - In-process `memory` backend: run a whole pipeline in one process with no
@@ -26,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `WorkerFactoryContext.mongo_client` / `redis_client` are now typed as optional.
   They are `None` only on `backend: memory`; on RabbitMQ and Kafka they are
   always set, as before.
+
 ### Fixed
 
 - `JobStatusWorkerRunner`, `RetryWorkerRunner` and `JobPublicationWorkerRunner`

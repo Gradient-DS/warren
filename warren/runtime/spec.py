@@ -58,7 +58,9 @@ class WorkerFactoryContext:
         set. ``None`` otherwise.
     :param mongo_client: Raw async Mongo client, passed through so
         factories can construct additional specialised stores
-        (e.g. ``BinaryResultsStore``). Always populated by the runner.
+        (e.g. ``BinaryResultsStore``). Populated by the runner on the
+        RabbitMQ and Kafka backends; ``None`` on ``backend: memory``, where
+        no MongoDB or Redis exists.
     :param redis_client: Raw async Redis client — same rationale.
     :param database_name: Mongo database name to use for any
         factory-constructed stores.
@@ -67,8 +69,8 @@ class WorkerFactoryContext:
     worker_name: str
     worker_type: str
     stores: dict[str, ResultsStoreInterface]
-    mongo_client: AsyncMongoClient
-    redis_client: Redis
+    mongo_client: AsyncMongoClient | None
+    redis_client: Redis | None
     database_name: str
     accepts: frozenset[str] = frozenset()
     produces: str | None = None

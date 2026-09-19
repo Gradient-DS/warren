@@ -156,6 +156,31 @@ The runner that wires everything together. Given a `RuntimeConfig` and a `Worker
 
 You rarely instantiate `DefaultWorkerRunner` directly — the launcher scripts handle that. But understanding what it does helps when debugging or writing custom runners.
 
+## In-process backend
+
+Set `backend: memory` to run a whole pipeline in one process without RabbitMQ,
+Kafka, MongoDB or Redis. It needs no extra to install and no `memory:` config
+section. Set `health.enabled: false` so the runners do not try to bind the same
+health port.
+
+`DefaultWorkerRunner`, `JobStatusWorkerRunner` and `RetryWorkerRunner` accept an
+optional `infra=` parameter to share one `RuntimeInfra`. The caller owns shared
+infrastructure and closes it after the runners finish. On this backend,
+`RuntimeInfra.mongo_client` / `redis_client` and the corresponding
+`WorkerFactoryContext` fields are `None`; use the injected stores instead.
+
+`warren.runtime.in_process` provides `create_in_process_runners` to build the
+pipeline and support runners with shared infrastructure and a
+`MemoryStoreRegistry`, and `run_in_process` to run them together. Its optional
+`until` callable starts once every runner is consuming: publish messages there
+and return when the job is done.
+
+This backend supports one process and one event loop only. `RetryWorker`
+schedules retries with in-process timers. State is not persisted, and queues
+are unbounded. See [`warren/docs/memory.md`](../docs/memory.md) for the usage
+pattern and limits, and [`examples/rag/run_local.py`](../../examples/rag/run_local.py)
+for a complete example.
+
 ## Defining a pipeline
 
 ### Convention

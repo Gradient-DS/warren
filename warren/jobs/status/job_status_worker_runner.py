@@ -32,6 +32,7 @@ from warren.runtime.infrastructure import (
     RuntimeInfra,
     close_runtime_infrastructure,
     create_runtime_infrastructure,
+    require_injected,
 )
 from warren.storage.job_results.interface import (
     JobResultsStoreInterface,
@@ -71,6 +72,9 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         manager factory. Default: factory creating ``RMQConsumerManager``
         on the job status queue with a publisher for the
         ``job-completed`` signal.
+    :param infra: optional shared infrastructure. When given, the runner
+        uses it and does not close it; the caller owns its lifetime. Needed
+        when several runners share one process (``backend: memory``).
     """
 
     def __init__(
@@ -82,6 +86,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         job_store: JobStoreInterface | None = None,
         job_results_store: JobResultsStoreInterface | None = None,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
+        infra: RuntimeInfra | None = None,
     ) -> None:
         super().__init__(name=worker_name, health=config.health)
         self._worker_name = worker_name
@@ -90,7 +95,8 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         self._job_store = job_store
         self._job_results_store = job_results_store
         self._consumer_manager_factory = consumer_manager_factory
-        self._infra: RuntimeInfra | None = None
+        self._infra: RuntimeInfra | None = infra
+        self._owns_infra: bool = infra is None
         self._publisher: PublisherInterface | None = None
 
     async def setup(self) -> None:
@@ -101,8 +107,18 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         3. Create the JobStatusWorker
         4. Create and set up the consumer manager
         """
-        with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
-            self._infra = await create_runtime_infrastructure(self._config)
+        if self._infra is None:
+            with self._exception_wrapping(
+                "Infrastructure setup (RabbitMQ/MongoDB/Redis)"
+            ):
+                self._infra = await create_runtime_infrastructure(self._config)
+
+        with self._exception_wrapping("Store injection check"):
+            require_injected(
+                self._config,
+                job_store=self._job_store,
+                job_results_store=self._job_results_store,
+            )
 
         if self._job_store is None:
             with self._exception_wrapping("Job store creation"):
@@ -136,7 +152,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
                     f"Publisher teardown failed: {summarize_exception_chain(exc)}"
                 )
 
-        if self._infra is not None:
+        if self._infra is not None and self._owns_infra:
             try:
                 await close_runtime_infrastructure(self._infra)
             except Exception as exc:

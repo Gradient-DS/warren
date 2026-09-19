@@ -91,6 +91,8 @@ class RuntimeConfig(BaseModel):
     :param backend: Pubsub backend the runtime wires up. Explicit (not
         presence-based): defaults to ``"rabbitmq"`` so every existing
         YAML stays valid, and only the matching backend section is used.
+        ``"memory"`` runs everything in one process with no infrastructure
+        and uses none of the sections below (see ``warren/docs/memory.md``).
     :param rabbitmq: RabbitMQ connection, exchange, and consumer settings.
     :param kafka: Kafka connection, topic, and consumer settings.
     :param mongodb: MongoDB connection settings.
@@ -99,7 +101,7 @@ class RuntimeConfig(BaseModel):
     :param health: Watchdog and readiness endpoint settings.
     """
 
-    backend: Literal["rabbitmq", "kafka"] = "rabbitmq"
+    backend: Literal["rabbitmq", "kafka", "memory"] = "rabbitmq"
     rabbitmq: RuntimeRMQConfig = RuntimeRMQConfig()
     kafka: RuntimeKafkaConfig = RuntimeKafkaConfig()
     mongodb: MongoDBConfig = MongoDBConfig()

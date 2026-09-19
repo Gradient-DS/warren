@@ -21,6 +21,9 @@ from warren.pubsub.kafka.aiokafka.connection import KafkaConnectionManager
 from warren.pubsub.kafka.aiokafka.consumer import KafkaConsumerManager
 from warren.pubsub.kafka.aiokafka.publisher import KafkaPublisher
 from warren.pubsub.kafka.config import KafkaConsumerConfig
+from warren.pubsub.memory.connection import MemoryConnectionManager
+from warren.pubsub.memory.consumer import MemoryConsumerManager
+from warren.pubsub.memory.publisher import MemoryPublisher
 from warren.pubsub.rabbitmq.aio_pika.connection import RMQConnectionManager
 from warren.pubsub.rabbitmq.aio_pika.consumer import RMQConsumerManager
 from warren.pubsub.rabbitmq.aio_pika.publisher import RMQPublisher
@@ -204,3 +207,44 @@ def test_consumer_manager_rabbitmq_forwards_queue_arguments() -> None:
     )
 
     assert manager._config.queue.arguments == {"x-queue-type": "quorum"}
+
+
+# ---------------------------------------------------------------------------
+# Memory backend
+# ---------------------------------------------------------------------------
+
+
+def test_connection_manager_memory() -> None:
+    config = RuntimeConfig(backend="memory")
+
+    assert isinstance(
+        backends.create_connection_manager(config), MemoryConnectionManager
+    )
+
+
+@pytest.mark.parametrize("exchange", [FANOUT, TOPIC, DIRECT])
+def test_publisher_memory_supports_every_exchange_type(exchange) -> None:
+    config = RuntimeConfig(backend="memory")
+    conn = backends.create_connection_manager(config)
+
+    publisher = backends.create_publisher(config, conn, exchange=exchange)
+
+    assert isinstance(publisher, MemoryPublisher)
+
+
+def test_consumer_manager_memory_owns_queue_naming() -> None:
+    config = RuntimeConfig(backend="memory")
+    conn = backends.create_connection_manager(config)
+
+    manager = backends.create_consumer_manager(
+        config,
+        conn,
+        exchange=TOPIC,
+        worker_type=WORKER_TYPE,
+        consumer=_FakeConsumer(),
+        binding_key="doc.#",
+    )
+
+    assert isinstance(manager, MemoryConsumerManager)
+    assert manager._queue_name == f"jobs.{WORKER_TYPE}"
+    assert manager._binding_key == "doc.#"

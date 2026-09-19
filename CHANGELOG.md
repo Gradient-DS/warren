@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `MongoDBJobResultsStore.get_stage_counts` reported `soft_failed: 0` for every
+  stage. Field presence was tested by comparing `$type` output to `"missing"` as
+  strings, which is false for array fields.
+
 ## [0.4.0] — 2026-09-18
 
 > `ConsumerManagerInterface` gains `health()` and `WorkerRunnerBase.run()`

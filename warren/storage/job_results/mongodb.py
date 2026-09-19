@@ -19,6 +19,19 @@ if TYPE_CHECKING:
     from pymongo.asynchronous.collection import AsyncCollection
 
 
+def _present(field: str) -> dict:
+    """Aggregation expression that is true when ``field`` exists.
+
+    ``$ifNull`` maps a missing field to ``None``, so "not equal to None"
+    means "present". The previous idiom compared the field's type name to
+    the string ``"missing"`` with ``$gt``, which is a lexical comparison:
+    it holds for ``"string"`` and fails for ``"array"``, so array-valued
+    fields were never seen as present. Safe here because this store
+    removes these fields with ``$unset`` and never writes ``None``.
+    """
+    return {"$ne": [{"$ifNull": [field, None]}, None]}
+
+
 @classify_transient_methods
 class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
     """Async MongoDB implementation of JobResultsStoreInterface.
@@ -241,12 +254,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
                                 {
                                     "$and": [
                                         {"$not": "$success"},
-                                        {
-                                            "$gt": [
-                                                {"$type": "$soft_failures"},
-                                                "missing",
-                                            ]
-                                        },
+                                        _present("$soft_failures"),
                                     ],
                                 },
                                 1,
@@ -255,13 +263,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
                         },
                     },
                     "hard_failed": {
-                        "$sum": {
-                            "$cond": [
-                                {"$gt": [{"$type": "$hard_failure"}, "missing"]},
-                                1,
-                                0,
-                            ],
-                        },
+                        "$sum": {"$cond": [_present("$hard_failure"), 1, 0]},
                     },
                 },
             },
@@ -320,7 +322,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
                     "time": 1,
                     "error": {
                         "$cond": [
-                            {"$gt": [{"$type": "$hard_failure"}, "missing"]},
+                            _present("$hard_failure"),
                             "$hard_failure",
                             {"$arrayElemAt": ["$soft_failures", -1]},
                         ],

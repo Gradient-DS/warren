@@ -25,6 +25,12 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
     gives callers that isolation for free; a dict does not, and a worker
     mutating a document it just read must not change stored state.
 
+    The doc id field and each unique index are backed by a hash index, so
+    uniqueness is checked in constant time instead of by scanning the
+    collection. Values of indexed fields must be hashable. As on MongoDB,
+    an ``update`` that would duplicate a unique key is rejected, here with
+    ``DocumentAlreadyExistsError``.
+
     ``query`` supports flat equality only, which is everything the
     framework itself issues. A query operator raises instead of silently
     matching nothing.
@@ -46,6 +52,11 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
             for spec in (unique_indexes or [])
         ]
         self._docs: dict[str, dict] = {}
+        # Per constraint: field values -> key in ``_docs``. Insert and update
+        # reject collisions, so a value tuple maps to at most one document.
+        self._indexes: dict[tuple[str, ...], dict[tuple, str]] = {
+            fields: {} for fields in [(doc_id_field,), *self._unique_indexes]
+        }
 
     async def insert(self, doc: dict, overwrite_existing: bool = False) -> str:
         new = copy.deepcopy(doc)
@@ -66,8 +77,12 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
             raise DocumentAlreadyExistsError(msg)
 
         if replaced is not None:
-            del self._docs[replaced]
+            self._remove_from_indexes(self._docs.pop(replaced))
+        # Ids 5 and "5" do not clash (fields compare raw) but share a key.
+        if (previous := self._docs.get(new_id)) is not None:
+            self._remove_from_indexes(previous)
         self._docs[new_id] = new
+        self._add_to_indexes(new_id, new)
         return new_id
 
     async def update(self, doc_id: str, updates: dict) -> None:
@@ -75,7 +90,13 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
         if key not in self._docs:
             msg = f"Document with id '{doc_id}' not found"
             raise DocumentNotFoundError(msg)
-        self._docs[key].update(copy.deepcopy(updates))
+        stored, updates = self._docs[key], copy.deepcopy(updates)
+        if self._clashing_ids({**stored, **updates}) - {key}:
+            msg = f"Updating document '{doc_id}' would duplicate a unique key"
+            raise DocumentAlreadyExistsError(msg)
+        self._remove_from_indexes(stored)
+        stored.update(updates)
+        self._add_to_indexes(key, stored)
 
     async def exists(self, doc_id: str) -> bool:
         return self._require_id(doc_id) in self._docs
@@ -106,7 +127,12 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
             yield copy.deepcopy(doc)
 
     async def delete(self, doc_id: str) -> bool:
-        return self._docs.pop(self._require_id(doc_id), None) is not None
+        key = self._require_id(doc_id)
+        doc = self._docs.pop(key, None)
+        if doc is None:
+            return False
+        self._remove_from_indexes(doc)
+        return True
 
     def get_document_type(self) -> str:
         return self._collection_name
@@ -125,19 +151,25 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
         return str(doc_id)
 
     def _find_by_fields(self, fields: tuple[str, ...], doc: dict) -> str | None:
-        for key, stored in self._docs.items():
-            if all(stored.get(f) == doc.get(f) for f in fields):
-                return key
-        return None
+        return self._indexes[fields].get(_field_values(doc, fields))
 
     def _clashing_ids(self, doc: dict) -> set[str]:
         """Ids of stored documents that ``doc`` would collide with."""
-        constraints = [(self._doc_id_field,), *self._unique_indexes]
-        return {
-            key
-            for key, stored in self._docs.items()
-            if any(
-                all(stored.get(f) == doc.get(f) for f in fields)
-                for fields in constraints
-            )
-        }
+        found = (
+            index.get(_field_values(doc, fields))
+            for fields, index in self._indexes.items()
+        )
+        return {key for key in found if key is not None}
+
+    def _add_to_indexes(self, key: str, doc: dict) -> None:
+        for fields, index in self._indexes.items():
+            index[_field_values(doc, fields)] = key
+
+    def _remove_from_indexes(self, doc: dict) -> None:
+        for fields, index in self._indexes.items():
+            index.pop(_field_values(doc, fields), None)
+
+
+def _field_values(doc: dict, fields: tuple[str, ...]) -> tuple:
+    """A missing field counts as ``None``, as in a unique index on MongoDB."""
+    return tuple(doc.get(f) for f in fields)

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `MemoryDocumentStore.update` raises `DocumentAlreadyExistsError` when the
+  update would give two documents the same unique key, as MongoDB rejects such
+  an update too. Before, it silently kept both.
+
+### Fixed
+
+- `MemoryDocumentStore.insert` compared every new document against every
+  stored one, so filling a collection took quadratic time: 2,770 results took
+  2.7 s, and on the `memory` backend that time blocked the event loop that all
+  workers share. The doc id field and each unique index are now backed by a
+  hash index (2,770 results: 0.04 s).
+
 ## [0.5.0] — 2026-09-19
 
 > Adds the in-process `memory` backend: a whole pipeline in one process, no

@@ -9,7 +9,7 @@ system. Published to PyPI as `warren` (Apache-2.0).
 ## Commands
 
 ```bash
-pip install -e ".[dev,rmq,kafka]"   # Dev install
+pip install -e ".[dev]"             # Dev install (includes what the tests import)
 pytest                              # Tests (no infrastructure needed)
 ruff check && ruff format           # Lint + format (config in ruff.toml)
 ```

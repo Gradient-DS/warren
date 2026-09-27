@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   2.7 s, and on the `memory` backend that time blocked the event loop that all
   workers share. The doc id field and each unique index are now backed by a
   hash index (2,770 results: 0.04 s).
+- The `dev` extra now pulls in the `rmq`, `kafka`, `http` and `s3` extras, which
+  the test suite imports. `pip install -e .[dev]`, as CONTRIBUTING.md says,
+  stopped at collection with 9 errors, and `.[dev,rmq,kafka]` from the README
+  stopped at one (no `httpx`), with two S3 tests failing behind it (no
+  `boto3`); only CI's full list of extras was green. README and AGENTS.md now
+  use `.[dev]` too.
 
 ## [0.5.0] — 2026-09-19
 

@@ -25,7 +25,7 @@ Requires Python 3.12+. For development:
 ```bash
 git clone https://github.com/Gradient-DS/warren.git
 cd warren
-pip install -e ".[dev,rmq,kafka]"
+pip install -e ".[dev]"
 ```
 
 ## Quickstart
@@ -231,7 +231,7 @@ They compose rather than compete: a natural setup is **Airflow as the calendar-d
 ## Development
 
 ```bash
-pip install -e ".[dev,rmq,kafka]"
+pip install -e ".[dev]"
 python -m pytest tests -q
 ruff check . && ruff format --check .
 ```

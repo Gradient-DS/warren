@@ -9,7 +9,7 @@ Requires Python 3.12+.
 ```bash
 git clone https://github.com/Gradient-DS/warren.git
 cd warren
-pip install -e .[dev]
+pip install -e ".[dev]"
 ```
 
 ## Tests and lint

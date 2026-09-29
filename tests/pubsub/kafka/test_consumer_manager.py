@@ -394,6 +394,20 @@ def test_soft_failure_without_control_publisher_seeks_back() -> None:
     assert conn.kafka_consumer.seeks == [(TP, 7)]
 
 
+def test_soft_failure_preserves_lane_and_priority() -> None:
+    publisher = _FakePublisher()
+    manager, conn = _manager(
+        _FakeWorker(error=SoftFailureException("later")), control_publisher=publisher
+    )
+    body = {**_BODY, "lane": "interactive", "priority": 2}
+    _process(manager, _msg(body))
+    failed = publisher.published[0]["data"]
+    assert failed["lane"] == body["lane"]
+    assert failed["priority"] == body["priority"]
+    assert failed[REPLAY_ROUTING_KEY_FIELD] == ""
+    assert conn.kafka_consumer.commits == [{TP: 8}]
+
+
 def test_soft_failure_publishes_envelope_and_commits() -> None:
     worker = _FakeWorker(error=SoftFailureException("transient"))
     publisher = _FakePublisher()

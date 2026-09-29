@@ -3,7 +3,11 @@
 import asyncio
 
 from warren.pubsub.rabbitmq.aio_pika.topology import declare_queue
-from warren.pubsub.rabbitmq.config import RMQQueueConfig
+from warren.pubsub.rabbitmq.config import RMQExchangeConfig, RMQQueueConfig
+from warren.runtime import backends
+from warren.runtime.config import RuntimeConfig
+
+from .fakes import FakeWorker
 
 
 class _FakeQueue:
@@ -34,6 +38,27 @@ def test_declare_queue_forwards_arguments() -> None:
     asyncio.run(declare_queue(channel, _FakeExchange(), config, exchange_type="fanout"))
 
     assert channel.declared["arguments"] == {"x-queue-type": "quorum"}
+
+
+def test_runtime_priority_argument_reaches_queue_declaration() -> None:
+    config = RuntimeConfig.model_validate(
+        {"rabbitmq": {"consumer": {"queue_arguments": {"x-max-priority": 2}}}}
+    )
+    manager = backends.create_consumer_manager(
+        config,
+        object(),
+        exchange=RMQExchangeConfig(name="jobs", type="topic"),
+        worker_type="parser",
+        consumer=FakeWorker(),
+        binding_key="interactive.raw_document",
+    )
+    channel = _FakeChannel()
+    asyncio.run(
+        declare_queue(
+            channel, _FakeExchange(), manager._config.queue, exchange_type="topic"
+        )
+    )
+    assert channel.declared["arguments"] == {"x-max-priority": 2}
 
 
 def test_declare_queue_default_has_no_arguments() -> None:

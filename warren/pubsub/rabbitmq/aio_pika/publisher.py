@@ -25,6 +25,7 @@ from warren.pubsub.rabbitmq.aio_pika.topology import (
 from warren.pubsub.rabbitmq.config import (
     RMQExchangeConfig,
 )
+from warren.pubsub.routing import PRIORITY_FIELD
 
 
 if TYPE_CHECKING:
@@ -119,10 +120,17 @@ class RMQPublisher(BasePublisher):
             raise RuntimeError(msg)
 
         body = json.dumps(message).encode()
+        priority = message.get(PRIORITY_FIELD)
+        properties = (
+            {"priority": priority}
+            if isinstance(priority, int) and not isinstance(priority, bool)
+            else {}
+        )
         amqp_message = aio_pika.Message(
             body=body,
             delivery_mode=aio_pika.DeliveryMode(self._delivery_mode),
             content_type=self._content_type,
+            **properties,
         )
 
         # If a route function is provided, use it to resolve the routes. Otherwise, use the routing key (which can be None).

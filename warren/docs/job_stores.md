@@ -6,8 +6,8 @@ in `MongoDBPublishingTracker`. Call `setup()` on each store before use.
 
 ## Retention
 
-Job records are retained indefinitely by default. Configure MongoDB expiry
-through `RuntimeConfig`:
+Retention is unmanaged by default, leaving existing indexes untouched.
+Configure MongoDB expiry through `RuntimeConfig`:
 
 ```yaml
 retention:
@@ -30,14 +30,13 @@ ignored by the completion TTL index.
 The optional maximum age bounds jobs that never complete. It applies to all
 jobs from creation, including completed jobs, so it may expire a job before
 its completion-based TTL. When both settings are set, maximum age must be at
-least the completion TTL. Values must be nonnegative; zero makes a record
-eligible for expiry at its timestamp. Choose durations longer than the jobs
+least the completion TTL. Values must be positive. Choose durations longer than the jobs
 and status history you need to retain. MongoDB removes expired rows
 asynchronously, not at an exact deadline.
 
-At setup, stores replace indexes on these keys when their options differ.
-Setting a value back to `null` removes its TTL index. Use the same retention
-configuration in all processes sharing these collections.
+At setup, positive settings create TTL indexes or replace conflicting options.
+`null` leaves existing indexes untouched, even if another process created them.
+Removing a TTL index is an operator action.
 
 The status runner and bundled publishing scripts pass the settings to their
 stores. Custom factories should pass `config.retention.job_records_ttl_seconds`

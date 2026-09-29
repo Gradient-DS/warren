@@ -7,10 +7,12 @@ from pymongo.results import UpdateResult
 class MongoCollection:
     def __init__(self) -> None:
         self.indexes: dict[str, dict] = {}
+        self.index_information_calls = 0
         self.dropped: list[str] = []
         self.writes: list[dict] = []
 
     async def index_information(self) -> dict:
+        self.index_information_calls += 1
         return copy.deepcopy(self.indexes)
 
     async def create_index(

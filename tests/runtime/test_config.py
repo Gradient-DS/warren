@@ -252,7 +252,7 @@ def test_invalid_startup_settings(settings: dict[str, int | float]) -> None:
         RuntimeConfig.model_validate({"startup": settings})
 
 
-def test_retention_defaults_to_disabled() -> None:
+def test_retention_defaults_to_unmanaged() -> None:
     config = RuntimeConfig()
     assert config.retention.job_records_ttl_seconds is None
     assert config.retention.job_records_max_age_seconds is None
@@ -260,7 +260,7 @@ def test_retention_defaults_to_disabled() -> None:
 
 @pytest.mark.parametrize(
     ("ttl", "max_age"),
-    [(None, None), (None, 60), (0, 0), (60, None), (60, 60), (60, 90)],
+    [(None, None), (None, 60), (1, 1), (60, None), (60, 60), (60, 90)],
 )
 def test_retention_from_yaml(
     tmp_path: Path, ttl: int | None, max_age: int | None
@@ -273,6 +273,8 @@ def test_retention_from_yaml(
 @pytest.mark.parametrize(
     "settings",
     [
+        {"job_records_ttl_seconds": 0},
+        {"job_records_max_age_seconds": 0},
         {"job_records_ttl_seconds": -1},
         {"job_records_max_age_seconds": -1},
         {"job_records_ttl_seconds": 60, "job_records_max_age_seconds": 59},

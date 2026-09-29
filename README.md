@@ -246,9 +246,9 @@ Redis cache entries always have a positive expiry.
 Both retention settings default to `null`. The first expires MongoDB job
 completion, result-status, and publishing-status records; the second bounds job
 age from creation, including unfinished jobs. When both are set, maximum age
-must be at least the record TTL. Values are nonnegative. Setup replaces
-conflicting indexes, and setting retention back to `null` removes its TTL
-indexes. Use the same retention settings in all processes sharing collections.
+must be at least the record TTL. Values must be positive. Setup creates or
+replaces TTL indexes only for configured values; `null` leaves indexes untouched.
+Removing a TTL index is an operator action.
 See [job stores](warren/docs/job_stores.md) for timestamp fields and factory wiring.
 
 ### Optional scopes

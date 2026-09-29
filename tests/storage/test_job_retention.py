@@ -6,6 +6,7 @@ import pytest
 from tests.storage.job_store_doubles import MongoClient
 from warren.storage.job_results.mongodb import MongoDBJobResultsStore
 from warren.storage.jobs.mongodb import MongoDBJobStore
+from warren.storage.mongo_retention import configure_ttl_index
 from warren.storage.publishing_tracker.mongodb import MongoDBPublishingTracker
 
 
@@ -17,7 +18,7 @@ from warren.storage.publishing_tracker.mongodb import MongoDBPublishingTracker
         (MongoDBPublishingTracker, "job_publishing_results", "time"),
     ],
 )
-@pytest.mark.parametrize("ttl", [None, 0, 3600])
+@pytest.mark.parametrize("ttl", [None, 1, 3600])
 def test_retention_index_specs(
     store_type: type, collection: str, field: str, ttl: int | None
 ) -> None:
@@ -81,17 +82,35 @@ def test_setup_replaces_conflicting_index_options(
     }
 
 
-def test_disabling_retention_removes_ttl_but_preserves_regular_indexes() -> None:
+@pytest.mark.parametrize(
+    ("store_type", "collection", "field"),
+    [
+        (MongoDBJobStore, "jobs", "status.completed_at"),
+        (MongoDBJobStore, "jobs", "created_at"),
+        (MongoDBJobResultsStore, "job_results", "time"),
+        (MongoDBPublishingTracker, "job_publishing_results", "time"),
+    ],
+)
+@pytest.mark.parametrize("options", [{}, {"expireAfterSeconds": 20}])
+def test_unset_retention_leaves_existing_indexes_untouched(
+    store_type: type, collection: str, field: str, options: dict
+) -> None:
     client = MongoClient()
-    coll = client["test"]["jobs"]
-    coll.indexes["old_ttl"] = {
-        "key": [("status.completed_at", 1)],
-        "expireAfterSeconds": 20,
-    }
-    coll.indexes["created_at_1"] = {"key": [("created_at", 1)]}
-    asyncio.run(MongoDBJobStore(client, database_name="test").setup())
-    assert coll.dropped == ["old_ttl"]
-    assert coll.indexes["created_at_1"] == {"key": [("created_at", 1)]}
+    coll = client["test"][collection]
+    coll.indexes["existing_index"] = {"key": [(field, 1)], **options}
+    asyncio.run(store_type(client, database_name="test").setup())
+    assert coll.index_information_calls == 0
+    assert coll.dropped == []
+    assert coll.indexes["existing_index"] == {"key": [(field, 1)], **options}
+
+
+@pytest.mark.parametrize("seconds", [0, -1])
+def test_nonpositive_ttl_is_rejected_before_inspecting_indexes(seconds: int) -> None:
+    coll = MongoClient()["test"]["jobs"]
+    with pytest.raises(ValueError, match="TTL seconds must be positive"):
+        asyncio.run(configure_ttl_index(coll, "created_at", seconds))
+    assert coll.index_information_calls == 0
+    assert coll.indexes == {}
 
 
 def test_setup_preserves_an_equivalent_index_with_a_custom_name() -> None:

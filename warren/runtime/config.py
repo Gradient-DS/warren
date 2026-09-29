@@ -108,8 +108,8 @@ class RetentionConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    job_records_ttl_seconds: int | None = Field(default=None, ge=0)
-    job_records_max_age_seconds: int | None = Field(default=None, ge=0)
+    job_records_ttl_seconds: int | None = Field(default=None, gt=0)
+    job_records_max_age_seconds: int | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def validate_max_age(self) -> Self:

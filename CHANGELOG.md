@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `erase_scope` removes scoped MongoDB content, Redis keys, and control rows with deletion counts, falling back to collection drops when database drops are denied; see `warren/docs/scoping.md`.
 - Optional scoping isolates content in per-scope MongoDB databases and Redis namespaces, validates at storage access, labels control rows with valid scopes, and supplies worker factories with a database resolver.
 - Message scopes propagate through worker, failure, retry, and job-publication envelopes and into handler executor threads; runtime scoping defaults to disabled.
-- Optional MongoDB job-record retention covers completion, result updates, and publishing outcomes, including failures without an item ID; a maximum-age backstop bounds unfinished jobs, and setup reconciles or removes TTL indexes.
+- Optional MongoDB job-record retention covers completion, result updates, and publishing outcomes, including failures without an item ID; a maximum-age backstop bounds unfinished jobs, and setup reconciles explicitly configured TTL indexes.
 - Runtime `documents.cache_ttl_seconds` (86400) and `results.cache_ttl_seconds` (3600) configure positive cache expiry; fetched payload TTLs apply to both shared and job-scoped keys.
 - `ResultsStoreInterface.store_many` batches result upserts into one unordered MongoDB bulk write and an optional cache pipeline; memory stores support the API, and the last item wins for repeated keys.
 - Consumer concurrency is configurable on RabbitMQ and memory, health responses include in-flight handler counts, RabbitMQ prefetch is at least explicit concurrency, and Kafka rejects concurrency above one.
@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Unset job-record retention leaves existing TTL indexes untouched, so processes without retention settings cannot remove them. Configured TTLs must be positive; removing an index is an operator action.
 - Distributed retry workers share a MongoDB lease, renew every third of `retry.lease_ttl_seconds` (default 30), cancel local retries on lease loss, and recover persisted retries after standby takeover.
 - Concurrent status workers emit only one completion signal by conditionally setting completion time; `update_completion` returns whether it applied the update and preserves already-completed status and timestamps.
 - Binary result caches expire after 3600 seconds by default, retry caches use the maximum delay cap plus 60 seconds, Redis defaults of `None` use 3600 seconds, and framework cache writes pass TTLs explicitly.

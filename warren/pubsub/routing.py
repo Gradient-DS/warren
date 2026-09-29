@@ -28,7 +28,10 @@ DATA_TYPE_FIELD = "data_type"
 """The message field used as the routing key by convention."""
 
 LANE_FIELD = "lane"
+"""The message field conventionally used as a routing-key prefix (see ``MessageFieldRouter``)."""
+
 PRIORITY_FIELD = "priority"
+"""The message field the RabbitMQ publisher copies to the AMQP ``priority`` property."""
 
 ROUTING_PLAN_KEY = "routing"
 """Key under ``job_parameters`` where a :class:`RoutingPlan` is carried."""

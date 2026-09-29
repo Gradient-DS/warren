@@ -20,6 +20,12 @@ def _writes_without_ttl(source: str) -> list[int]:
         # Event.set() has no payload and is not a cache write.
         if method == "set" and not node.args and not node.keywords:
             continue
+        # Scope context assignment is not a cache write.
+        if (
+            isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "current_scope"
+        ):
+            continue
         position = 2 if method == "set" else 1
         ttl = node.args[position] if len(node.args) > position else None
         for keyword in node.keywords:
@@ -61,6 +67,7 @@ def test_guard_rejects_missing_or_null_ttls(call: str) -> None:
         "cache.set_many(items, ttl)",
         "client.set('key', value, ex=ttl)",
         "event.set()",
+        "current_scope.set(value)",
     ],
 )
 def test_guard_accepts_explicit_ttls_and_events(call: str) -> None:

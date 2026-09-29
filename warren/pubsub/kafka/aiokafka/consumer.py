@@ -385,6 +385,8 @@ class KafkaConsumerManager(ConsumerManagerBase):
             result = await self._call_handler(body)
 
             if result is not None:
+                if "scope" in body:
+                    result = {**result, "scope": body["scope"]}
                 # Route the result downstream (terminal workers have no
                 # data publisher).
                 if self._data_publisher is not None:
@@ -492,6 +494,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
         body[REPLAY_ROUTING_KEY_FIELD] = ""
 
         soft_failure_msg: dict = {
+            **({"scope": body["scope"]} if "scope" in body else {}),
             "data_type": "soft-failure",
             "data": body,
             "job_id": body.get("job_id"),
@@ -553,6 +556,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
 
         if self._publish_hard_failures and self._control_publisher is not None:
             hard_failure_msg: dict = {
+                **({"scope": body["scope"]} if "scope" in body else {}),
                 "data_type": "hard-failure",
                 "data": body,
                 "job_id": body.get("job_id"),

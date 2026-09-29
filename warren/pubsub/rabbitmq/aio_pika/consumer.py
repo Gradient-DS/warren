@@ -379,6 +379,8 @@ class RMQConsumerManager(ConsumerManagerBase):
             # Route the result downstream (terminal workers have no data
             # publisher). Lifecycle envelopes go through the control publisher.
             if result is not None:
+                if "scope" in body:
+                    result = {**result, "scope": body["scope"]}
                 if self._data_publisher is not None:
                     await self._data_publisher(result)
                 # Echo to the observer exchange when it can't observe the data
@@ -595,6 +597,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         body[REPLAY_ROUTING_KEY_FIELD] = message.routing_key
 
         soft_failure_msg: dict = {
+            **({"scope": body["scope"]} if "scope" in body else {}),
             "data_type": "soft-failure",
             "data": body,
             "job_id": body.get("job_id"),
@@ -666,6 +669,7 @@ class RMQConsumerManager(ConsumerManagerBase):
 
         if self._publish_hard_failures and self._control_publisher is not None:
             hard_failure_msg: dict = {
+                **({"scope": body["scope"]} if "scope" in body else {}),
                 "data_type": "hard-failure",
                 "data": body,
                 "job_id": body.get("job_id"),

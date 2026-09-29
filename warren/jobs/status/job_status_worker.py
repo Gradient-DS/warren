@@ -131,7 +131,10 @@ class JobStatusWorker(FilteringWorkerBase):
         else:
             await self._handle_success(job_id, message)
 
-        return await self._check_completion(job_id)
+        result = await self._check_completion(job_id)
+        if result is not None and "scope" in message:
+            result["scope"] = message["scope"]
+        return result
 
     async def _handle_success(
         self,

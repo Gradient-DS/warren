@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import time
 from abc import ABCMeta, abstractmethod
+from contextvars import copy_context
 
 from basics.base import Base
 
@@ -13,6 +14,7 @@ from warren.pubsub.common import (
     Route,
     RouteFunc,
 )
+from warren.storage.scoping import current_scope
 
 
 class BasePublisher(Base, PublisherInterface, metaclass=ABCMeta):
@@ -86,6 +88,7 @@ class ConsumerManagerBase(Base, ConsumerManagerInterface, metaclass=ABCMeta):
         self._handler_started_at[token] = time.monotonic()
         deadline = asyncio.timeout(self._handler_timeout_seconds)
         executor_running = False
+        scope_token = current_scope.set(body.get("scope"))
         try:
             async with deadline:
                 is_async = inspect.iscoroutinefunction(
@@ -96,7 +99,7 @@ class ConsumerManagerBase(Base, ConsumerManagerInterface, metaclass=ABCMeta):
                 if is_async:
                     return await self._consumer(body)
                 future = asyncio.get_running_loop().run_in_executor(
-                    None, self._consumer, body
+                    None, copy_context().run, self._consumer, body
                 )
                 # A timeout cannot stop the executor thread; track it until it exits.
                 executor_running = True
@@ -114,6 +117,7 @@ class ConsumerManagerBase(Base, ConsumerManagerInterface, metaclass=ABCMeta):
             reason = f"handler timed out after {self._handler_timeout_seconds:g}s"
             raise SoftFailureException(reason) from e
         finally:
+            current_scope.reset(scope_token)
             if not executor_running:
                 self._handler_started_at.pop(token, None)
                 if self._handler_slots is not None:

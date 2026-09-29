@@ -148,6 +148,16 @@ class StartupConfig(BaseModel):
     max_delay_seconds: float = Field(default=30.0, ge=0, allow_inf_nan=False)
 
 
+class ScopingConfig(BaseModel):
+    """Content namespace settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    required: bool = True
+    database_prefix: str = "wr_"
+
+
 class RuntimeConfig(BaseModel):
     """Top-level runtime configuration.
 
@@ -183,6 +193,7 @@ class RuntimeConfig(BaseModel):
     retry: RuntimeRetryConfig = RuntimeRetryConfig()
     health: HealthConfig = HealthConfig()
     startup: StartupConfig = StartupConfig()
+    scoping: ScopingConfig = ScopingConfig()
 
     @classmethod
     def from_yaml(cls, path: Path) -> "RuntimeConfig":

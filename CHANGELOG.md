@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Optional message scopes propagate through worker, failure, retry and job
+  publication envelopes. Handler scope context also reaches executor threads.
+  Runtime scoping settings default to disabled.
+
 - Optional runtime job-record retention creates MongoDB TTL indexes for job
   completion, result updates and publishing outcomes, including failures without
   an item ID. A maximum-age backstop bounds unfinished jobs. Store setup replaces

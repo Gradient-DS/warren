@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-09-29
+
+> Queue lanes and message priority: optional `lane` and `priority` on the message envelope, lane-prefixed routing keys and AMQP priority on publish. Patch: additive and backward compatible.
+
 ### Added
 
 - Optional application-defined `lane` and AMQP `priority` fields on processing

@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PipelineSpec.publication=PublishSpec(route_func=...)`; omitting the spec keeps
   the existing exchange-based routing.
 
+### Fixed
+
+- Release versions now come from Git tags via hatch-vcs, with a `0.0.0`
+  fallback when version detection is unavailable. Publishing rejects
+  distributions whose versions do not match the GitHub Release tag, preventing
+  stale versions from being uploaded to PyPI.
+
 ## [0.6.1] — 2026-09-29
 
 > Queue lanes and message priority: optional `lane` and `priority` on the message envelope, lane-prefixed routing keys and AMQP priority on publish. Patch: additive and backward compatible.

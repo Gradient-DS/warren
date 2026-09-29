@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v6
         with:
@@ -19,6 +21,34 @@ jobs:
 
       - name: Check metadata
         run: pip install twine && twine check dist/*
+
+      - name: Verify distribution versions match release tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          shopt -s nullglob dotglob
+          files=(dist/*)
+          if [[ -z "$version" || ${#files[@]} -eq 0 ]]; then
+            echo "::error::Release tag is empty or dist/ contains no files."
+            exit 1
+          fi
+          for file in "${files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "::error::Unexpected distribution entry: $file"
+              exit 1
+            fi
+            case "$file" in
+              "dist/warren-${version}.tar.gz"|"dist/warren-${version}-"*.whl)
+                echo "Verified $file matches release $RELEASE_TAG"
+                ;;
+              *)
+                echo "::error::$file does not match release $RELEASE_TAG (expected version $version)."
+                exit 1
+                ;;
+            esac
+          done
 
       - uses: actions/upload-artifact@v7
         with:

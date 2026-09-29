@@ -88,13 +88,16 @@ class DocumentStoreInterface(Protocol):
         """
         ...
 
-    def query(self, params: dict) -> AsyncGenerator[dict, None]:
+    def query(
+        self, params: dict, *, sort_by: str | None = None
+    ) -> AsyncGenerator[dict, None]:
         """
         Query document store.
 
         Returns an async generator — callers use ``async for doc in store.query(params)``.
 
         :param params: Query parameters.
+        :param sort_by: Optional field to sort by in ascending order.
 
         :return: Async generator of documents found.
         """

@@ -2,6 +2,7 @@ from typing import Self
 
 import copy
 from collections.abc import AsyncIterator
+from fnmatch import fnmatchcase
 
 from bson import ObjectId
 from pymongo import ReplaceOne
@@ -79,6 +80,12 @@ class Cursor:
     def __init__(self, rows: list[dict]) -> None:
         self.rows = rows
 
+    def sort(self, field: str, direction: int) -> Self:
+        assert field == "part_idx"
+        assert direction == 1
+        self.rows.sort(key=lambda row: row[field])
+        return self
+
     def __aiter__(self) -> AsyncIterator[dict]:
         async def iterate() -> AsyncIterator[dict]:
             for row in self.rows:
@@ -91,6 +98,7 @@ class RedisClient:
     def __init__(self) -> None:
         self.entries: dict[str, bytes] = {}
         self.ttls: dict[str, int | None] = {}
+        self.scan_calls = 0
         self.pipeline_calls = 0
         self.execute_calls = 0
 
@@ -100,6 +108,15 @@ class RedisClient:
 
     async def get(self, key: str) -> bytes | None:
         return self.entries.get(key)
+
+    async def scan(
+        self, *, cursor: int, match: str, count: int = 10
+    ) -> tuple[int, list[bytes]]:
+        self.scan_calls += 1
+        return 0, [key.encode() for key in self.entries if fnmatchcase(key, match)]
+
+    async def mget(self, keys: list[str]) -> list[bytes | None]:
+        return [self.entries.get(key) for key in keys]
 
     def pipeline(self) -> "Pipeline":
         self.pipeline_calls += 1

@@ -53,3 +53,30 @@ def test_serialize_still_refuses_values_json_cannot_render() -> None:
 
     with pytest.raises(TypeError, match="not JSON serializable"):
         cache._serialize({"result": object()})
+
+
+class _ScanningRedis:
+    def __init__(self) -> None:
+        self.calls: list[tuple[int, str, int]] = []
+
+    async def scan(
+        self, *, cursor: int, match: str, count: int
+    ) -> tuple[int, list[bytes]]:
+        self.calls.append((cursor, match, count))
+        return (1, [b"results:a:0"]) if cursor == 0 else (0, [b"results:a:1"])
+
+    async def mget(self, keys: list[str]) -> list[bytes]:
+        assert keys == ["results:a:0", "results:a:1"]
+        return [b'{"value": 0}', b'{"value": 1}']
+
+
+def test_prefix_scan_sets_count_on_every_page() -> None:
+    import asyncio
+
+    client = _ScanningRedis()
+    cache = RedisDictCache(client, base_key="results")
+    assert asyncio.run(cache.get_by_key_prefix("a:")) == {
+        "a:0": {"value": 0},
+        "a:1": {"value": 1},
+    }
+    assert client.calls == [(0, "results:a:*", 1000), (1, "results:a:*", 1000)]

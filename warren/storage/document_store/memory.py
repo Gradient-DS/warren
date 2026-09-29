@@ -111,7 +111,9 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
             raise DocumentNotFoundError(msg)
         return copy.deepcopy(self._docs[key])
 
-    async def query(self, params: dict) -> AsyncGenerator[dict, None]:
+    async def query(
+        self, params: dict, *, sort_by: str | None = None
+    ) -> AsyncGenerator[dict, None]:
         for field, value in params.items():
             if field.startswith("$") or isinstance(value, dict):
                 msg = (
@@ -126,6 +128,8 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
             for doc in self._docs.values()
             if all(doc.get(field) == value for field, value in params.items())
         ]
+        if sort_by is not None:
+            matches.sort(key=lambda doc: doc[sort_by])
         for doc in matches:
             yield copy.deepcopy(doc)
 

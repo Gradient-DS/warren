@@ -162,6 +162,8 @@ class CachedDocumentStore(Base):
     def query(
         self,
         params: dict,
+        *,
+        sort_by: str | None = None,
     ) -> AsyncGenerator[dict, None]:
         """Query document store (cache is bypassed).
 
@@ -169,7 +171,7 @@ class CachedDocumentStore(Base):
 
         :return: Async generator of documents found.
         """
-        return self._store.query(params)
+        return self._store.query(params, sort_by=sort_by)
 
     def get_document_type(self) -> str:
         """Return document type from underlying store."""

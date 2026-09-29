@@ -107,14 +107,11 @@ class ResultsStoreInterface(Protocol):
         try_cache: bool = True,
     ) -> AsyncGenerator[ResultDoc, None]:
         """
-        Stream all processing results for given document ID and job ID.
-
-        Returns an async generator — callers use
-        ``async for result in store.stream_doc_processing_results(...)``.
+        Stream persisted results in ascending part order, bypassing the cache.
 
         :param doc_id: The document ID.
         :param job_id: The job ID (None if not using job grouping).
-        :param try_cache: Whether to try cache first before querying document store.
+        :param try_cache: Deprecated and ignored; retained for compatibility.
 
         :returns: Async generator yielding result documents.
         :raises: DocumentProcessingResultsNotFound if no results exist for the given

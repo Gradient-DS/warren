@@ -38,6 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Multi-part result reads always query persistence in ascending `part_idx` order,
+  preventing incomplete results after cache eviction or partial rewrites.
+  `stream_doc_processing_results(try_cache=...)` still accepts the parameter,
+  but it is deprecated and ignored. Single-part reads retain their cache.
+  Redis prefix scans use an explicit count of 1000.
+
 - Runtime configuration rejects unknown keys at every modeled level, catching
   misspelled settings instead of silently ignoring them.
 

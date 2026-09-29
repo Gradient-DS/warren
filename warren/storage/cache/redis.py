@@ -264,7 +264,9 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
         keys: list[str] = []
         cursor = 0
         while True:
-            cursor, batch = await self._client.scan(cursor=cursor, match=pattern)
+            cursor, batch = await self._client.scan(
+                cursor=cursor, match=pattern, count=1000
+            )
             keys.extend(k.decode("utf-8") if isinstance(k, bytes) else k for k in batch)
             if cursor == 0:
                 break

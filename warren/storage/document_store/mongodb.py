@@ -217,15 +217,20 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
     async def query(
         self,
         params: dict,
+        *,
+        sort_by: str | None = None,
     ) -> AsyncGenerator[dict, None]:
         """
         Query documents matching the given parameters.
 
         :param params: MongoDB query parameters.
+        :param sort_by: Optional field to sort by in ascending order.
 
         :return: Async generator yielding matching documents.
         """
         cursor = self._collection.find(params)
+        if sort_by is not None:
+            cursor = cursor.sort(sort_by, 1)
         async for doc in cursor:
             yield self._prepare_doc_for_return(doc)
 

@@ -19,7 +19,6 @@ from warren.storage.results.interface import (
 )
 from warren.workers.messages import (
     build_message_key,
-    build_message_key_prefix,
 )
 
 
@@ -201,11 +200,11 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         try_cache: bool = True,
     ) -> AsyncGenerator[ResultDoc, None]:
         """
-        Stream all processing results for a document.
+        Stream persisted results in ascending part order, bypassing the cache.
 
         :param doc_id: Document ID.
         :param job_id: Job ID (None if not using job grouping).
-        :param try_cache: Whether to try cache first.
+        :param try_cache: Deprecated and ignored; retained for compatibility.
 
         :return: Async generator yielding result documents.
 
@@ -213,21 +212,10 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         """
         results_found = False
 
-        if try_cache:
-            cached_items = await self._cache_get_by_prefix(doc_id, job_id)
-            if cached_items:
-                for doc in cached_items.values():
-                    results_found = True
-                    yield self._dict_to_result_doc(doc)
-                return
-
         query = self._build_query(doc_id, job_id=job_id)
-        async for doc in self._document_store.query(query):
+        async for doc in self._document_store.query(query, sort_by="part_idx"):
             results_found = True
-            doc = self._add_result_id(doc)
-            part_idx = doc.get("part_idx", 0)
-            await self._cache_set(doc_id, part_idx, job_id, doc)
-            yield self._dict_to_result_doc(doc)
+            yield self._dict_to_result_doc(self._add_result_id(doc))
 
         if not results_found:
             msg = f"No results found for doc_id={doc_id}, job_id={job_id}"
@@ -298,27 +286,6 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
             )
             return None
 
-    async def _cache_get_by_prefix(
-        self,
-        doc_id: str,
-        job_id: str | None,
-    ) -> dict[str, dict]:
-        """Get values from cache by prefix, returning empty dict on failure."""
-        if self._cache is None:
-            return {}
-        try:
-            cache_prefix = self._build_cache_prefix(doc_id, job_id)
-            return await self._cache.get_by_key_prefix(cache_prefix)
-        except Exception as e:
-            self._log.warning(
-                f"Retrieving from cache using key prefix failed for:\n"
-                f"doc_id={doc_id}\n"
-                f"job_id={job_id}\n"
-                f"Exceptions(s): {summarize_exception_chain(e)}"
-            )
-
-            return {}
-
     def _build_cache_key(
         self,
         doc_id: str,
@@ -327,14 +294,6 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
     ) -> str:
         """Build a cache key from business keys."""
         return build_message_key(job_id=job_id, doc_id=doc_id, part_idx=part_idx)
-
-    def _build_cache_prefix(
-        self,
-        doc_id: str,
-        job_id: str | None,
-    ) -> str:
-        """Build a cache prefix for streaming queries."""
-        return build_message_key_prefix(doc_id=doc_id, job_id=job_id)
 
     def _build_query(
         self,

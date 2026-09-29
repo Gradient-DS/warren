@@ -99,6 +99,58 @@ message. Warren ships a few; a pipeline can also supply its own.
 - **`ReplayRouter`** — replays the routing key a message originally arrived
   with; used by the retry worker (see *Failure lifecycle*).
 
+## Lanes and message priority
+
+`ProcessingMessage` accepts optional `lane` and `priority` fields. Lane names
+are application-defined; Warren assigns no meaning to them. `derive()` carries
+both fields through downstream stages. Priority must be an integer in `0..255`
+(booleans are rejected); unset fields are omitted from the serialized envelope.
+
+For a topic exchange, configure every data publisher with a lane prefix and
+bind separate queues to the corresponding keys:
+
+```python
+from warren.pubsub.rabbitmq.config import RMQExchangeConfig, RMQQueueConfig
+from warren.pubsub.routing import LANE_FIELD, MessageFieldRouter
+from warren.runtime.spec import PublishSpec
+
+exchange = RMQExchangeConfig(name="jobs", type="topic")
+publish = PublishSpec(
+    route_func=MessageFieldRouter(prefix_field=LANE_FIELD, default_prefix="bulk")
+)
+interactive_queue = RMQQueueConfig(
+    name="jobs.parser_interactive",
+    binding_keys=("interactive.raw_document",),
+    arguments={"x-max-priority": 2},
+)
+bulk_queue = RMQQueueConfig(
+    name="jobs.parser_bulk", binding_keys=("bulk.raw_document",)
+)
+```
+
+A message with `data_type="raw_document"`, `lane="interactive"`, and
+`priority=2` uses key `interactive.raw_document` and AMQP priority `2`.
+Missing or empty lanes use `default_prefix`; without a fallback they raise
+`ValueError`. Leaving `prefix_field` unset preserves routing by `data_type` alone.
+
+With runtime workers, put these bindings and `publish` on their `WorkerSpec`s.
+Use distinct worker type names for the separate queues: the runtime names each
+queue `<exchange>.<worker_type>`. Router options live in Python pipeline specs,
+not runtime YAML. For the interactive worker deployment, the existing queue
+arguments setting supplies the priority queue declaration:
+
+```yaml
+rabbitmq:
+  consumer:
+    queue_arguments: {x-max-priority: 2}
+```
+
+Soft-failure retries and counted broker redeliveries retain the original body
+and replay its original routing key, including its lane prefix, with the same
+AMQP priority. Failure control envelopes keep the original message under `data`
+and use the existing observer routing. The memory backend matches lane-prefixed
+topic keys but ignores priority ordering and remains FIFO.
+
 ## Job-defined routing
 
 Routing *strategy* (what computes the key) and exchange *type* (how the broker

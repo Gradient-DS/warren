@@ -52,6 +52,8 @@ class MessageFieldRouter:
 
     :param field: Message-body key to read the routing key from.
         Defaults to ``"data_type"``.
+    :param prefix_field: Optional field prepended to the key with a dot.
+    :param default_prefix: Fallback when the prefix field is missing or empty.
     """
 
     def __init__(

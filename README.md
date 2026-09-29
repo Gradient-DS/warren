@@ -295,6 +295,12 @@ alias. Overlapping bindings deliver a message only once per matching queue.
 The `publish` field supplies a `PublishSpec`, or `None` for a worker with no
 downstream data publisher.
 
+Optional `lane` and `priority` message fields support separate queue lanes and
+RabbitMQ message priority through downstream stages and retries. See
+[lanes and message priority](warren/docs/routing.md#lanes-and-message-priority)
+for topic bindings such as `interactive.raw_document` / `bulk.raw_document`
+and an interactive queue configured with `x-max-priority`.
+
 The three `examples/exchanges/{fanout,topic,direct}` directories wire the same
 synthetic stages to each exchange type. See [routing](warren/docs/routing.md)
 and the [runtime usage guide](warren/runtime/USAGE.md) for factories, capability

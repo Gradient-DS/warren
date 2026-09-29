@@ -128,6 +128,8 @@ class ProcessingMessage:
         before the main processing can proceed.
     :param preprocessing_completed: Preprocessing steps already done.
     :param retry: Retry state, populated on soft failure.
+    :param lane: Optional application-defined routing lane.
+    :param priority: Optional AMQP priority, an integer from 0 through 255.
     """
 
     data_type: str
@@ -199,8 +201,9 @@ class ProcessingMessage:
     ) -> "ProcessingMessage":
         """Derive a new message carrying forward job metadata from this one.
 
-        Copies ``job_id``, ``job_metadata``, and ``job_parameters`` from
-        self. Preprocessing fields are copied unless explicitly overridden.
+        Copies ``job_id``, ``job_metadata``, ``job_parameters``, ``scope``,
+        ``lane``, and ``priority`` from self. Preprocessing fields are copied
+        unless explicitly overridden.
         The ``retry`` field is intentionally not copied — a derived
         message starts with a clean retry state.
 

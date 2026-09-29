@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional application-defined `lane` and AMQP `priority` fields on processing
+  messages, preserved by `derive()` and retry replay. Priority accepts integers
+  from 0 through 255, excluding booleans.
+- Optional `prefix_field` and `default_prefix` on `MessageFieldRouter` for
+  lane-prefixed routing keys. RabbitMQ publishers forward message priority;
+  the memory backend supports lane routing and ignores priority ordering.
+
 ## [0.6.0] — 2026-09-29
 
 > Production hardening: connection auth and startup retries, handler timeouts, consumer concurrency, multi-key bindings, bulk result writes, cache expiry, job-record retention, scopes and a single active retry scheduler. Minor, not patch: unknown config keys are now rejected.

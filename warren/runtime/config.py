@@ -30,6 +30,7 @@ from warren.pubsub.kafka.config import (
     KafkaConsumerConfig,
     KafkaTopicConfig,
 )
+from warren.pubsub.memory.config import MemoryConsumerConfig
 from warren.pubsub.rabbitmq.config import (
     RMQConnectionConfig,
     RMQConsumerConfig,
@@ -128,9 +129,10 @@ class RuntimeConfig(BaseModel):
         presence-based): defaults to ``"rabbitmq"`` so every existing
         YAML stays valid, and only the matching backend section is used.
         ``"memory"`` runs everything in one process with no infrastructure
-        and uses none of the sections below (see ``warren/docs/memory.md``).
+        and needs no external connection settings (see ``warren/docs/memory.md``).
     :param rabbitmq: RabbitMQ connection, exchange, and consumer settings.
     :param kafka: Kafka connection, topic, and consumer settings.
+    :param memory: In-process consumer settings.
     :param mongodb: MongoDB connection settings.
     :param redis: Redis connection settings.
     :param retry: Retry worker toggle and collection name.
@@ -143,6 +145,7 @@ class RuntimeConfig(BaseModel):
     backend: Literal["rabbitmq", "kafka", "memory"] = "rabbitmq"
     rabbitmq: RuntimeRMQConfig = RuntimeRMQConfig()
     kafka: RuntimeKafkaConfig = RuntimeKafkaConfig()
+    memory: MemoryConsumerConfig = MemoryConsumerConfig()
     mongodb: MongoDBConfig = MongoDBConfig()
     redis: RedisConfig = RedisConfig()
     retry: RuntimeRetryConfig = RuntimeRetryConfig()

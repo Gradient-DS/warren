@@ -103,7 +103,7 @@ class RMQConsumerConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # TODO: prefetch count is influenced by the worker's concurrency level. How to handle this?
+    concurrency: int | None = Field(default=None, ge=1)
     prefetch_count: int = 1
     handler_timeout_seconds: float | None = Field(
         default=None, gt=0, allow_inf_nan=False

@@ -15,7 +15,7 @@ The transport-agnostic retry policy (``RetryConfig``) lives in
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class KafkaConnectionConfig(BaseModel):
@@ -85,6 +85,7 @@ class KafkaConsumerConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    concurrency: int | None = Field(default=None, ge=1)
     group_id: str | None = None
     auto_offset_reset: Literal["earliest", "latest"] = "earliest"
     max_poll_interval_ms: int = 600_000
@@ -93,6 +94,14 @@ class KafkaConsumerConfig(BaseModel):
         default=None, gt=0, allow_inf_nan=False
     )
     on_shutdown_timeout: float = 30.0
+
+    @field_validator("concurrency")
+    @classmethod
+    def require_sequential_commits(cls, value: int | None) -> int | None:
+        if value is not None and value > 1:
+            msg = "Kafka concurrency must be 1 to preserve offset commit ordering"
+            raise ValueError(msg)
+        return value
 
 
 class KafkaConsumerManagerConfig(BaseModel):

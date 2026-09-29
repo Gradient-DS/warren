@@ -198,3 +198,31 @@ def test_handler_timeout_error_is_not_a_deadline_expiry() -> None:
         assert publisher.published[0]["data_type"] == "hard-failure"
 
     asyncio.run(run())
+
+
+def test_sync_timeout_holds_concurrency_slot_until_thread_finishes() -> None:
+    release = threading.Event()
+
+    class SyncWorker(FakeWorker):
+        def __call__(self, message: dict) -> dict:
+            self.calls.append(dict(message))
+            release.wait(2)
+            return message
+
+    async def run() -> None:
+        worker = SyncWorker()
+        manager, process = await make_consumer("memory", worker, FakePublisher(), 0.001)
+        try:
+            await process({"item": 1})
+            second = asyncio.create_task(process({"item": 2}))
+            await asyncio.sleep(0.003)
+            assert worker.calls == [{"item": 1}]
+            assert (await manager.health()).in_flight_handlers == 1
+            assert not second.done()
+        finally:
+            release.set()
+        await second
+        assert worker.calls == [{"item": 1}, {"item": 2}]
+        assert (await manager.health()).in_flight_handlers == 0
+
+    asyncio.run(run())

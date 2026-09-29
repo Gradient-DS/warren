@@ -1,6 +1,7 @@
 """A whole pipeline in one process: memory broker, memory stores, real runners."""
 
 import asyncio
+import json
 
 import pytest
 
@@ -240,3 +241,90 @@ def test_first_runner_failure_stops_the_run_and_is_raised() -> None:
         asyncio.run(run_in_process([forever, boom]))  # type: ignore[list-item]
     assert boom.torn_down
     assert forever.torn_down
+
+
+def test_instances_share_queue_and_process_each_item_once() -> None:
+    async def scenario() -> None:
+        seen: dict[str, list[int]] = {}
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        class Worker(FilteringWorkerBase):
+            def should_process(self, message: dict) -> bool:
+                return True
+
+            async def process(self, message: dict) -> dict | None:
+                seen.setdefault(self.name, []).append(message["item"])
+                if len(seen) == 3:
+                    started.set()
+                await release.wait()
+                return None
+
+        async def factory(ctx: WorkerFactoryContext) -> MessageConsumerInterface:
+            return Worker(ctx.worker_name, worker_type=ctx.worker_type)
+
+        exchange = RMQExchangeConfig(name="jobs", type="fanout")
+        pipeline = _pipeline(exchange, flaky=False)
+        pipeline.workers.clear()
+        pipeline.workers["worker"] = WorkerSpec({}, factory)
+        config = RuntimeConfig(backend="memory", health=HealthConfig(enabled=False))
+        infra = await create_runtime_infrastructure(config)
+        runners = []
+        try:
+            runners = await create_in_process_runners(
+                config,
+                pipeline,
+                infra=infra,
+                stores=MemoryStoreRegistry(),
+                instances={"worker": 3},
+            )
+            assert [r._worker_name for r in runners[:3]] == [
+                "worker-0",
+                "worker-1",
+                "worker-2",
+            ]
+            for runner in runners:
+                await runner.setup()
+            managers = [r._consumer_manager for r in runners[:3]]
+            assert len({id(m._queue) for m in managers}) == 1
+            for manager in managers:
+                await manager.start_consuming()
+            broker = infra.pubsub_connection_manager.broker
+            for i in range(3):
+                broker.publish(exchange, "", json.dumps({"item": i}).encode())
+            async with asyncio.timeout(1):
+                await started.wait()
+            assert sorted(item for items in seen.values() for item in items) == [
+                0,
+                1,
+                2,
+            ]
+        finally:
+            release.set()
+            for runner in reversed(runners):
+                await runner.teardown()
+            await close_runtime_infrastructure(infra)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("instances", [{"upper": 0}, {"upper": -1}, {"missing": 1}])
+def test_invalid_instance_counts_fail_before_setup(instances: dict[str, int]) -> None:
+    async def scenario() -> None:
+        config = RuntimeConfig(backend="memory")
+        infra = await create_runtime_infrastructure(config)
+        try:
+            with pytest.raises(ValueError, match=r"Instance count|Unknown worker type"):
+                await create_in_process_runners(
+                    config,
+                    _pipeline(
+                        RMQExchangeConfig(name="jobs", type="fanout"), flaky=False
+                    ),
+                    infra=infra,
+                    stores=MemoryStoreRegistry(),
+                    instances=instances,
+                )
+        finally:
+            await close_runtime_infrastructure(infra)
+
+    asyncio.run(scenario())

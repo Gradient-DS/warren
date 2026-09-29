@@ -248,3 +248,24 @@ def test_consumer_manager_memory_owns_queue_naming() -> None:
     assert isinstance(manager, MemoryConsumerManager)
     assert manager._queue_name == f"jobs.{WORKER_TYPE}"
     assert manager._binding_keys == ("doc.#",)
+
+
+def test_memory_runtime_passes_handler_settings() -> None:
+    config = RuntimeConfig(
+        backend="memory",
+        memory={
+            "concurrency": 3,
+            "handler_timeout_seconds": 2,
+            "on_shutdown_timeout": 4,
+        },
+    )
+    manager = backends.create_consumer_manager(
+        config,
+        object(),
+        exchange=FANOUT,
+        worker_type="worker",
+        consumer=_FakeConsumer(),
+    )
+    assert manager._concurrency == 3
+    assert manager._handler_timeout_seconds == 2
+    assert manager._on_shutdown_timeout == 4

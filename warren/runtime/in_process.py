@@ -33,8 +33,9 @@ async def create_in_process_runners(
     *,
     infra: RuntimeInfra,
     stores: MemoryStoreRegistry,
+    instances: dict[str, int] | None = None,
 ) -> list[WorkerRunnerBase]:
-    """Build one runner per worker type, plus the status and retry runners.
+    """Build worker instances, plus the status and retry runners.
 
     The one place that knows which registry store goes into which runner
     parameter. Every runner shares ``infra`` (and with it the broker) and
@@ -45,8 +46,17 @@ async def create_in_process_runners(
     :param pipeline: The pipeline to run.
     :param infra: Shared infrastructure. The caller creates and closes it.
     :param stores: Shared store registry.
+    :param instances: Instance count per worker type; unspecified types get one.
     :return: Runners, not yet set up.
     """
+    instances = instances or {}
+    for worker_type, count in instances.items():
+        if worker_type not in pipeline.workers:
+            msg = f"Unknown worker type in instances: {worker_type!r}"
+            raise ValueError(msg)
+        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+            msg = f"Instance count for {worker_type!r} must be an integer >= 1"
+            raise ValueError(msg)
     runners: list[WorkerRunnerBase] = []
 
     for worker_type, spec in pipeline.workers.items():
@@ -71,19 +81,20 @@ async def create_in_process_runners(
             if spec.needs_document_fetcher
             else None
         )
-        runners.append(
-            DefaultWorkerRunner(
-                config,
-                f"{worker_type}-0",
-                worker_type=worker_type,
-                worker_spec=spec,
-                exchange=pipeline.exchange,
-                document_fetcher=document_fetcher,
-                document_store=document_store,
-                results_stores=results_stores,
-                infra=infra,
+        for i in range(instances.get(worker_type, 1)):
+            runners.append(
+                DefaultWorkerRunner(
+                    config,
+                    f"{worker_type}-{i}",
+                    worker_type=worker_type,
+                    worker_spec=spec,
+                    exchange=pipeline.exchange,
+                    document_fetcher=document_fetcher,
+                    document_store=document_store,
+                    results_stores=results_stores,
+                    infra=infra,
+                )
             )
-        )
 
     # Status and retry workers observe the observer exchange: the data
     # exchange itself for fanout/topic, a derived fanout one for direct.

@@ -95,6 +95,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
             consumer,
             publishers=all_publishers,
             handler_timeout_seconds=config.consumer.handler_timeout_seconds,
+            concurrency=config.consumer.concurrency or 1,
         )
 
         self._data_publisher = data_publisher

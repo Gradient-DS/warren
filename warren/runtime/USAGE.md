@@ -226,6 +226,33 @@ are unbounded. See [`warren/docs/memory.md`](../docs/memory.md) for the usage
 pattern and limits, and [`examples/rag/run_local.py`](../../examples/rag/run_local.py)
 for a complete example.
 
+## Consumer limits
+
+RabbitMQ uses `rabbitmq.consumer.concurrency`, Kafka uses
+`kafka.consumer.concurrency`, and memory uses `memory.concurrency`.
+The default is `null`, preserving existing behavior: RabbitMQ limits handlers
+to `prefetch_count`, while Kafka and memory process one at a time. RabbitMQ
+prefetch zero remains unlimited when concurrency is unset.
+An explicit concurrency must be at least one and sets the handler limit.
+RabbitMQ sets prefetch to `max(prefetch_count, concurrency or 0)`.
+Kafka currently rejects values above one to preserve offset commit ordering.
+Handlers must support concurrent calls when the effective limit exceeds one.
+
+Each section also accepts `handler_timeout_seconds` (positive seconds or
+`null`, which disables the deadline). Expiry produces a soft failure and uses
+the existing retry limits. A synchronous handler runs in an executor thread;
+timeout cannot terminate that thread, so it retains its concurrency slot until
+it finishes.
+
+Health responses include `in_flight_handlers`. The `/live` endpoint returns
+503 if a handler in the latest health sample has run longer than twice its
+timeout, including handlers that suppress cancellation.
+
+For memory pipelines, `create_in_process_runners(..., instances={"transform": 2})`
+creates two instances named `transform-0` and `transform-1`. Each instance
+has its own concurrency limit and shares the worker type's queue and stores.
+Unspecified worker types get one instance.
+
 ## Defining a pipeline
 
 ### Convention

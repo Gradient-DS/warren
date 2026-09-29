@@ -17,8 +17,8 @@ and nothing crosses a process boundary.
 - **Stores:** pure-Python implementations of the store Protocols
   (`MemoryDocumentStore`, `MemoryJobStore`, `MemoryJobResultsStore`,
   `MemoryCache`), shared between workers by a `MemoryStoreRegistry`.
-- **Same semantics where it matters:** one message at a time per worker
-  (`prefetch_count: 1`), the same soft-failure and hard-failure envelopes, the
+- **Same semantics where it matters:** configurable handler concurrency
+  (one by default), the same soft-failure and hard-failure envelopes, the
   same retry math, the same health states.
 
 ## Running a pipeline
@@ -39,6 +39,29 @@ return when the work is done; the run then stops and everything is torn down.
 
 Turn the health endpoint off (`health.enabled: false`): every runner shares the
 process, so they would all try to bind the same port.
+
+## Handler limits and instances
+
+Configure limits per consumer manager in the runtime configuration:
+
+```yaml
+backend: memory
+memory:
+  concurrency: 3
+  handler_timeout_seconds: 30
+  on_shutdown_timeout: 30
+```
+
+For direct construction, pass these settings to `MemoryConsumerManager`.
+Concurrency defaults to `None`, preserving one handler at a time; an explicit
+value must be at least one.
+Timeouts default to `None` and use the existing soft-failure retry policy.
+
+Pass `instances={"transform": 2}` to `create_in_process_runners` to create
+`transform-0` and `transform-1`. Unspecified worker types get one instance;
+counts must be positive integers. Instances share stores and the worker
+type's queue. Status and retry runners remain single instances.
+Handler concurrency applies to each instance.
 
 ## Limits
 

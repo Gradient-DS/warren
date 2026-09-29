@@ -438,7 +438,7 @@ def test_shutdown_drains_the_in_flight_message_and_tears_down_publishers() -> No
             EXCHANGE, "", json.dumps(_BODY).encode()
         )
         await manager.start_consuming()
-        await _eventually(lambda: manager._in_flight_task is not None)
+        await _eventually(lambda: bool(manager._in_flight_tasks))
         stopping = asyncio.create_task(manager.stop_consuming())
         await asyncio.sleep(0.01)
         gate.set()

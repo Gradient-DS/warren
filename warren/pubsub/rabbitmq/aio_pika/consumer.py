@@ -109,6 +109,7 @@ class RMQConsumerManager(ConsumerManagerBase):
             consumer,
             publishers=all_publishers,
             handler_timeout_seconds=config.consumer.handler_timeout_seconds,
+            concurrency=config.consumer.concurrency or config.consumer.prefetch_count,
         )
 
         self._data_publisher = data_publisher
@@ -155,14 +156,13 @@ class RMQConsumerManager(ConsumerManagerBase):
             raise PubSubSetupError(msg) from e
         self._channel = channel
 
+        prefetch_count = max(
+            self._config.consumer.prefetch_count, self._config.consumer.concurrency or 0
+        )
         try:
-            # TODO: Couple this to the worker's concurrency level?
-            await channel.set_qos(prefetch_count=self._config.consumer.prefetch_count)
+            await channel.set_qos(prefetch_count=prefetch_count)
         except Exception as e:
-            msg = (
-                f"Failed to set consumer QoS "
-                f"(prefetch_count={self._config.consumer.prefetch_count})"
-            )
+            msg = f"Failed to set consumer QoS (prefetch_count={prefetch_count})"
             raise PubSubSetupError(msg) from e
 
         # declare_exchange / declare_queue self-contextualise (exchange/queue
@@ -183,8 +183,8 @@ class RMQConsumerManager(ConsumerManagerBase):
         Begin consuming messages from the configured queue.
 
         Messages are delivered to _on_message() as they arrive.
-        Each message spawns a task, allowing concurrent processing
-        up to prefetch_count limit.
+        Each delivery spawns a task; handler concurrency is bounded separately
+        from the channel prefetch.
         """
         if self._queue is None:
             msg = "Must call setup() before start_consuming()"

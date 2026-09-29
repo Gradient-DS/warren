@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Configurable consumer concurrency on RabbitMQ and memory, with in-flight
+  handler counts in health responses. Unset concurrency preserves existing
+  behavior: RabbitMQ uses `prefetch_count`; memory and Kafka use one handler.
+  Explicit concurrency sets the handler limit, with RabbitMQ prefetch at least
+  that limit. Kafka rejects concurrency above one to preserve offset commit ordering.
+- In-process pipelines accept per-worker instance counts. Memory handler
+  settings are available in the runtime memory configuration.
+
 - Workers can bind their queue to several keys with binding_keys, retaining
   binding_key as a single-key constructor alias. Fanout consumers ignore keys;
   RabbitMQ and memory route each message once per matching queue.

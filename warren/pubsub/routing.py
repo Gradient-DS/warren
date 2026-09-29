@@ -27,6 +27,12 @@ from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 DATA_TYPE_FIELD = "data_type"
 """The message field used as the routing key by convention."""
 
+LANE_FIELD = "lane"
+"""The message field conventionally used as a routing-key prefix (see ``MessageFieldRouter``)."""
+
+PRIORITY_FIELD = "priority"
+"""The message field the RabbitMQ publisher copies to the AMQP ``priority`` property."""
+
 ROUTING_PLAN_KEY = "routing"
 """Key under ``job_parameters`` where a :class:`RoutingPlan` is carried."""
 
@@ -49,10 +55,19 @@ class MessageFieldRouter:
 
     :param field: Message-body key to read the routing key from.
         Defaults to ``"data_type"``.
+    :param prefix_field: Optional field prepended to the key with a dot.
+    :param default_prefix: Fallback when the prefix field is missing or empty.
     """
 
-    def __init__(self, field: str = DATA_TYPE_FIELD) -> None:
+    def __init__(
+        self,
+        field: str = DATA_TYPE_FIELD,
+        prefix_field: str | None = None,
+        default_prefix: str | None = None,
+    ) -> None:
         self._field = field
+        self._prefix_field = prefix_field
+        self._default_prefix = default_prefix
 
     async def __call__(self, message: dict) -> list[Route]:
         key = message.get(self._field)
@@ -63,6 +78,16 @@ class MessageFieldRouter:
                 "ensure every published message sets it."
             )
             raise ValueError(msg)
+        if self._prefix_field is not None:
+            prefix = message.get(self._prefix_field) or self._default_prefix
+            if not prefix:
+                msg = (
+                    f"Cannot route message: missing or empty '{self._prefix_field}' "
+                    "field and no default_prefix; ensure every published message "
+                    "sets it or configure default_prefix."
+                )
+                raise ValueError(msg)
+            key = f"{prefix}.{key}"
         return [Route(key=str(key))]
 
 

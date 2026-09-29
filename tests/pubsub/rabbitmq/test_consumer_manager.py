@@ -305,6 +305,17 @@ def test_max_deliveries_none_ignores_redelivered() -> None:
     assert message.acked
 
 
+def test_lane_and_priority_survive_broker_requeue() -> None:
+    body = {**BODY, "lane": "interactive", "priority": 2}
+    message = FakeIncomingMessage(body, routing_key="interactive.raw_document")
+    original = message.body
+    manager = make_manager(FakeWorker(error=SoftFailureException("later")))
+    process(manager, message)
+    assert message.nacked is True
+    assert message.body == original
+    assert message.routing_key == "interactive.raw_document"
+
+
 def test_redelivery_delay_below_one_is_rejected() -> None:
     with pytest.raises(ValueError, match="redelivery_delay"):
         RMQConsumerConfig(redelivery_delay=0)

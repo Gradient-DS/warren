@@ -128,6 +128,8 @@ class ProcessingMessage:
         before the main processing can proceed.
     :param preprocessing_completed: Preprocessing steps already done.
     :param retry: Retry state, populated on soft failure.
+    :param lane: Optional application-defined routing lane.
+    :param priority: Optional AMQP priority, an integer from 0 through 255.
     """
 
     data_type: str
@@ -140,6 +142,17 @@ class ProcessingMessage:
     preprocessing_completed: list[str] = field(default_factory=list)
     retry: RetryInfo | None = None
     scope: str | None = None
+    lane: str | None = None
+    priority: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.priority is not None and (
+            not isinstance(self.priority, int)
+            or isinstance(self.priority, bool)
+            or not 0 <= self.priority <= 255
+        ):
+            msg = "priority must be an int in 0..255 (excluding bool) or None"
+            raise ValueError(msg)
 
     @classmethod
     def create_from(cls, message: dict[str, Any]) -> "ProcessingMessage":
@@ -173,6 +186,8 @@ class ProcessingMessage:
             preprocessing_completed=message.get("preprocessing_completed", []),
             retry=retry,
             scope=message.get("scope"),
+            lane=message.get("lane"),
+            priority=message.get("priority"),
         )
 
     def derive(
@@ -186,8 +201,9 @@ class ProcessingMessage:
     ) -> "ProcessingMessage":
         """Derive a new message carrying forward job metadata from this one.
 
-        Copies ``job_id``, ``job_metadata``, and ``job_parameters`` from
-        self. Preprocessing fields are copied unless explicitly overridden.
+        Copies ``job_id``, ``job_metadata``, ``job_parameters``, ``scope``,
+        ``lane``, and ``priority`` from self. Preprocessing fields are copied
+        unless explicitly overridden.
         The ``retry`` field is intentionally not copied — a derived
         message starts with a clean retry state.
 
@@ -205,6 +221,8 @@ class ProcessingMessage:
             data=data,
             job_id=self.job_id,
             scope=self.scope,
+            lane=self.lane,
+            priority=self.priority,
             origin=origin,
             job_metadata=self.job_metadata,
             job_parameters=self.job_parameters,
@@ -237,6 +255,10 @@ class ProcessingMessage:
         }
         if self.scope is not None:
             result["scope"] = self.scope
+        if self.lane is not None:
+            result["lane"] = self.lane
+        if self.priority is not None:
+            result["priority"] = self.priority
         if self.job_metadata is not None:
             result["job_metadata"] = self.job_metadata
         if self.retry is not None:

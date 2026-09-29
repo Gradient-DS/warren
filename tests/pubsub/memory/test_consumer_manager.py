@@ -187,6 +187,34 @@ def test_soft_failure_without_control_publisher_requeues() -> None:
     assert depth == 1
 
 
+@pytest.mark.parametrize("path", ["retry", "requeue", "observer"])
+def test_lane_and_priority_survive_republication(path: str) -> None:
+    async def scenario() -> None:
+        body = {**_BODY, "lane": "interactive", "priority": 2}
+        delivery = _delivery(body, routing_key="interactive.raw_document")
+        publisher = _FakePublisher()
+        worker = (
+            _FakeWorker(result=body)
+            if path == "observer"
+            else _FakeWorker(error=SoftFailureException("later"))
+        )
+        kwargs = {"control_publisher": publisher} if path == "retry" else {}
+        manager = await _manager(worker, observer_publisher=publisher, **kwargs)
+        await manager._process_message(delivery)
+        if path == "requeue":
+            assert manager._queue.get_nowait() == delivery
+        elif path == "observer":
+            assert publisher.published == [body]
+        else:
+            failed = publisher.published[0]["data"]
+            assert failed["lane"] == body["lane"]
+            assert failed["priority"] == body["priority"]
+            assert failed[REPLAY_ROUTING_KEY_FIELD] == delivery.routing_key
+        await manager.stop_consuming()
+
+    asyncio.run(scenario())
+
+
 def test_soft_failure_publishes_envelope_and_acks() -> None:
     control = _FakePublisher()
 

@@ -9,10 +9,38 @@ from warren.pubsub.common import PublishFailureException, Route
 from warren.pubsub.memory.connection import MemoryConnectionManager
 from warren.pubsub.memory.publisher import MemoryPublisher
 from warren.pubsub.rabbitmq.config import RMQExchangeConfig
+from warren.pubsub.routing import MessageFieldRouter
 
 
 DIRECT = RMQExchangeConfig(name="jobs", type="direct")
 FANOUT = RMQExchangeConfig(name="jobs", type="fanout")
+
+
+def test_lane_routing_matches_topic_bindings() -> None:
+    async def scenario() -> None:
+        conn = MemoryConnectionManager()
+        await conn.setup()
+        exchange = RMQExchangeConfig(name="jobs", type="topic")
+        bindings = [
+            "interactive.raw_document",
+            "bulk.raw_document",
+            "interactive.*",
+            "#",
+        ]
+        queues = [conn.broker.bind(exchange, key, key) for key in bindings]
+        body = {"data_type": "raw_document", "lane": "interactive", "priority": 2}
+        publisher = MemoryPublisher(
+            conn, exchange, route_func=MessageFieldRouter(prefix_field="lane")
+        )
+        await publisher(body)
+        assert [queue.qsize() for queue in queues] == [1, 0, 1, 1]
+        for queue in (queues[0], queues[2], queues[3]):
+            delivery = queue.get_nowait()
+            assert delivery.routing_key == "interactive.raw_document"
+            assert json.loads(delivery.body) == body
+        await conn.teardown()
+
+    asyncio.run(scenario())
 
 
 def test_broker_requires_setup() -> None:

@@ -48,6 +48,30 @@ def test_message_field_router_raises_on_missing_field():
         asyncio.run(MessageFieldRouter()({"no_data_type": "x"}))
 
 
+@pytest.mark.parametrize("lane", [None, "", "interactive"])
+def test_message_field_router_prefix_with_default(lane: str | None) -> None:
+    router = MessageFieldRouter(prefix_field="lane", default_prefix="bulk")
+    routes = asyncio.run(router({"data_type": "raw_document", "lane": lane}))
+    assert [r.key for r in routes] == [f"{lane or 'bulk'}.raw_document"]
+
+
+def test_message_field_router_missing_prefix() -> None:
+    with pytest.raises(ValueError, match="missing or empty 'lane'"):
+        asyncio.run(MessageFieldRouter(prefix_field="lane")({"data_type": "raw"}))
+
+
+def test_message_field_router_custom_prefix_field() -> None:
+    router = MessageFieldRouter(field="kind", prefix_field="group")
+    routes = asyncio.run(router({"kind": "raw", "group": "a"}))
+    assert [r.key for r in routes] == ["a.raw"]
+
+
+def test_message_field_router_without_prefix_field_ignores_lane_and_default() -> None:
+    router = MessageFieldRouter(default_prefix="bulk")
+    routes = asyncio.run(router({"data_type": "raw", "lane": "interactive"}))
+    assert [r.key for r in routes] == ["raw"]
+
+
 def test_observer_exchange_fanout_and_topic_observe_in_place():
     fan = RMQExchangeConfig(name="jobs", type="fanout")
     top = RMQExchangeConfig(name="docs", type="topic")

@@ -2,25 +2,47 @@
 
 [![tests](https://github.com/Gradient-DS/warren/actions/workflows/tests.yml/badge.svg)](https://github.com/Gradient-DS/warren/actions/workflows/tests.yml) [![PyPI version](https://img.shields.io/pypi/v/warren)](https://pypi.org/project/warren/) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-Warren is a message-driven **distributed processing framework**: typed messages flow continuously through a graph of workers over a message broker (RabbitMQ or Kafka), with per-item retry, job tracking, and storage-backed reliability. There is no central scheduler — the broker routes, workers self-select, and you scale by adding replicas of any worker type. The broker is selected by `backend:` in your `RuntimeConfig` YAML (`rabbitmq` by default, or `kafka` for fanout pipelines); nothing else changes.
+Warren is an application-agnostic, message-driven **distributed processing
+framework**. Independent items flow through workers over RabbitMQ or Kafka.
+Workers select the messages they handle, store their results, and publish
+references for downstream workers. Messages stay small; payloads live in storage.
+Scale a worker type by adding replicas that share its queue or consumer group.
 
-Warren's flagship use case is **document processing for RAG** — the examples take real PDFs through parse → chunk → embed — but the framework is item-agnostic: any workload shaped as *many independent items flowing through processing stages* fits (ETL, media processing, ML inference pipelines, event enrichment).
+The framework provides worker base classes and storage and pubsub interfaces.
+The [runtime](warren/runtime/USAGE.md) wires them to RabbitMQ or Kafka with
+MongoDB and Redis, or to in-process memory implementations for local use.
 
-A typical flow: a job enters the pipeline as a message on the exchange. Every worker type receives a copy in its own queue, but only processes the messages relevant to it — each worker's `should_process()` decides whether to act or discard. When a worker processes a message, it writes its results to a cached storage layer (MongoDB + Redis), then publishes a new message describing the *location* of those results (the claim-check pattern — messages stay small; bytes live in storage). Downstream workers pick that up, fetch what they need from storage, and publish their own result locations. Adding a new worker type is purely additive — no routing configuration changes, no upstream modifications.
+## Features
 
-Warren separates the **framework** (worker base classes, storage interfaces, pubsub abstractions — transport-agnostic) from the **runtime** (concrete wiring for RabbitMQ or Kafka + MongoDB + Redis, shipped in `warren/runtime/`).
+- **Transport choice:** RabbitMQ and memory support fanout, topic and direct
+  routing; Kafka supports fanout. Workers can bind to several routing keys.
+- **Durable retries:** configurable backoff and retry limits, with one active
+  retry scheduler elected through a MongoDB lease and standby takeover.
+- **Handler limits:** configurable concurrency and timeouts, readiness and
+  liveness endpoints, and in-flight handler counts.
+- **Job tracking:** per-item, per-stage outcomes, indexed failure counts, and
+  conditional completion updates that prevent competing completion signals.
+- **Storage:** batched result writes, ordered reads for results split into
+  parts, explicit cache expiry, and optional MongoDB job-record retention.
+- **Deployment configuration:** connection strings, credentials, TLS, pool
+  limits, startup retries, environment expansion, and rejection of unknown keys.
+- **Optional scopes:** isolated content databases and cache namespaces,
+  propagated handler context, and scope erasure with deletion counts.
 
 ## Installation
 
-The transport backends and cloud storage are optional extras — install the ones you use. The Docker Quickstart below runs on RabbitMQ, so install the `rmq` extra:
+Requires Python 3.12+. Install the transport extra you use:
 
 ```bash
 pip install "warren[rmq]"
 ```
 
-Use `warren[kafka]` to run on Kafka instead. Document resolvers are extras too: `warren[gcs]` (Google Cloud Storage), `warren[s3]` (Amazon S3 / S3-compatible), and `warren[http]` (plain HTTP(S) URLs, e.g. presigned GET links). Selecting a backend or resolver without its extra raises a clear `OptionalDependencyError`.
+Use `warren[kafka]` for Kafka. The memory backend needs no transport extra.
+Payload resolvers are optional too: `warren[gcs]`, `warren[s3]`, and
+`warren[http]`. Selecting a transport or resolver without its extra raises
+`OptionalDependencyError`.
 
-Requires Python 3.12+. For development:
+The examples below run from a clone:
 
 ```bash
 git clone https://github.com/Gradient-DS/warren.git
@@ -30,27 +52,13 @@ pip install -e ".[dev]"
 
 ## Quickstart
 
-### Try it without any infrastructure
+### Synthetic pipeline with Docker
 
-From a clone of the repo, install the example extras and set your OpenAI key:
+`examples/exchanges/fanout/` runs three stages over pre-baked data. Four input
+items produce eighteen final results without external data or API credentials.
+The stage and collection names below are those of the bundled example.
 
-```bash
-pip install -e ".[examples]"
-export OPENAI_API_KEY=...
-python -m examples.rag.run_local
-```
-
-This runs the real PDF -> chunks -> embeddings pipeline in a single process on
-the in-process `memory` backend: no RabbitMQ, MongoDB, Redis or Docker. It is for
-trying warren and for tests, not for production. See
-[`warren/docs/memory.md`](warren/docs/memory.md).
-The RAG instructions below run the same workers as separate processes.
-
-### The synthetic fanout pipeline with Docker
-
-`examples/exchanges/fanout/` is a minimal three-stage pipeline (parse → chunk → embed) over synthetic pre-baked data: 4 stand-in documents produce 18 chunks and 18 embeddings. No external data dependencies — just local infrastructure. (It's one of three sibling examples under `examples/exchanges/`, one per exchange type — see [Choosing an exchange](#choosing-an-exchange).)
-
-**1. Start RabbitMQ, MongoDB, and Redis** (e.g. via Docker):
+**1. Start RabbitMQ, MongoDB, and Redis:**
 
 ```bash
 docker run -d --name warren-rabbitmq -p 5672:5672 rabbitmq:4
@@ -58,7 +66,7 @@ docker run -d --name warren-mongodb -p 27017:27017 mongo:8
 docker run -d --name warren-redis -p 6379:6379 redis:7
 ```
 
-**2. Start the three workers** (one terminal each, from the repo root):
+**2. Start the processing workers, one per terminal:**
 
 ```bash
 python -m runtime_scripts.start_worker --pipeline-spec ./examples/exchanges/fanout --worker-type document_parser --config-file examples/exchanges/fanout/config.yaml
@@ -66,180 +74,269 @@ python -m runtime_scripts.start_worker --pipeline-spec ./examples/exchanges/fano
 python -m runtime_scripts.start_worker --pipeline-spec ./examples/exchanges/fanout --worker-type embedding_generator --config-file examples/exchanges/fanout/config.yaml
 ```
 
-Optionally also start the support workers (job completion tracking and retry management). They take `--pipeline-spec` too, so they can resolve which exchange to observe:
+Start the support workers in two more terminals for completion tracking and
+retry management:
 
 ```bash
 python -m runtime_scripts.start_job_status_worker --pipeline-spec ./examples/exchanges/fanout --config-file examples/exchanges/fanout/config.yaml
 python -m runtime_scripts.start_retry_worker --pipeline-spec ./examples/exchanges/fanout --config-file examples/exchanges/fanout/config.yaml
 ```
 
-**3. Publish the documents:**
+For local processes sharing a host, add `health: {enabled: false}` to the
+example config to avoid sharing the default health port, 8080. In deployments,
+use separate network namespaces or configure a distinct port per process.
+
+**3. Publish a job:**
 
 ```bash
 python -m examples.exchanges.publish --job-name demo-001 --config-file examples/exchanges/fanout/config.yaml
 ```
 
-Watch the worker terminals: the parser picks up the documents, the chunker picks up the parsed results, the embedder picks up the chunks. Results land in MongoDB collections `parsed_documents`, `chunks`, and `embeddings` (database `warren_fanout`, per the example config).
+Results land in the `parsed_documents`, `chunks`, and `embeddings` collections
+of the `warren_fanout` database. The example config sets the database name.
 
-**4. Watch the run (optional).** With a job-status worker running (the support worker above), `inspect_job` polls the job by name and prints a live per-stage view until it completes:
+**4. Watch completion:**
 
 ```bash
 python -m examples.inspect_job --job-name demo-001 --config-file examples/exchanges/fanout/config.yaml
 ```
 
-```
-  stage                   total     ok   soft   hard
-  ---------------------- ------ ------ ------ ------
-  embedded_document           4      4      0      0
-  ...
-  state: COMPLETED
-```
+With the job-status worker running, this prints per-stage counts until the job
+completes. Start more instances of a processing worker to share its load.
+Multiple retry workers may run too; only the lease holder schedules retries.
 
-## Get started for real — PDFs to embeddings
+### Local pipelines without infrastructure
 
-The quickstart proves the plumbing with synthetic data. `examples/rag/` does
-**real work**: it downloads real PDFs, extracts their text with
-[`pypdf`](https://pypi.org/project/pypdf/), splits it into chunks, and embeds
-each chunk with the OpenAI API — the first three stages of a RAG pipeline. You
-bring your own `OPENAI_API_KEY`. It defaults to two arXiv papers and takes your
-own with `--url`.
+Set `backend: memory` and use `create_in_process_runners` and `run_in_process`
+from `warren.runtime.in_process`. The runners share one `RuntimeInfra` and
+`MemoryStoreRegistry`. Pass `instances={"transform": 2}` to create two instances
+of a worker type named `transform`; unspecified types get one.
 
-It runs on a **fanout** exchange (every worker self-selects), like the
-quickstart — what's new is that the work is real: the parser **downloads** each
-PDF over HTTP, and a real embedding API whose transient errors flow through
-Warren's retry path.
-
-**1. Install the example extras** (real PDF + OpenAI clients, not needed by the
-framework itself) and start the same infrastructure as the quickstart:
-
-```bash
-pip install -e .[examples]      # or: pip install 'warren[examples]'
-export OPENAI_API_KEY=sk-...
-```
-
-**2. Start the three workers** (one terminal each) plus the support workers so
-you can watch progress:
-
-```bash
-python -m runtime_scripts.start_worker --pipeline-spec ./examples/rag --worker-type pdf_parser --config-file examples/rag/config.yaml
-python -m runtime_scripts.start_worker --pipeline-spec ./examples/rag --worker-type text_chunker --config-file examples/rag/config.yaml
-python -m runtime_scripts.start_worker --pipeline-spec ./examples/rag --worker-type embedding_generator --config-file examples/rag/config.yaml
-python -m runtime_scripts.start_job_status_worker --pipeline-spec ./examples/rag --config-file examples/rag/config.yaml
-```
-
-`OPENAI_API_KEY` only needs to be set for the **embedding** worker's terminal —
-the parser and chunker don't call OpenAI.
-
-**3. Publish the PDFs** (defaults to two arXiv papers; add your own with `--url`):
-
-```bash
-python -m examples.rag.publish_jobs --job-name rag-001 --config-file examples/rag/config.yaml
-```
-
-The publisher sends one small message per PDF carrying just its *URL* — the
-parser worker downloads and parses each one. Results land in the
-`parsed_documents`, `chunks`, and `embeddings` collections of the `warren_rag`
-database.
-
-**4. Watch it run:**
-
-```bash
-python -m examples.inspect_job --job-name rag-001 --config-file examples/rag/config.yaml
-```
-
-To embed your own corpus, pass `--url` (repeatable). The chunk size and
-embedding model are constants at the top of `examples/rag/workers/` — tune them
-for your documents.
+Set `health.enabled: false` when runners share a process. Memory supports one
+process and event loop, keeps all state in memory, and loses it on exit. It is
+intended for local runs and tests. See the [memory usage guide](warren/docs/memory.md).
 
 ### Running on Kafka instead
 
-A fanout pipeline runs on Kafka with zero code changes — just point every command at `examples/exchanges/fanout/config.kafka.yaml` instead of `config.yaml`, and start a Kafka broker (e.g. `localhost:9092`) in place of RabbitMQ. (Kafka supports fanout pipelines only; `topic`/`direct` routing is RabbitMQ-only for now.) The Kafka config has `backend: kafka`, a `jobs` topic with `create_if_missing: true`, and the same MongoDB/Redis/retry sections. See [`warren/docs/kafka.md`](warren/docs/kafka.md) for the full RabbitMQ→Kafka semantic mapping.
+Install `warren[kafka]`, start a broker at `localhost:9092`, and point the fanout
+commands at `examples/exchanges/fanout/config.kafka.yaml`. That config selects
+`backend: kafka` and creates the `jobs` topic if missing. MongoDB and Redis are
+still required. Kafka rejects topic and direct exchange types at startup.
+See the [Kafka guide](warren/docs/kafka.md).
 
-### Choosing a backend
+## Runtime configuration
 
-Pipelines behave identically on both brokers — the choice is **operational, not semantic** (like Postgres vs MySQL behind an ORM). In practice the deciding factor is usually *which broker your team already runs*.
+`RuntimeConfig.from_yaml` expands `${VAR}` in YAML string values and reports an
+unset variable by name. Unknown fields in modeled runtime sections are rejected.
+Omitted fields retain their defaults.
 
-| Prefer **RabbitMQ** when... | Prefer **Kafka** when... |
-|---|---|
-| You want the simplest ops story at small/medium scale | You need very high throughput |
-| Routing-heavy pipelines (`topic`/`direct` are broker-native) | Your org already runs a Kafka platform (MSK, Confluent) |
-| Low-latency, per-message work | Message retention as an audit trail matters |
+### Connections and startup
 
-Kafka-wire-compatible brokers (Redpanda, Azure Event Hubs) work with the same `backend: kafka` config. If your workload is actually *event streaming* — windowed aggregations, stream joins — use Kafka Streams or Flink directly; that's a different altitude than Warren.
+Distributed runners accept connection URLs and individual connection fields.
+For example, with `MONGODB_URI` and `REDIS_URL` set in the environment:
+
+```yaml
+mongodb:
+  uri: ${MONGODB_URI}
+  database: my_pipeline
+  max_pool_size: 20
+  server_selection_timeout_ms: 5000
+redis:
+  url: ${REDIS_URL}
+  max_connections: 20
+  socket_timeout: 5.0
+startup:
+  attempts: 5
+  initial_delay_seconds: 1.0
+  max_delay_seconds: 30.0
+```
+
+MongoDB also accepts `host`, `port`, `username`, `password`, `auth_source`, and
+`tls`; a URI replaces host and port, and explicit options override URI options.
+Redis accepts `host`, `port`, `username`, `password`, `db`, and `ssl`; URL options
+win over separate fields. Use `rediss://` for TLS with a Redis URL. Connection
+strings and passwords are masked in configuration representations.
+
+Startup connects the transport and pings MongoDB and Redis. Failed attempts
+close their connections before retrying with exponential backoff. The defaults
+are one attempt, a one-second initial delay and a 30-second delay cap. Driver
+timeouts still bound individual operations; startup settings do not impose a
+total deadline. Memory skips external connections and startup retries.
+See [connection details](warren/runtime/USAGE.md#runtimeconfig) for precedence
+and available fields. The bundled publishing and inspection examples use local
+host/port connections; they are not deployment configuration templates.
+
+### Concurrency, timeouts, and health
+
+```yaml
+rabbitmq:
+  consumer:
+    concurrency: 4
+    prefetch_count: 4
+    handler_timeout_seconds: 60
+```
+
+| Backend | Handler settings | Default when concurrency is omitted |
+| --- | --- | --- |
+| RabbitMQ | `rabbitmq.consumer` | `prefetch_count`, normally 1; zero is unlimited |
+| Kafka | `kafka.consumer` | One handler; concurrency above 1 is rejected |
+| Memory | `memory` | One handler per instance |
+
+An explicit concurrency is a positive integer. RabbitMQ prefetch is at least
+that limit. Handlers must support concurrent calls when the limit exceeds one.
+All three sections accept `handler_timeout_seconds`, a positive number or
+`null` to disable the deadline, which is the default.
+
+Timeouts use the existing soft-failure retry policy. A synchronous handler runs
+in an executor thread; timing out cannot stop that thread, and it retains its
+concurrency slot until it finishes. Health responses include
+`in_flight_handlers`. `/live` returns 503 when the latest health sample reports
+a handler running longer than twice its timeout, including one that ignores
+cancellation. `/ready` reports whether the consumer is connected and available.
+
+### Retry ownership
+
+```yaml
+retry:
+  enabled: true
+  collection_name: retries
+  lease_ttl_seconds: 30
+  policy:
+    max_delay_cap: 300
+```
+
+Start a retry worker alongside distributed processing workers. The memory
+runner helper includes one when `retry.enabled` is true. Distributed retry
+runners use one lease per retry database and collection, stored in
+`<collection_name>_lease` in `mongodb.database`. Each process has a unique
+holder ID. The lease TTL must be a positive integer; it defaults to 30 seconds.
+
+The holder renews and standbys poll every TTL/3. Only the holder schedules and
+republishes. Standbys still persist received failures; the holder scans for
+pending work at each renewal, so those retries can incur an extra poll interval.
+Lease loss, renewal failure, or expiry cancels local timers and publish tasks.
+After expiry, a standby takes ownership and recovers persisted work. Shutdown
+leaves the lease to expire. Keep worker clocks synchronized; expiry uses wall
+clock time, and lease updates use majority write concern.
+
+Retries remain at-least-once. A crash after publishing but before deleting the
+stored retry can cause replay. Replacement retries are protected by conditional
+cleanup. Custom injected retry stores must support
+`delete(key, expected={"generation": ...})`; the built-in MongoDB, memory, and
+cached stores do. Direct `RetryWorker` users must inject a lease and call
+`start()` for distributed scheduling. Memory runners use no MongoDB lease.
+
+### Cache expiry and record retention
+
+```yaml
+documents:
+  cache_ttl_seconds: 86400
+results:
+  cache_ttl_seconds: 3600
+retention:
+  job_records_ttl_seconds: 604800
+  job_records_max_age_seconds: 2592000
+```
+
+The cache values above are defaults and must be positive. Fetched payloads use
+the same TTL for shared and job-scoped keys. Binary result caches default to
+3600 seconds; retry caches use the policy's maximum delay cap plus 60 seconds.
+Redis cache entries always have a positive expiry.
+
+Both retention settings default to `null`. The first expires MongoDB job
+completion, result-status, and publishing-status records; the second bounds job
+age from creation, including unfinished jobs. When both are set, maximum age
+must be at least the record TTL. Values are nonnegative. Setup replaces
+conflicting indexes, and setting retention back to `null` removes its TTL
+indexes. Use the same retention settings in all processes sharing collections.
+See [job stores](warren/docs/job_stores.md) for timestamp fields and factory wiring.
+
+### Optional scopes
+
+```yaml
+scoping:
+  enabled: true
+  required: true
+  database_prefix: wr_
+```
+
+Scoping defaults to disabled. When enabled, a message's top-level `scope`
+selects its content database and Redis namespace. Scopes are opaque names
+matching `^[a-z0-9][a-z0-9-]{0,39}$`. Missing required or malformed scopes fail at scoped
+storage access. Worker outputs, failures, retries, and job signals preserve the
+scope; handler context reaches executor threads too.
+
+Content lives in `wr_<scope>` and Redis keys prefixed with `s:<scope>:`. Control
+records stay in `mongodb.database`, labelled with valid scopes. Factories
+receive `ctx.scoped_database` and `ctx.current_scope`; injected stores remain
+the application's responsibility. Scopes separate storage namespaces and are
+not an authorization boundary. See [scoping and erasure](warren/docs/scoping.md)
+for optional scopes and `erase_scope`, including quiescing traffic before erasure.
 
 ## Defining your own pipeline
 
-A pipeline is a directory with a `pipeline_spec.py` (exporting a `PIPELINE: PipelineSpec`) and a `config.yaml` (a `RuntimeConfig`). Each worker module owns a `create(ctx: WorkerFactoryContext)` factory; the spec references factories via lazy-import wrappers so different deployment images only load the dependencies they need.
-
-The `PipelineSpec` also defines the **exchange** (topology) and how each worker is wired to it: an optional `binding_key` and a `publish` route (`config.yaml` holds only per-environment infra — broker/Mongo/Redis hosts, credentials, prefetch). A pipeline uses exactly one exchange, and its type is the main routing decision you make.
+A pipeline directory contains `pipeline_spec.py`, exporting a `PIPELINE:
+PipelineSpec`, and a runtime `config.yaml`. Each worker owns an async
+`create(ctx: WorkerFactoryContext)` factory. `WorkerSpec` supplies its store
+roles, factory, routing bindings, and optional downstream publisher.
 
 ### Choosing an exchange
 
-Start with **fanout** — it's the simplest and covers most pipelines. Reach for `topic` or `direct` only when a concrete need below appears:
+| Exchange | Routing | Supported backends |
+| --- | --- | --- |
+| `fanout` | Each worker type receives every message and self-selects | RabbitMQ, Kafka, memory |
+| `topic` | Binding patterns select routing keys, conventionally `data_type` | RabbitMQ, memory |
+| `direct` | Exact keys address workers; jobs can supply a `RoutingPlan` | RabbitMQ, memory |
 
-- **`fanout` — a pipeline where every worker self-selects.** Every worker receives every message and decides via `should_process` whether to act. Best when your stages form a straight line (or a fan-out where several *independent* workers should each react to the same event — embed *and* classify *and* extract entities). Adding a stage is purely additive: drop in a worker, change no routing. The cost is that every worker sees every message and discards what isn't for it — fine until that volume hurts.
-  *Use it when:* "I just want a pipeline, and adding a worker shouldn't touch any routing."
+Fanout needs no binding keys. On topic or direct exchanges, set
+`WorkerSpec(binding_keys=("input.*", "retry.#"), ...)` for topic patterns or
+exact keys for direct routing. `binding_key` remains a single-key constructor
+alias. Overlapping bindings deliver a message only once per matching queue.
+The `publish` field supplies a `PublishSpec`, or `None` for a worker with no
+downstream data publisher.
 
-- **`topic` — heterogeneous inputs routed by *kind*.** The broker routes each message by a key (`data_type` by convention) to only the workers that bind it. Best when inputs are mixed and different kinds need different workers: PDFs → a PDF parser, HTML → an OCR worker, scanned images → something else. The broker does the filtering, so a worker never wakes up for a message it would only discard.
-  *Use it when:* "My documents aren't all the same, and routing by content type keeps each worker focused."
-
-- **`direct` + a job-defined `RoutingPlan` — different jobs, different paths.** Workers declare what they `accepts`/`produces` (`CapabilityWorkerBase`) and bind their own id on a `direct` exchange. Each *job* ships a `RoutingPlan` in `job_parameters` that names the path through the **same** deployed workers — one job runs parse → chunk → embed, another runs parse → chunk → summarise — and the plan is validated against the workers' capabilities before publishing (`validate_routing_plan`).
-  *Use it when:* "The set of workers is fixed, but each submission needs a different route through them."
-
-Each has a runnable example. The three `examples/exchanges/` siblings are the **same pipeline wired three ways** (synthetic data, so the routing is what stands out); `examples/rag/` is the real, end-to-end one:
-
-| Example | Exchange | The scenario it shows |
-|---------|----------|-----------------------|
-| `examples/rag/` | `fanout` | **Real** PDFs → chunks → embeddings (BYO OpenAI key) — the linear, additive case. |
-| `examples/exchanges/fanout/` | `fanout` | The same shape on synthetic data — the zero-dependency quickstart. |
-| `examples/exchanges/topic/` | `topic` | Broker routes by `data_type`; workers bind the type they consume. |
-| `examples/exchanges/direct/` | `direct` | Capability workers + a per-job `RoutingPlan` choosing the path. |
-
-(The `exchanges/` examples reuse synthetic workers to keep the routing mechanism front and centre; swap in the `examples/rag/` workers to make them do real work.)
-
-See [`warren/docs/routing.md`](warren/docs/routing.md) for the full routing model and design decisions.
-
-**Read [`warren/runtime/USAGE.md`](warren/runtime/USAGE.md)** — the full usage guide: core concepts (`PipelineSpec`, `WorkerSpec`, `WorkerFactoryContext`, `RuntimeConfig`, `DefaultWorkerRunner`), the launcher scripts, custom runners, and recommended project layout.
-
-Deeper design docs live in [`warren/docs/`](warren/docs/): workers, storage and caching, document store, RabbitMQ and Kafka topology, results store, and the retry system.
+The three `examples/exchanges/{fanout,topic,direct}` directories wire the same
+synthetic stages to each exchange type. See [routing](warren/docs/routing.md)
+and the [runtime usage guide](warren/runtime/USAGE.md) for factories, capability
+workers, job-defined plans, custom runners, and the launcher flags.
 
 ## How Warren compares
 
-Warren processes **per-item message-flow graphs**: each item flows through the worker graph independently, at message granularity, continuously. Linear pipelines are the simplest case; fan-out works today (broadcast, overlapping topic bindings, multi-successor routing plans); fan-in/join is on the roadmap. That shape is the difference from the neighbours it's often compared to:
+Warren processes each item independently through a graph of persistent workers.
+Fan-out is supported; fan-in and joins remain on the [roadmap](ROADMAP.md).
 
-| Tool | What it is | How Warren differs |
-|---|---|---|
-| Airflow, Dagster, Prefect | Batch workflow orchestrators — a central scheduler runs *DAGs of task runs* over datasets, on a schedule | Warren has no scheduler and no runs: work arrives as individual messages, workers are always-on, retry/failure is per item |
-| Temporal | Durable workflow-as-code for long-running business logic | Warren is for high-volume homogeneous items, not per-instance sagas |
-| Flink, Kafka Streams | Stream analytics — windows, joins, aggregations | Warren workers are heavyweight per-item processors (parse a PDF, call an embedding API), not stream operators |
-| Celery, RQ | Task queues — point-to-point function invocation | Warren adds pipeline topology, broker routing, typed messages, and job-level tracking |
+| Tool category | Typical work | Warren's focus |
+| --- | --- | --- |
+| Batch orchestrators such as Airflow or Dagster | Scheduled task graphs over datasets | Continuous per-item messages and job tracking |
+| Durable workflows such as Temporal | Long-running, stateful workflows | Independent items flowing through processing stages |
+| Stream analytics such as Flink | Windows, joins, and aggregations | Worker-defined per-item processing |
+| Task queues such as Celery or RQ | Function invocation | Pipeline topology, routing, and per-stage outcomes |
 
-They compose rather than compete: a natural setup is **Airflow as the calendar-driven control plane, Warren as the always-on data plane** — an Airflow task submits a Warren job and a sensor polls Warren's job store for completion.
+An external scheduler can submit Warren jobs and poll completion while Warren
+handles the per-item processing.
 
 ## Launchers
 
-`runtime_scripts/` ships the process launchers, also installed as console scripts:
+`runtime_scripts/` also installs console scripts:
 
 | Console script | Module | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `warren-worker` | `runtime_scripts.start_worker` | Any worker type from a `PipelineSpec` |
-| `warren-job-publication-worker` | `runtime_scripts.start_job_publication_worker` | Job submission → per-document publication |
-| `warren-job-status-worker` | `runtime_scripts.start_job_status_worker` | Completion detection, progress tracking |
-| `warren-retry-worker` | `runtime_scripts.start_retry_worker` | Soft-failure re-delivery with backoff |
-| `warren-purge-queues` | `runtime_scripts.purge_queues` | Queue/exchange cleanup between runs |
+| `warren-job-publication-worker` | `runtime_scripts.start_job_publication_worker` | Job submission and per-item publication |
+| `warren-job-status-worker` | `runtime_scripts.start_job_status_worker` | Completion detection and progress tracking |
+| `warren-retry-worker` | `runtime_scripts.start_retry_worker` | Soft-failure replay with backoff |
+| `warren-purge-queues` | `runtime_scripts.purge_queues` | Queue and exchange cleanup between runs |
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest tests -q
-ruff check . && ruff format --check .
+ruff check && ruff format --check && pytest -q
 ```
 
-## Contributing
-
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). To report a security issue, follow [SECURITY.md](SECURITY.md) (never a public issue).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues through
+[SECURITY.md](SECURITY.md).
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE).

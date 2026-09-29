@@ -1,6 +1,6 @@
 # Roadmap
 
-Where Warren is headed. This is a statement of direction, not a schedule —
+Where Warren is headed. This is a statement of direction, not a schedule;
 items ship when they're ready, and feedback (issues, discussions) can and
 should reorder it.
 
@@ -9,24 +9,24 @@ should reorder it.
 Warren's model is transport-agnostic; the implementation is not yet fully
 there. The plan, in order:
 
-1. **Neutral channel spec** — replace the RabbitMQ-flavoured exchange config
+1. **Neutral channel spec**: replace the RabbitMQ-flavoured exchange config
    in `PipelineSpec` with a backend-neutral `ChannelSpec`, so a pipeline spec
    doesn't name broker primitives.
-2. **Route key split** — separate *selection* (which worker processes a
+2. **Route key split**: separate *selection* (which worker processes a
    message) from *affinity* (which messages must stay ordered relative to each
    other). Wiring the affinity key onto the Kafka message key unlocks per-key
    ordering.
-3. **`PubSubBackend` protocol + capability matrix** — a declarative statement
+3. **`PubSubBackend` protocol + capability matrix**: a declarative statement
    of what each backend supports, so unsupported combinations are rejected by
    data rather than hand-written guards.
-4. **Full Kafka routing support** — Kafka is currently fanout-only by design
+4. **Full Kafka routing support**: Kafka is currently fanout-only by design
    (topic/direct selection fails fast at startup). Filtered/selective
    consumption on Kafka lands once the capability matrix exists and a use
    case demands it.
-5. **Redis Streams backend** — a strong third-backend candidate: Redis is
-   already in the stack, which would make the smallest possible Warren
-   deployment a single Redis + MongoDB.
-6. **`warren-run` launcher consolidation** — one entry point replacing the
+5. **Redis Streams backend**: an additional distributed backend: Redis is
+   already in the stack, allowing a distributed deployment with just Redis
+   and MongoDB.
+6. **`warren-run` launcher consolidation**: one entry point replacing the
    per-worker-kind start scripts.
 
 ## Towards processing DAGs
@@ -40,20 +40,20 @@ terminal *set* of data types rather than a single final one. See
 ## Worker self-registration
 
 Workers registering their capabilities (`accepts`/`produces`) in the store at
-startup, so routing plans can be validated against what is actually deployed —
+startup, so routing plans can be validated against what is actually deployed,
 and so pipelines can be composed dynamically against a live worker fleet.
 
 ## Resilience
 
-- **Transient store-error mapping** — map transient storage errors to soft
+- **Transient store-error mapping**: map transient storage errors to soft
   failures (bus-level retry) for primary consumers, extending the
   local-retry policy that observers already use.
-- **Retry-path test coverage** — end-to-end scenarios for retry-worker restart
-  recovery, max-retry exhaustion, and mixed outcomes.
+- **Retry-path test coverage**: end-to-end scenarios for broker-backed restart
+  and lease takeover, max-retry exhaustion, and mixed outcomes.
 
 ## Operations
 
-- **First-class autoscaling story** — scaling on queue depth already works
+- **First-class autoscaling story**: scaling on queue depth already works
   today with no code changes (workers are competing consumers per queue; see
   `warren/docs/rabbitmq.md` for the KEDA pointer). Planned: shipped example
   scaler manifests per backend (RabbitMQ queue-depth, Kafka consumer-lag) and
@@ -61,12 +61,9 @@ and so pipelines can be composed dynamically against a live worker fleet.
 
 ## Developer experience and API polish
 
-- Batch storage on the results-store interface (`batch_store`).
 - Job lookup by metadata as a first-class `JobStore` query instead of direct
   collection access.
 - Slim down `PipelineSpec`: move fields only used by test harnesses out of the
   core spec.
 - Rework the worker-factory context so factories own their dependencies
   (fewer `needs_*` flags, better typing).
-- Couple consumer prefetch to worker concurrency instead of configuring them
-  independently.

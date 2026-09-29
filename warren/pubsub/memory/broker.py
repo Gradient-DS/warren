@@ -50,7 +50,7 @@ def _words_match(pattern: list[str], key: list[str]) -> bool:
 
 
 class MemoryBroker:
-    """Routes published messages to the queues bound to an exchange."""
+    """Routes messages to bound queues in FIFO order; priority is ignored."""
 
     def __init__(self) -> None:
         self._bindings: dict[str, list[_Binding]] = {}

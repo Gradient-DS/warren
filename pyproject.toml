@@ -38,7 +38,10 @@ kafka = ["aiokafka>=0.12"]
 gcs = ["google-cloud-storage>=2.18"]
 s3 = ["boto3>=1.34"]
 http = ["httpx>=0.26"]
+# The test suite imports the rmq, kafka, http and s3 libraries (no broker or
+# bucket needed), so the dev install pulls those extras in.
 dev = [
+    "warren[rmq,kafka,http,s3]",
     "pytest>=8",
     "ruff",
 ]

@@ -69,7 +69,10 @@ await cache.delete_by_key_prefix("doc123:")
 
 #### 4. Optional TTL per operation
 
-Different data has different staleness tolerances. Per-key TTL provides flexibility. Implementations should have a default TTL when `None` is passed.
+Per-key TTL overrides the configured default. Redis caches require a positive
+TTL and use 3600 seconds when the default is omitted or `None`. Runtime settings
+`documents.cache_ttl_seconds` and `results.cache_ttl_seconds` default to 86400 and
+3600 respectively. Retry caches use `retry.policy.max_delay_cap + 60` seconds.
 
 #### 5. Generic `CacheOperationError` exception
 
@@ -144,7 +147,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
         client: redis.asyncio.Redis,  # Async client, injected
         *,
         base_key: str,
-        default_ttl_seconds: Optional[int] = None,
+        default_ttl_seconds: Optional[int] = 3600,
         key_separator: str = ":",
         name: Optional[str] = None,
     ) -> None: ...

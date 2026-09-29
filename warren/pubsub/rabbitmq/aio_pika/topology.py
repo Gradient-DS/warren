@@ -13,6 +13,7 @@ from aio_pika.abc import (
     AbstractExchange,
     AbstractQueue,
 )
+from basics.logging import get_logger
 
 from warren.pubsub.common import PubSubSetupError
 from warren.pubsub.rabbitmq.config import (
@@ -51,9 +52,13 @@ async def declare_queue(
 
     :raises PubSubSetupError: if the broker rejects the declaration or bind.
     """
-    if config.routing_key and exchange_type == "fanout":
-        msg = "Non-empty routing key is not supported for fanout exchanges."
-        raise ValueError(msg)
+    keys = config.binding_keys or (config.routing_key or "",)
+    if exchange_type == "fanout":
+        if any(keys):
+            get_logger(__name__).debug(
+                "Ignoring binding keys on fanout exchange %s", exchange.name
+            )
+        keys = ("",)
 
     try:
         queue = await channel.declare_queue(
@@ -63,11 +68,12 @@ async def declare_queue(
             auto_delete=config.auto_delete,
             arguments=config.arguments,
         )
-        await queue.bind(exchange.name, routing_key=config.routing_key or "")
+        for key in keys:
+            await queue.bind(exchange.name, routing_key=key)
     except Exception as e:
         msg = (
             f"Failed to declare queue '{config.name}' bound to exchange "
-            f"'{exchange.name}' (routing_key='{config.routing_key or ''}')"
+            f"'{exchange.name}' (binding_keys={keys!r})"
         )
         raise PubSubSetupError(msg) from e
 

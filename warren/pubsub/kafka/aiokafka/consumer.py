@@ -1,7 +1,6 @@
 from typing import TYPE_CHECKING
 
 import asyncio
-import inspect
 import json
 import random
 
@@ -95,6 +94,8 @@ class KafkaConsumerManager(ConsumerManagerBase):
         super().__init__(
             consumer,
             publishers=all_publishers,
+            handler_timeout_seconds=config.consumer.handler_timeout_seconds,
+            concurrency=config.consumer.concurrency or 1,
         )
 
         self._data_publisher = data_publisher
@@ -266,6 +267,8 @@ class KafkaConsumerManager(ConsumerManagerBase):
         started = self._kafka_consumer is not None
         polling = self._poll_task is not None and not self._poll_task.done()
         return ConsumerHealth(
+            handler_timeout_seconds=self._handler_timeout_seconds,
+            handler_started_at=tuple(self._handler_started_at.values()),
             connected=started,
             blocked=False,
             channel_open=started,
@@ -378,24 +381,12 @@ class KafkaConsumerManager(ConsumerManagerBase):
             await self._commit(message)  # ≙ reject(requeue=False)
             return
 
-        # Process — dispatch sync consumers to thread pool, await async directly.
-        # iscoroutinefunction checks both plain async functions and callable
-        # objects with async __call__ (the latter requires checking __call__).
         try:
-            is_async = inspect.iscoroutinefunction(
-                self._consumer
-            ) or inspect.iscoroutinefunction(getattr(self._consumer, "__call__", None))
-            if is_async:
-                result = await self._consumer(body)
-            else:
-                loop = asyncio.get_running_loop()
-                result = await loop.run_in_executor(
-                    None,
-                    self._consumer,
-                    body,
-                )
+            result = await self._call_handler(body)
 
             if result is not None:
+                if "scope" in body:
+                    result = {**result, "scope": body["scope"]}
                 # Route the result downstream (terminal workers have no
                 # data publisher).
                 if self._data_publisher is not None:
@@ -503,6 +494,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
         body[REPLAY_ROUTING_KEY_FIELD] = ""
 
         soft_failure_msg: dict = {
+            **({"scope": body["scope"]} if "scope" in body else {}),
             "data_type": "soft-failure",
             "data": body,
             "job_id": body.get("job_id"),
@@ -564,6 +556,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
 
         if self._publish_hard_failures and self._control_publisher is not None:
             hard_failure_msg: dict = {
+                **({"scope": body["scope"]} if "scope" in body else {}),
                 "data_type": "hard-failure",
                 "data": body,
                 "job_id": body.get("job_id"),

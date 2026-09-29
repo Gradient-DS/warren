@@ -61,6 +61,7 @@ from warren.storage.results import (
 from warren.storage.results.factories import (
     create_default_results_store,
 )
+from warren.storage.scoping import ScopedDatabase
 from warren.workers.runners import WorkerRunnerBase
 
 
@@ -207,7 +208,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
     :param worker_name: unique worker instance identifier.
     :param worker_type: name of the worker type (used for queue naming).
     :param worker_spec: spec defining collections, factory, exchange
-        wiring (binding_key, publish), and flags.
+        wiring (binding_keys, publish), and flags.
     :param exchange: the pipeline's exchange (from ``PipelineSpec.exchange``)
         this worker consumes from and publishes to.
     :param document_fetcher: optional override for the document fetcher.
@@ -250,6 +251,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         self._infra: RuntimeInfra | None = infra
         self._owns_infra: bool = infra is None
         self._worker: MessageConsumerInterface | None = None
+        self._scoped_database: ScopedDatabase | None = None
 
     async def setup(self) -> None:
         """Wire connections, stores, worker, publishers, and consumer.
@@ -267,6 +269,14 @@ class DefaultWorkerRunner(WorkerRunnerBase):
                 "Infrastructure setup (RabbitMQ/MongoDB/Redis)"
             ):
                 self._infra = await create_runtime_infrastructure(self._config)
+
+        if self._config.scoping.enabled and self._infra.mongo_client is not None:
+            self._scoped_database = ScopedDatabase(
+                self._infra.mongo_client,
+                self._config.scoping.database_prefix,
+                required=self._config.scoping.required,
+                default_database=self._config.mongodb.database,
+            )
 
         with self._exception_wrapping("Store injection check"):
             required: dict[str, object] = {"results_stores": self._results_stores}
@@ -366,6 +376,8 @@ class DefaultWorkerRunner(WorkerRunnerBase):
                 mongo_client=self._infra.mongo_client,
                 redis_client=self._infra.redis_client,
                 database_name=self._config.mongodb.database,
+                cache_ttl_seconds=self._config.results.cache_ttl_seconds,
+                scoped_database=self._scoped_database,
             )
 
         return stores
@@ -376,6 +388,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             client=self._infra.mongo_client,
             database_name=self._config.mongodb.database,
             collection_name="documents",
+            scoped_database=self._scoped_database,
             doc_id_field="doc_id",
             unique_indexes=[("doc_id",)],
         )
@@ -389,6 +402,9 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         return create_cached_document_fetcher(
             redis_client=self._infra.redis_client,
             resolvers=resolvers,
+            default_ttl_seconds=self._config.documents.cache_ttl_seconds,
+            scoping_enabled=self._config.scoping.enabled,
+            scope_required=self._config.scoping.required,
         )
 
     async def _create_worker(
@@ -401,6 +417,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             worker_name=self._worker_name,
             worker_type=self._worker_type,
             stores=stores,
+            scoped_database=self._scoped_database,
             mongo_client=self._infra.mongo_client,
             redis_client=self._infra.redis_client,
             database_name=self._config.mongodb.database,
@@ -470,7 +487,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             self._infra.pubsub_connection_manager,
             exchange=self._exchange,
             worker_type=self._worker_type,
-            binding_key=self._worker_spec.binding_key,
+            binding_keys=self._worker_spec.binding_keys,
             consumer=consumer,
             data_publisher=data_publisher,
             control_publisher=control_publisher,

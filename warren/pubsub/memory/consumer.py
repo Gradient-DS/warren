@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 import json
 import random
 
@@ -18,6 +17,7 @@ from warren.pubsub.common import (
     RetryConfig,
 )
 from warren.pubsub.memory.broker import Delivery
+from warren.pubsub.memory.config import MemoryConsumerConfig
 from warren.pubsub.memory.connection import MemoryConnectionManager
 from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 from warren.pubsub.routing import REPLAY_ROUTING_KEY_FIELD
@@ -42,8 +42,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
     - ack and reject(requeue=False): the delivery is simply not put back.
     - nack(requeue=True): the delivery goes back on the queue.
 
-    Messages are processed one at a time per manager, the faithful mapping
-    of ``prefetch_count: 1``.
+    Handler concurrency defaults to one per manager.
 
     Single-process only. The broker lives in this process's memory, and
     ``RetryWorker`` schedules retries with in-process timers, so nothing
@@ -59,12 +58,15 @@ class MemoryConsumerManager(ConsumerManagerBase):
         exchange: RMQExchangeConfig,
         queue_name: str,
         binding_key: str | None = None,
+        binding_keys: tuple[str, ...] = (),
         data_publisher: PublisherInterface | None = None,
         control_publisher: PublisherInterface | None = None,
         observer_publisher: PublisherInterface | None = None,
         retry_config: RetryConfig | None = None,
         extract_identity_func: ExtractMessageIdentityFunc | None = None,
         publish_hard_failures: bool = True,
+        handler_timeout_seconds: float | None = None,
+        concurrency: int | None = None,
         on_shutdown_timeout: float = _DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
     ) -> None:
         # Same three publishing paths as the other backends (see
@@ -75,7 +77,17 @@ class MemoryConsumerManager(ConsumerManagerBase):
             for p in (data_publisher, control_publisher, observer_publisher)
             if p is not None
         ]
-        super().__init__(consumer, publishers=all_publishers)
+        config = MemoryConsumerConfig(
+            concurrency=concurrency,
+            handler_timeout_seconds=handler_timeout_seconds,
+            on_shutdown_timeout=on_shutdown_timeout,
+        )
+        super().__init__(
+            consumer,
+            publishers=all_publishers,
+            handler_timeout_seconds=config.handler_timeout_seconds,
+            concurrency=config.concurrency or 1,
+        )
 
         self._data_publisher = data_publisher
         self._control_publisher = control_publisher
@@ -84,16 +96,21 @@ class MemoryConsumerManager(ConsumerManagerBase):
         self._connection_manager = connection_manager
         self._exchange = exchange
         self._queue_name = queue_name
-        self._binding_key = binding_key
+        if binding_key is not None:
+            if binding_keys:
+                msg = "Specify either binding_key or binding_keys, not both"
+                raise ValueError(msg)
+            binding_keys = (binding_key,)
+        self._binding_keys = binding_keys
         self._retry_config = retry_config or RetryConfig()
         self._extract_identity = extract_identity_func or extract_message_identity
         self._publish_hard_failures = publish_hard_failures
-        self._on_shutdown_timeout = on_shutdown_timeout
+        self._on_shutdown_timeout = config.on_shutdown_timeout
+        self._concurrency = config.concurrency or 1
 
         self._queue: asyncio.Queue[Delivery] | None = None
-        self._consume_task: asyncio.Task | None = None
-        # Processing is sequential, so there is at most one.
-        self._in_flight_task: asyncio.Task | None = None
+        self._consume_tasks: set[asyncio.Task] = set()
+        self._in_flight_tasks: set[asyncio.Task] = set()
         self._shutting_down: bool = False
 
     async def setup(self) -> None:
@@ -104,11 +121,17 @@ class MemoryConsumerManager(ConsumerManagerBase):
         """
         for publisher in self._publishers:
             await publisher.setup()
-        self._queue = self._connection_manager.broker.bind(
-            self._exchange,
-            self._queue_name,
-            self._binding_key,
-        )
+        keys = self._binding_keys
+        if self._exchange.type == "fanout":
+            if keys:
+                self._log.debug(
+                    "Ignoring binding keys on fanout exchange %s", self._exchange.name
+                )
+            keys = ()
+        for key in keys or ("",):
+            self._queue = self._connection_manager.broker.bind(
+                self._exchange, self._queue_name, key
+            )
 
     async def start_consuming(self) -> None:
         if self._queue is None:
@@ -116,39 +139,30 @@ class MemoryConsumerManager(ConsumerManagerBase):
             raise RuntimeError(msg)
 
         self._shutting_down = False
-        self._consume_task = asyncio.create_task(self._consume_loop())
-        self._consume_task.add_done_callback(self._on_consume_loop_done)
+        for _ in range(self._concurrency):
+            task = asyncio.create_task(self._consume_loop())
+            self._consume_tasks.add(task)
+            task.add_done_callback(self._on_consume_loop_done)
 
     async def stop_consuming(self) -> None:
-        """Stop taking messages, drain the in-flight one, tear down publishers."""
+        """Stop taking messages, drain in-flight work, tear down publishers."""
         self._shutting_down = True
 
-        if self._consume_task is not None and not self._consume_task.done():
-            self._consume_task.cancel()
-            try:
-                await self._consume_task
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                self._log.warning(
-                    f"Error stopping consume loop: {summarize_exception_chain(e)}"
-                )
+        for task in self._consume_tasks:
+            task.cancel()
+        await asyncio.gather(*self._consume_tasks, return_exceptions=True)
+        self._consume_tasks.clear()
 
-        if self._in_flight_task is not None and not self._in_flight_task.done():
+        if self._in_flight_tasks:
             try:
                 await asyncio.wait_for(
-                    self._in_flight_task,
+                    asyncio.gather(*self._in_flight_tasks, return_exceptions=True),
                     timeout=self._on_shutdown_timeout,
                 )
             except TimeoutError:
                 self._log.warning(
-                    f"Timed out waiting for in-flight message during shutdown "
+                    f"Timed out waiting for in-flight messages during shutdown "
                     f"(timeout={self._on_shutdown_timeout}s)"
-                )
-            except Exception as e:
-                self._log.warning(
-                    f"Error in in-flight message during shutdown: "
-                    f"{summarize_exception_chain(e)}"
                 )
 
         # Best-effort so one failure cannot block the rest of shutdown.
@@ -164,8 +178,12 @@ class MemoryConsumerManager(ConsumerManagerBase):
     async def health(self, *, probe_timeout: float = 1.0) -> ConsumerHealth:
         """No connection to lose and no blocked state; liveness is the loop."""
         bound = self._queue is not None
-        consuming = self._consume_task is not None and not self._consume_task.done()
+        consuming = len(self._consume_tasks) == self._concurrency and all(
+            not task.done() for task in self._consume_tasks
+        )
         return ConsumerHealth(
+            handler_timeout_seconds=self._handler_timeout_seconds,
+            handler_started_at=tuple(self._handler_started_at.values()),
             connected=bound,
             blocked=False,
             channel_open=bound,
@@ -186,11 +204,11 @@ class MemoryConsumerManager(ConsumerManagerBase):
             delivery = await self._queue.get()
 
             task = asyncio.create_task(self._process_message(delivery))
-            self._in_flight_task = task
+            self._in_flight_tasks.add(task)
             # A done-callback (not a finally) so the clear is tied to the
             # task completing, not to this loop being cancelled out of the
             # shield() below while the message is still in flight.
-            task.add_done_callback(self._clear_in_flight_task)
+            task.add_done_callback(self._in_flight_tasks.discard)
             try:
                 await asyncio.shield(task)
             except Exception as e:
@@ -199,10 +217,6 @@ class MemoryConsumerManager(ConsumerManagerBase):
                 self._log.error(
                     f"Error settling message: {summarize_exception_chain(e)}"
                 )
-
-    def _clear_in_flight_task(self, task: asyncio.Task) -> None:
-        if self._in_flight_task is task:
-            self._in_flight_task = None
 
     def _on_consume_loop_done(self, task: asyncio.Task) -> None:
         """Log unexpected loop termination; never let it die silently."""
@@ -228,19 +242,12 @@ class MemoryConsumerManager(ConsumerManagerBase):
             )
             return  # reject(requeue=False)
 
-        # iscoroutinefunction checks plain async functions; callable objects
-        # with an async __call__ need the second check.
         try:
-            is_async = inspect.iscoroutinefunction(
-                self._consumer
-            ) or inspect.iscoroutinefunction(getattr(self._consumer, "__call__", None))
-            if is_async:
-                result = await self._consumer(body)
-            else:
-                loop = asyncio.get_running_loop()
-                result = await loop.run_in_executor(None, self._consumer, body)
+            result = await self._call_handler(body)
 
             if result is not None:
+                if "scope" in body:
+                    result = {**result, "scope": body["scope"]}
                 if self._data_publisher is not None:
                     await self._data_publisher(result)
                 if self._observer_publisher is not None:
@@ -323,6 +330,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
         body[REPLAY_ROUTING_KEY_FIELD] = delivery.routing_key
 
         soft_failure_msg: dict = {
+            **({"scope": body["scope"]} if "scope" in body else {}),
             "data_type": "soft-failure",
             "data": body,
             "job_id": body.get("job_id"),
@@ -367,6 +375,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
 
         if self._publish_hard_failures and self._control_publisher is not None:
             hard_failure_msg: dict = {
+                **({"scope": body["scope"]} if "scope" in body else {}),
                 "data_type": "hard-failure",
                 "data": body,
                 "job_id": body.get("job_id"),

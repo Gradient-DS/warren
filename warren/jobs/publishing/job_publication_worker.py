@@ -127,6 +127,7 @@ class JobPublicationWorker(FilteringWorkerBase):
             job_id=job_id,
             sources=sources,
             job_parameters=job_parameters,
+            **({"scope": message["scope"]} if "scope" in message else {}),
         )
 
         self._log.info(

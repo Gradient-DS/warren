@@ -80,12 +80,15 @@ async def _publish(
     job_store = MongoDBJobStore(
         client=mongo_client,
         database_name=mongo_cfg.database,
+        job_records_ttl_seconds=config.retention.job_records_ttl_seconds,
+        job_records_max_age_seconds=config.retention.job_records_max_age_seconds,
     )
     await job_store.setup()
 
     tracker = MongoDBPublishingTracker(
         client=mongo_client,
         database_name=mongo_cfg.database,
+        job_records_ttl_seconds=config.retention.job_records_ttl_seconds,
     )
     await tracker.setup()
 

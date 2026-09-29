@@ -13,6 +13,8 @@ from warren.storage.job_results.interface import (
 from warren.storage.mongo_errors import (
     classify_transient_methods,
 )
+from warren.storage.mongo_retention import configure_ttl_index
+from warren.storage.scoping import scope_fields
 
 
 if TYPE_CHECKING:
@@ -50,17 +52,23 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
         *,
         database_name: str,
         collection_name: str = "job_results",
+        job_records_ttl_seconds: int | None = None,
         name: str | None = None,
+        scoping_enabled: bool = False,
     ) -> None:
         super().__init__(pybase_logger_name=name)
+        self._scoping_enabled = scoping_enabled
         self._client = client
         self._database_name = database_name
         self._collection_name = collection_name
         self._collection: AsyncCollection = client[database_name][collection_name]
+        self._job_records_ttl_seconds = job_records_ttl_seconds
 
     async def setup(self) -> None:
         """Create indexes for the job_results collection."""
         # Primary key — one record per (job_id, data_type, doc_id)
+        if self._scoping_enabled:
+            await self._collection.create_index("scope")
         await self._collection.create_index(
             [
                 ("job_id", ASCENDING),
@@ -84,6 +92,14 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
                 ("success", ASCENDING),
             ],
         )
+        await self._collection.create_index(
+            [("job_id", ASCENDING), ("doc_id", ASCENDING)],
+            partialFilterExpression={"hard_failure": {"$exists": True}},
+        )
+
+        await configure_ttl_index(
+            self._collection, "time", self._job_records_ttl_seconds
+        )
 
     # --- Recording results ---
 
@@ -104,6 +120,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
             },
             {
                 "$set": {
+                    **scope_fields(self._scoping_enabled),
                     "time": now,
                     "success": True,
                     "origin_type": origin_type,
@@ -142,6 +159,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
             },
             {
                 "$set": {
+                    **scope_fields(self._scoping_enabled),
                     "time": now,
                     "success": False,
                     "origin_type": origin_type,
@@ -182,6 +200,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
             },
             {
                 "$set": {
+                    **scope_fields(self._scoping_enabled),
                     "time": now,
                     "success": False,
                     "origin_type": origin_type,

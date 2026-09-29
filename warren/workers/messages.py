@@ -139,6 +139,7 @@ class ProcessingMessage:
     preprocessing_required: list[str] = field(default_factory=list)
     preprocessing_completed: list[str] = field(default_factory=list)
     retry: RetryInfo | None = None
+    scope: str | None = None
 
     @classmethod
     def create_from(cls, message: dict[str, Any]) -> "ProcessingMessage":
@@ -171,6 +172,7 @@ class ProcessingMessage:
             preprocessing_required=message.get("preprocessing_required", []),
             preprocessing_completed=message.get("preprocessing_completed", []),
             retry=retry,
+            scope=message.get("scope"),
         )
 
     def derive(
@@ -202,6 +204,7 @@ class ProcessingMessage:
             data_type=data_type,
             data=data,
             job_id=self.job_id,
+            scope=self.scope,
             origin=origin,
             job_metadata=self.job_metadata,
             job_parameters=self.job_parameters,
@@ -232,6 +235,8 @@ class ProcessingMessage:
             "preprocessing_required": self.preprocessing_required,
             "preprocessing_completed": self.preprocessing_completed,
         }
+        if self.scope is not None:
+            result["scope"] = self.scope
         if self.job_metadata is not None:
             result["job_metadata"] = self.job_metadata
         if self.retry is not None:

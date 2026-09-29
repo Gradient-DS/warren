@@ -10,8 +10,10 @@ from types import SimpleNamespace
 import pytest
 from basics.logging_utils import summarize_exception_chain
 
+from tests.storage.job_store_doubles import MongoClient
 from warren.common import MessageConsumerInterface
 from warren.exceptions import WarrenError
+from warren.jobs.status.job_status_worker_runner import JobStatusWorkerRunner
 from warren.pubsub.common import RetryConfig
 from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 from warren.runtime import backends
@@ -40,7 +42,7 @@ async def _factory(ctx):
     return _FakeWorker()
 
 
-def test_runner_passes_retry_policy_to_consumer_manager(
+def test_runner_passes_retry_policy_and_binding_keys_to_consumer_manager(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict = {}
@@ -57,7 +59,9 @@ def test_runner_passes_retry_policy_to_consumer_manager(
         config,
         "worker-1",
         worker_type="test_worker",
-        worker_spec=WorkerSpec(collections={}, factory=_factory),
+        worker_spec=WorkerSpec(
+            collections={}, factory=_factory, binding_keys=("input.*", "retry.#")
+        ),
         exchange=RMQExchangeConfig(name="jobs", type="fanout"),
     )
     runner._infra = SimpleNamespace(pubsub_connection_manager=object())
@@ -65,6 +69,7 @@ def test_runner_passes_retry_policy_to_consumer_manager(
     runner._create_consumer_manager(_FakeWorker(), None, None, None)
 
     assert captured["retry_config"].max_delay_cap == 900
+    assert captured["binding_keys"] == ("input.*", "retry.#")
 
 
 def test_runner_takes_health_config_from_runtime_config() -> None:
@@ -78,6 +83,32 @@ def test_runner_takes_health_config_from_runtime_config() -> None:
     )
 
     assert runner._health.port == 9090
+
+
+def test_status_runner_passes_retention_to_stores() -> None:
+    config = RuntimeConfig.model_validate(
+        {
+            "retention": {
+                "job_records_ttl_seconds": 60,
+                "job_records_max_age_seconds": 120,
+            }
+        }
+    )
+    client = MongoClient()
+    runner = JobStatusWorkerRunner(
+        config, "status-1", exchange=RMQExchangeConfig(name="jobs", type="fanout")
+    )
+    runner._infra = SimpleNamespace(mongo_client=client)
+
+    async def scenario() -> None:
+        await runner._create_default_job_store()
+        await runner._create_default_job_results_store()
+
+    asyncio.run(scenario())
+    db = client[config.mongodb.database]
+    assert db["jobs"].indexes["status.completed_at_1"]["expireAfterSeconds"] == 60
+    assert db["jobs"].indexes["created_at_1"]["expireAfterSeconds"] == 120
+    assert db["job_results"].indexes["time_1"]["expireAfterSeconds"] == 60
 
 
 # ---------------------------------------------------------------------------

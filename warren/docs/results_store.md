@@ -90,9 +90,10 @@ result:<result_type>:job:<job_id or ->:doc:<doc_id>:part:<part_idx>
 - `result:parsed_md:job:-:doc:doc456:part:0` (no job_id - this is a concrete value)
 - `result:chunks:job:abc123:doc:doc456:part:3` (chunked result, part 3)
 
-**Prefix scanning** (always includes job):
-- Results for doc without job: `result:<result_type>:job:-:doc:<doc_id>:`
-- Results for doc with specific job: `result:<result_type>:job:<job_id>:doc:<doc_id>:`
+`get_result` uses the per-part cache. `stream_doc_processing_results` always
+queries persistence, sorted by `part_idx`, so eviction or a partial cache rewrite
+cannot truncate the result set. Its `try_cache` parameter is deprecated and
+ignored. Streaming does not scan or populate the cache.
 
 ### 6. Uniqueness Constraint
 

@@ -5,12 +5,15 @@ Consumes ``data_type: "soft-failure"`` messages from the processing
 exchange, unwraps the failed message, stores it durably, and uses
 ``asyncio.call_later`` to trigger republishing after the configured
 delay. On startup, ``schedule_pending`` loads persisted messages and
-reschedules remaining delays.
+reschedules remaining delays. Distributed runners use a lease so only
+one worker schedules and republishes at a time.
 """
 
 import asyncio
 import time
-from collections.abc import Callable
+import uuid
+from collections.abc import Awaitable, Callable
+from contextlib import suppress
 
 from basics.logging_utils import summarize_exception_chain
 
@@ -18,10 +21,12 @@ from warren.pubsub.common import (
     PublisherInterface,
     PublishFailureException,
 )
+from warren.retry_management.lease import RetryLeaseInterface
 from warren.storage.document_store.interface import (
     DocumentNotFoundError,
     DocumentStoreInterface,
 )
+from warren.storage.scoping import scope_fields
 from warren.workers.messages import (
     build_message_key,
     extract_message_identity,
@@ -40,7 +45,9 @@ class RetryWorker(AsyncProcessingWorkerBase):
     3. On timer: fetches message, republishes, deletes from store.
 
     On startup (via ``schedule_pending``), loads scheduling metadata for
-    persisted messages and reschedules remaining delays.
+    persisted messages and reschedules remaining delays. With a lease, call
+    ``start`` to acquire ownership and poll for takeover. Standbys only persist.
+    Omitting the lease is intended for single-process use.
 
     :param worker_name: Worker identifier.
     :param retry_store: Persistent store for messages awaiting retry.
@@ -64,6 +71,11 @@ class RetryWorker(AsyncProcessingWorkerBase):
         retry_store: DocumentStoreInterface,
         republish_publisher: PublisherInterface,
         message_key_func: Callable[[dict], str] | None = None,
+        scoping_enabled: bool = False,
+        lease: RetryLeaseInterface | None = None,
+        lease_ttl_seconds: int = 30,
+        clock: Callable[[], float] = time.time,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         super().__init__(worker_name)
 
@@ -76,6 +88,19 @@ class RetryWorker(AsyncProcessingWorkerBase):
             )
             raise ValueError(msg)
 
+        if lease_ttl_seconds <= 0:
+            msg = "lease_ttl_seconds must be positive"
+            raise ValueError(msg)
+        self._lease = lease
+        self._lease_ttl = lease_ttl_seconds
+        self._clock = clock
+        self._sleep = sleep
+        self._holder_id = str(uuid.uuid4())
+        self._lease_expires_at = 0.0
+        self._lease_task: asyncio.Task[None] | None = None
+        self._lease_timer: asyncio.TimerHandle | None = None
+        self._republishing_keys: set[str] = set()
+        self._scoping_enabled = scoping_enabled
         self._retry_store = retry_store
         self._republish_publisher = republish_publisher
         self._message_key_func = message_key_func or self._default_message_key
@@ -87,31 +112,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
         # remove themselves on completion via add_done_callback.
         self._republish_tasks: set[asyncio.Task[None]] = set()
 
-        # Monotonic generation counter per retry key. Incremented each
-        # time __call__ stores a new envelope for the same key. Passed
-        # through call_later → _on_timer_fire → _republish so that a
-        # stale timer (whose generation no longer matches the envelope)
-        # can detect it was superseded and skip without side effects.
-        # Integer comparison is immune to float-precision issues that
-        # would affect comparing fire_at timestamps after a JSON/BSON
-        # round-trip.
-        self._envelope_generation: dict[str, int] = {}
-
-        # Single lock serializing store mutations and republish for all
-        # keys. Prevents the TOCTOU race where _republish (fetch →
-        # publish → delete) interleaves with __call__ (store → schedule)
-        # for the same key at await points, causing the delete to remove
-        # a newer envelope. The generation counter above solves a
-        # *different* problem: stale timers that fire after a newer
-        # envelope was stored but before the stale task acquires the
-        # lock.
-        #
-        # A per-key lock would allow independent keys to proceed
-        # concurrently, but adds lifecycle complexity (ref-counted
-        # creation/cleanup to avoid stale lock objects). Since retries
-        # are the exceptional path and the critical section is short
-        # (one store op + one RMQ publish), a single lock is sufficient.
-        # Upgrade to per-key if retry volume proves this a bottleneck.
+        # Serialize local writes with fetch/publish/delete.
         self._retry_lock: asyncio.Lock = asyncio.Lock()
 
     async def __call__(self, message: dict) -> dict | None:
@@ -128,16 +129,19 @@ class RetryWorker(AsyncProcessingWorkerBase):
 
         failed_message: dict = message["data"]
         retry_info = failed_message.get("retry", {})
+        fields = scope_fields(self._scoping_enabled, failed_message.get("scope"))
         retry_key = self._message_key_func(failed_message)
+        if fields:
+            retry_key = f"s:{fields['scope']}:{retry_key}"
         delay_seconds = retry_info.get("after", 30)
 
-        generation = self._envelope_generation.get(retry_key, 0) + 1
-        self._envelope_generation[retry_key] = generation
+        generation = str(uuid.uuid4())
 
         envelope = {
+            **fields,
             self.REQUIRED_DOC_ID_FIELD: retry_key,
             "message": failed_message,
-            "fire_at": time.time() + delay_seconds,
+            "fire_at": self._clock() + delay_seconds,
             "retry_after_seconds": delay_seconds,
             "generation": generation,
         }
@@ -163,32 +167,43 @@ class RetryWorker(AsyncProcessingWorkerBase):
         timers. Messages past their fire time are republished
         immediately.
         """
-        now = time.time()
+        if not self._can_publish():
+            return
+        now = self._clock()
         immediate_count = 0
         scheduled_count = 0
         skipped_count = 0
 
-        async for envelope in self._retry_store.query({}):
-            try:
-                retry_key = envelope[self.REQUIRED_DOC_ID_FIELD]
-                fire_at = envelope["fire_at"]
-            except KeyError as e:
-                # A single malformed persisted envelope must not abort
-                # recovery of the rest.
-                skipped_count += 1
-                self._log.warning(
-                    f"Skipping malformed persisted retry envelope: "
-                    f"{summarize_exception_chain(e)}"
-                )
-                continue
+        async with self._retry_lock:
+            async for envelope in self._retry_store.query({}):
+                if not self._can_publish():
+                    return
+                try:
+                    retry_key = envelope[self.REQUIRED_DOC_ID_FIELD]
+                    fire_at = envelope["fire_at"]
+                except KeyError as e:
+                    # A single malformed persisted envelope must not abort
+                    # recovery of the rest.
+                    skipped_count += 1
+                    self._log.warning(
+                        f"Skipping malformed persisted retry envelope: "
+                        f"{summarize_exception_chain(e)}"
+                    )
+                    continue
 
-            if fire_at <= now:
-                self._spawn_republish(retry_key)
-                immediate_count += 1
-            else:
-                remaining = fire_at - now
-                self._schedule_republish(retry_key, remaining)
-                scheduled_count += 1
+                if retry_key in self._republishing_keys:
+                    continue
+                generation = envelope.get("generation")
+                if fire_at <= now:
+                    existing = self._pending_timers.pop(retry_key, None)
+                    if existing is not None:
+                        existing.cancel()
+                    self._spawn_republish(retry_key, generation)
+                    immediate_count += 1
+                else:
+                    remaining = fire_at - now
+                    self._schedule_republish(retry_key, remaining, generation)
+                    scheduled_count += 1
 
         self._log.info(
             f"Scheduled {scheduled_count} pending retries, "
@@ -196,26 +211,73 @@ class RetryWorker(AsyncProcessingWorkerBase):
             + (f", {skipped_count} malformed skipped" if skipped_count else "")
         )
 
-    async def shutdown(self) -> None:
-        """Cancel all pending timers.
+    async def start(self) -> None:
+        """Start lease polling and recover persisted retries."""
+        if self._lease is None:
+            await self.schedule_pending()
+        elif self._lease_task is None:
+            await self._refresh_lease()
+            self._lease_task = asyncio.create_task(self._maintain_lease())
 
-        Persisted messages remain in store for recovery on next
-        startup.
-        """
-        count = len(self._pending_timers)
+    async def _maintain_lease(self) -> None:
+        while True:
+            await self._sleep(self._lease_ttl / 3)
+            await self._refresh_lease()
 
+    async def _refresh_lease(self) -> None:
+        if not self._can_publish():
+            self._lose_lease()
+        now = self._clock()
+        expires_at = int((now + self._lease_ttl) * 1000) / 1000
+        try:
+            acquired = await self._lease.acquire_or_renew(
+                self._holder_id, now, expires_at
+            )
+            if not acquired or self._clock() >= expires_at:
+                self._lose_lease()
+                return
+            self._lease_expires_at = expires_at
+            if self._lease_timer is not None:
+                self._lease_timer.cancel()
+            self._lease_timer = asyncio.get_running_loop().call_later(
+                expires_at - self._clock(), self._lose_lease
+            )
+            await self.schedule_pending()
+        except Exception as exc:
+            self._lose_lease()
+            self._log.warning(
+                f"Retry lease refresh failed: {summarize_exception_chain(exc)}"
+            )
+
+    def _can_publish(self) -> bool:
+        return self._lease is None or self._clock() < self._lease_expires_at
+
+    def _lose_lease(self) -> None:
+        self._lease_expires_at = 0.0
+        if self._lease_timer is not None:
+            self._lease_timer.cancel()
+            self._lease_timer = None
         for handle in self._pending_timers.values():
             handle.cancel()
         self._pending_timers.clear()
+        for task in self._republish_tasks:
+            task.cancel()
 
-        if count > 0:
-            self._log.info(f"Cancelled {count} pending retry timers")
+    async def shutdown(self) -> None:
+        """Stop lease polling and cancel retries, leaving persisted work intact."""
+        if self._lease_task is not None:
+            self._lease_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._lease_task
+            self._lease_task = None
+        self._lose_lease()
+        await asyncio.gather(*self._republish_tasks, return_exceptions=True)
 
     def _schedule_republish(
         self,
         retry_key: str,
         delay_seconds: float,
-        expected_generation: int | None = None,
+        expected_generation: str | int | None = None,
     ) -> None:
         """Schedule a republish callback via ``asyncio.call_later``.
 
@@ -227,8 +289,10 @@ class RetryWorker(AsyncProcessingWorkerBase):
         :param expected_generation: The envelope generation at
             scheduling time. Passed through to ``_republish`` so it
             can detect stale timers superseded by a newer envelope.
-            ``None`` for startup recovery (skip staleness check).
+            ``None`` for legacy envelopes without a generation.
         """
+        if not self._can_publish():
+            return
         existing = self._pending_timers.pop(retry_key, None)
         if existing is not None:
             existing.cancel()
@@ -245,7 +309,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
     def _on_timer_fire(
         self,
         retry_key: str,
-        expected_generation: int | None,
+        expected_generation: str | int | None,
     ) -> None:
         """Synchronous callback for ``call_later`` -- creates async
         republish task."""
@@ -255,21 +319,31 @@ class RetryWorker(AsyncProcessingWorkerBase):
     def _spawn_republish(
         self,
         retry_key: str,
-        expected_generation: int | None = None,
+        expected_generation: str | int | None = None,
     ) -> None:
         """Create a tracked ``_republish`` task.
 
         Keeps a strong reference in ``_republish_tasks`` until the task
         completes so the event loop cannot collect it mid-flight.
         """
+        if not self._can_publish() or retry_key in self._republishing_keys:
+            return
+        self._republishing_keys.add(retry_key)
         task = asyncio.create_task(self._republish(retry_key, expected_generation))
         self._republish_tasks.add(task)
-        task.add_done_callback(self._republish_tasks.discard)
+
+        def done(task: asyncio.Task[None]) -> None:
+            self._republish_tasks.discard(task)
+            self._republishing_keys.discard(retry_key)
+            if not task.cancelled() and (exc := task.exception()) is not None:
+                self._log.error(f"Retry failed: {summarize_exception_chain(exc)}")
+
+        task.add_done_callback(done)
 
     async def _republish(
         self,
         retry_key: str,
-        expected_generation: int | None = None,
+        expected_generation: str | int | None = None,
     ) -> None:
         """Fetch message from store, republish, and delete from store.
 
@@ -281,12 +355,24 @@ class RetryWorker(AsyncProcessingWorkerBase):
         :param expected_generation: The envelope generation this timer
             was scheduled for. If the envelope's generation differs,
             a newer envelope has superseded it and this timer skips.
-            ``None`` disables the staleness check (used by startup
-            recovery in ``schedule_pending``).
+            ``None`` disables the staleness check for legacy envelopes.
         """
         async with self._retry_lock:
+            if not self._can_publish():
+                return
             try:
-                envelope = await self._retry_store.get_document(retry_key)
+                if self._lease is None:
+                    envelope = await self._retry_store.get_document(retry_key)
+                else:
+                    # A standby may have replaced the persisted row before its cache write.
+                    envelope = await anext(
+                        self._retry_store.query(
+                            {self.REQUIRED_DOC_ID_FIELD: retry_key}
+                        ),
+                        None,
+                    )
+                    if envelope is None:
+                        return
             except DocumentNotFoundError:
                 self._log.debug(
                     f"Retry envelope not found in store (key={retry_key}), "
@@ -302,10 +388,12 @@ class RetryWorker(AsyncProcessingWorkerBase):
                     f"Stale timer for key={retry_key} "
                     f"(expected generation={expected_generation}, "
                     f"envelope generation={envelope.get('generation')}), "
-                    f"skipping — newer timer will handle it"
+                    f"skipping superseded retry"
                 )
                 return
 
+            if not self._can_publish():
+                return
             message = envelope["message"]
             identity = extract_message_identity(message)
             retry_info = message.get("retry", {})
@@ -315,12 +403,18 @@ class RetryWorker(AsyncProcessingWorkerBase):
             except PublishFailureException as e:
                 self._log.error(
                     f"[{identity}] Failed to republish, "
-                    f"will recover on next startup: "
+                    f"will recover on the next pending scan: "
                     f"{summarize_exception_chain(e)}"
                 )
                 return
 
-            await self._retry_store.delete(retry_key)
+            if self._can_publish():
+                if self._lease is None:
+                    await self._retry_store.delete(retry_key)
+                else:
+                    await self._retry_store.delete(
+                        retry_key, expected={"generation": envelope.get("generation")}
+                    )
 
             self._log.info(
                 f"[{identity}] Republished retry message "

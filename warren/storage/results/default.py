@@ -1,9 +1,10 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from datetime import UTC, datetime
 
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
 
+from warren.common import HardFailureException
 from warren.storage.cache.interface import (
     CacheInterface,
 )
@@ -13,12 +14,12 @@ from warren.storage.document_store.interface import (
 from warren.storage.results.interface import (
     DocumentProcessingResultsNotFound,
     ResultDoc,
+    ResultItem,
     ResultNotFound,
     ResultsStoreInterface,
 )
 from warren.workers.messages import (
     build_message_key,
-    build_message_key_prefix,
 )
 
 
@@ -43,6 +44,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         cache: CacheInterface[dict] | None = None,
         result_type: str | None = None,
         name: str | None = None,
+        *,
+        cache_ttl_seconds: int = 3600,
     ) -> None:
         """
         Initialize the results store.
@@ -53,8 +56,10 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         :param result_type: Type identifier for cache keys. If None, uses
             document_store.get_document_type().
         :param name: Optional name for logging purposes.
+        :param cache_ttl_seconds: Expiry for cached results.
         """
         super().__init__(pybase_logger_name=name)
+        self._cache_ttl_seconds = cache_ttl_seconds
 
         self._document_store = document_store
         self._cache = cache
@@ -107,24 +112,58 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
 
         :return: Document ID from the document store.
         """
-        normalized_part_idx = 0 if part_idx is None else part_idx
-
-        doc = {
-            "doc_id": doc_id,
-            "part_idx": normalized_part_idx,
-            "job_id": job_id,
-            "result": result,
-            "result_metadata": result_metadata,
-            "created_at": datetime.now(UTC),
-        }
+        doc = self._build_row(
+            ResultItem(result, doc_id, part_idx, job_id, result_metadata)
+        )
 
         result_id = await self._document_store.insert(doc, overwrite_existing)
         doc["result_id"] = result_id
 
         if do_cache:
-            await self._cache_set(doc_id, normalized_part_idx, job_id, doc)
+            await self._cache_set(doc_id, doc["part_idx"], job_id, doc)
 
         return result_id
+
+    async def store_many(self, items: Sequence[ResultItem]) -> None:
+        """Upsert results in bulk. For repeated keys, the last item wins."""
+        if not items:
+            return
+        rows = {
+            (item.doc_id, item.job_id, item.part_idx or 0): self._build_row(item)
+            for item in items
+        }
+        docs = list(rows.values())
+        ids = await self._document_store.upsert_many(docs)
+        for doc, result_id in zip(docs, ids, strict=True):
+            if result_id is not None:
+                doc["result_id"] = result_id
+        if self._cache is not None:
+            try:
+                await self._cache.set_many(
+                    {
+                        self._build_cache_key(
+                            doc["doc_id"], doc["part_idx"], doc["job_id"]
+                        ): doc
+                        for doc in docs
+                    },
+                    ttl_seconds=self._cache_ttl_seconds,
+                )
+            except HardFailureException:
+                raise
+            except Exception as e:
+                self._log.warning(
+                    f"Caching results failed: {summarize_exception_chain(e)}"
+                )
+
+    def _build_row(self, item: ResultItem) -> dict:
+        return {
+            "doc_id": item.doc_id,
+            "part_idx": 0 if item.part_idx is None else item.part_idx,
+            "job_id": item.job_id,
+            "result": item.result,
+            "result_metadata": item.result_metadata,
+            "created_at": datetime.now(UTC),
+        }
 
     async def get_result(
         self,
@@ -146,7 +185,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         normalized_part_idx = 0 if part_idx is None else part_idx
 
         cached = await self._cache_get(doc_id, normalized_part_idx, job_id)
-        if cached is not None:
+        # Bulk replacements do not return existing MongoDB _id values.
+        if cached is not None and cached.get("result_id") is not None:
             return self._dict_to_result_doc(cached)
 
         query = self._build_query(doc_id, normalized_part_idx, job_id)
@@ -168,11 +208,11 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         try_cache: bool = True,
     ) -> AsyncGenerator[ResultDoc, None]:
         """
-        Stream all processing results for a document.
+        Stream persisted results in ascending part order, bypassing the cache.
 
         :param doc_id: Document ID.
         :param job_id: Job ID (None if not using job grouping).
-        :param try_cache: Whether to try cache first.
+        :param try_cache: Deprecated and ignored; retained for compatibility.
 
         :return: Async generator yielding result documents.
 
@@ -180,21 +220,10 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         """
         results_found = False
 
-        if try_cache:
-            cached_items = await self._cache_get_by_prefix(doc_id, job_id)
-            if cached_items:
-                for doc in cached_items.values():
-                    results_found = True
-                    yield self._dict_to_result_doc(doc)
-                return
-
         query = self._build_query(doc_id, job_id=job_id)
-        async for doc in self._document_store.query(query):
+        async for doc in self._document_store.query(query, sort_by="part_idx"):
             results_found = True
-            doc = self._add_result_id(doc)
-            part_idx = doc.get("part_idx", 0)
-            await self._cache_set(doc_id, part_idx, job_id, doc)
-            yield self._dict_to_result_doc(doc)
+            yield self._dict_to_result_doc(self._add_result_id(doc))
 
         if not results_found:
             msg = f"No results found for doc_id={doc_id}, job_id={job_id}"
@@ -233,7 +262,9 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
             return
         try:
             cache_key = self._build_cache_key(doc_id, part_idx, job_id)
-            await self._cache.set(cache_key, doc)
+            await self._cache.set(cache_key, doc, ttl_seconds=self._cache_ttl_seconds)
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Caching of document failed:\n"
@@ -255,6 +286,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         try:
             cache_key = self._build_cache_key(doc_id, part_idx, job_id)
             return await self._cache.get(cache_key)
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Retrieving from cache failed for:\n"
@@ -265,27 +298,6 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
             )
             return None
 
-    async def _cache_get_by_prefix(
-        self,
-        doc_id: str,
-        job_id: str | None,
-    ) -> dict[str, dict]:
-        """Get values from cache by prefix, returning empty dict on failure."""
-        if self._cache is None:
-            return {}
-        try:
-            cache_prefix = self._build_cache_prefix(doc_id, job_id)
-            return await self._cache.get_by_key_prefix(cache_prefix)
-        except Exception as e:
-            self._log.warning(
-                f"Retrieving from cache using key prefix failed for:\n"
-                f"doc_id={doc_id}\n"
-                f"job_id={job_id}\n"
-                f"Exceptions(s): {summarize_exception_chain(e)}"
-            )
-
-            return {}
-
     def _build_cache_key(
         self,
         doc_id: str,
@@ -294,14 +306,6 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
     ) -> str:
         """Build a cache key from business keys."""
         return build_message_key(job_id=job_id, doc_id=doc_id, part_idx=part_idx)
-
-    def _build_cache_prefix(
-        self,
-        doc_id: str,
-        job_id: str | None,
-    ) -> str:
-        """Build a cache prefix for streaming queries."""
-        return build_message_key_prefix(doc_id=doc_id, job_id=job_id)
 
     def _build_query(
         self,

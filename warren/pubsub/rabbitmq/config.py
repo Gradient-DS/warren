@@ -16,7 +16,7 @@ compatibility.
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from warren.pubsub.common import RetryConfig
 
@@ -43,6 +43,8 @@ class RMQConnectionConfig(BaseModel):
         timeout also delays aiormq's detection of a silent broker to
         ``(heartbeat + 1) * 3`` seconds.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     host: str = "localhost"
     port: int = 5672
@@ -79,6 +81,7 @@ class RMQQueueConfig(BaseModel):
     exclusive: bool = False
     auto_delete: bool = False
     routing_key: str | None = None
+    binding_keys: tuple[str, ...] = ()
     arguments: dict[str, Any] | None = None
 
 
@@ -98,8 +101,13 @@ class RMQConsumerConfig(BaseModel):
         the worker's queue; None declares the queue as today.
     """
 
-    # TODO: prefetch count is influenced by the worker's concurrency level. How to handle this?
+    model_config = ConfigDict(extra="forbid")
+
+    concurrency: int | None = Field(default=None, ge=1)
     prefetch_count: int = 1
+    handler_timeout_seconds: float | None = Field(
+        default=None, gt=0, allow_inf_nan=False
+    )
     on_shutdown_timeout: float = 30.0
     max_deliveries: int | None = Field(default=None, ge=1)
     redelivery_delay: int = Field(default=5, ge=1)

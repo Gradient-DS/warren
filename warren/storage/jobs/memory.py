@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from basics.base import Base
 
 from warren.storage.jobs.interface import JobNotFoundError, JobStoreInterface
+from warren.storage.scoping import scope_fields
 
 
 class MemoryJobStore(Base, JobStoreInterface):
@@ -16,9 +17,12 @@ class MemoryJobStore(Base, JobStoreInterface):
     so callers cannot tell the two apart. Single-process, gone at exit.
     """
 
-    def __init__(self, *, name: str | None = None) -> None:
+    def __init__(
+        self, *, name: str | None = None, scoping_enabled: bool = False
+    ) -> None:
         super().__init__(pybase_logger_name=name)
         self._jobs: dict[str, dict] = {}
+        self._scoping_enabled = scoping_enabled
 
     async def setup(self) -> None:
         """Nothing to create; present because the Protocol requires it."""
@@ -29,10 +33,12 @@ class MemoryJobStore(Base, JobStoreInterface):
         parameters: dict | None = None,
         num_documents: int | None = None,
         metadata: dict | None = None,
+        scope: str | None = None,
     ) -> str:
         now = datetime.now(UTC)
         job_id = f"job-{now.strftime('%Y-%m-%d')}-{uuid.uuid4().hex[:8]}"
         self._jobs[job_id] = {
+            **scope_fields(self._scoping_enabled, scope),
             "job_id": job_id,
             "final_data_type": final_data_type,
             "parameters": copy.deepcopy(parameters) if parameters else {},
@@ -67,8 +73,10 @@ class MemoryJobStore(Base, JobStoreInterface):
         job_id: str,
         completed: bool,
         with_failures: bool,
-    ) -> None:
+    ) -> bool:
         job = self._job(job_id)
+        if job["status"].get("completed_at") is not None:
+            return False
         now = datetime.now(UTC)
         job["status"] = {
             "completed": completed,
@@ -76,6 +84,7 @@ class MemoryJobStore(Base, JobStoreInterface):
             "completed_at": now if completed else None,
         }
         job["updated_at"] = now
+        return True
 
     async def get_status(self, job_id: str) -> dict:
         return copy.deepcopy(self._job(job_id)["status"])

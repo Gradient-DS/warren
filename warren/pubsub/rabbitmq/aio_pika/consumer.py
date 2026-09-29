@@ -1,7 +1,6 @@
 from typing import Any, Literal
 
 import asyncio
-import inspect
 import json
 import random
 from collections.abc import Awaitable
@@ -109,6 +108,8 @@ class RMQConsumerManager(ConsumerManagerBase):
         super().__init__(
             consumer,
             publishers=all_publishers,
+            handler_timeout_seconds=config.consumer.handler_timeout_seconds,
+            concurrency=config.consumer.concurrency or config.consumer.prefetch_count,
         )
 
         self._data_publisher = data_publisher
@@ -155,14 +156,13 @@ class RMQConsumerManager(ConsumerManagerBase):
             raise PubSubSetupError(msg) from e
         self._channel = channel
 
+        prefetch_count = max(
+            self._config.consumer.prefetch_count, self._config.consumer.concurrency or 0
+        )
         try:
-            # TODO: Couple this to the worker's concurrency level?
-            await channel.set_qos(prefetch_count=self._config.consumer.prefetch_count)
+            await channel.set_qos(prefetch_count=prefetch_count)
         except Exception as e:
-            msg = (
-                f"Failed to set consumer QoS "
-                f"(prefetch_count={self._config.consumer.prefetch_count})"
-            )
+            msg = f"Failed to set consumer QoS (prefetch_count={prefetch_count})"
             raise PubSubSetupError(msg) from e
 
         # declare_exchange / declare_queue self-contextualise (exchange/queue
@@ -183,8 +183,8 @@ class RMQConsumerManager(ConsumerManagerBase):
         Begin consuming messages from the configured queue.
 
         Messages are delivered to _on_message() as they arrive.
-        Each message spawns a task, allowing concurrent processing
-        up to prefetch_count limit.
+        Each delivery spawns a task; handler concurrency is bounded separately
+        from the channel prefetch.
         """
         if self._queue is None:
             msg = "Must call setup() before start_consuming()"
@@ -267,6 +267,8 @@ class RMQConsumerManager(ConsumerManagerBase):
         )
         if not connected:
             return ConsumerHealth(
+                handler_timeout_seconds=self._handler_timeout_seconds,
+                handler_started_at=tuple(self._handler_started_at.values()),
                 connected=False,
                 blocked=False,
                 channel_open=False,
@@ -298,6 +300,8 @@ class RMQConsumerManager(ConsumerManagerBase):
         else:
             detail = ""
         return ConsumerHealth(
+            handler_timeout_seconds=self._handler_timeout_seconds,
+            handler_started_at=tuple(self._handler_started_at.values()),
             connected=True,
             blocked=blocked,
             channel_open=channel_open,
@@ -362,22 +366,8 @@ class RMQConsumerManager(ConsumerManagerBase):
         ):
             return
 
-        # Process — dispatch sync consumers to thread pool, await async directly.
-        # iscoroutinefunction checks both plain async functions and callable
-        # objects with async __call__ (the latter requires checking __call__).
         try:
-            is_async = inspect.iscoroutinefunction(
-                self._consumer
-            ) or inspect.iscoroutinefunction(getattr(self._consumer, "__call__", None))
-            if is_async:
-                result = await self._consumer(body)
-            else:
-                loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(
-                    None,
-                    self._consumer,
-                    body,
-                )
+            result = await self._call_handler(body)
 
             # The last point at which a duplicate downstream publish can be
             # avoided: a dead channel means the broker redelivers this
@@ -389,6 +379,8 @@ class RMQConsumerManager(ConsumerManagerBase):
             # Route the result downstream (terminal workers have no data
             # publisher). Lifecycle envelopes go through the control publisher.
             if result is not None:
+                if "scope" in body:
+                    result = {**result, "scope": body["scope"]}
                 if self._data_publisher is not None:
                     await self._data_publisher(result)
                 # Echo to the observer exchange when it can't observe the data
@@ -605,6 +597,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         body[REPLAY_ROUTING_KEY_FIELD] = message.routing_key
 
         soft_failure_msg: dict = {
+            **({"scope": body["scope"]} if "scope" in body else {}),
             "data_type": "soft-failure",
             "data": body,
             "job_id": body.get("job_id"),
@@ -676,6 +669,7 @@ class RMQConsumerManager(ConsumerManagerBase):
 
         if self._publish_hard_failures and self._control_publisher is not None:
             hard_failure_msg: dict = {
+                **({"scope": body["scope"]} if "scope" in body else {}),
                 "data_type": "hard-failure",
                 "data": body,
                 "job_id": body.get("job_id"),

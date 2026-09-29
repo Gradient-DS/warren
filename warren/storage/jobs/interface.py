@@ -45,6 +45,7 @@ class JobStoreInterface(Protocol):
         parameters: dict | None = None,
         num_documents: int | None = None,
         metadata: dict | None = None,
+        scope: str | None = None,
     ) -> str:
         """Create a new job entry with a store-generated ID.
 
@@ -101,10 +102,10 @@ class JobStoreInterface(Protocol):
         job_id: str,
         completed: bool,
         with_failures: bool,
-    ) -> None:
-        """Atomically update the job's completion status.
+    ) -> bool:
+        """Update an unfinished job; return whether this call applied the update.
 
-        Always sets both fields together to prevent inconsistent state.
+        A completion timestamp prevents later updates, including reopening.
 
         :raises JobNotFoundError: If job_id does not exist.
         """

@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `erase_scope` removes scoped MongoDB content, Redis keys, and control rows with deletion counts, falling back to collection drops when database drops are denied; see `warren/docs/scoping.md`.
+- Optional scoping isolates content in per-scope MongoDB databases and Redis namespaces, validates at storage access, labels control rows with valid scopes, and supplies worker factories with a database resolver.
+- Message scopes propagate through worker, failure, retry, and job-publication envelopes and into handler executor threads; runtime scoping defaults to disabled.
+- Optional MongoDB job-record retention covers completion, result updates, and publishing outcomes, including failures without an item ID; a maximum-age backstop bounds unfinished jobs, and setup reconciles explicitly configured TTL indexes.
+- Runtime `documents.cache_ttl_seconds` (86400) and `results.cache_ttl_seconds` (3600) configure positive cache expiry; fetched payload TTLs apply to both shared and job-scoped keys.
+- `ResultsStoreInterface.store_many` batches result upserts into one unordered MongoDB bulk write and an optional cache pipeline; memory stores support the API, and the last item wins for repeated keys.
+- Consumer concurrency is configurable on RabbitMQ and memory, health responses include in-flight handler counts, RabbitMQ prefetch is at least explicit concurrency, and Kafka rejects concurrency above one.
+- In-process pipelines accept per-worker instance counts and runtime memory handler settings; unset concurrency uses RabbitMQ prefetch or one handler on Kafka and memory.
+- Worker queues accept multiple `binding_keys` with `binding_key` retained as a single-key constructor alias; fanout ignores keys, and overlapping RabbitMQ or memory bindings deliver once per matching queue.
+- Optional handler timeouts on all three backends use the existing retry policy, and liveness fails when a handler exceeds twice its timeout, including handlers that ignore cancellation.
+- Startup connection attempts support bounded exponential backoff, MongoDB and Redis pings, and cleanup between failures; the default remains one attempt, and memory needs no external connections.
+- MongoDB and Redis runtime settings accept connection strings, credentials, TLS, pool limits, and timeouts; YAML string values expand `${VAR}` and reject unset variables.
+- Store deletes accept expected field values so retry cleanup cannot delete a replacement written by a standby.
+
+### Changed
+
+- Job hard-failure counts use a partial MongoDB index on `(job_id, doc_id)` while retaining distinct-item counting across stages.
+- Multi-part result reads bypass caches and query persistence in ascending `part_idx` order; `try_cache` is deprecated and ignored, single-part reads retain their cache, and Redis prefix scans use count 1000.
+- Runtime configuration rejects unknown keys at every modeled level.
+- `MemoryDocumentStore.update` raises `DocumentAlreadyExistsError` when an update would duplicate a unique key, matching MongoDB's rejection.
+- README documents deployment settings, routing bindings, retry ownership, retention, and scoping; ROADMAP removes completed batch-write and prefetch/concurrency work.
+
+### Fixed
+
+- Unset job-record retention leaves existing TTL indexes untouched, so processes without retention settings cannot remove them. Configured TTLs must be positive; removing an index is an operator action.
+- Distributed retry workers share a MongoDB lease, renew every third of `retry.lease_ttl_seconds` (default 30), cancel local retries on lease loss, and recover persisted retries after standby takeover.
+- Concurrent status workers emit only one completion signal by conditionally setting completion time; `update_completion` returns whether it applied the update and preserves already-completed status and timestamps.
+- Binary result caches expire after 3600 seconds by default, retry caches use the maximum delay cap plus 60 seconds, Redis defaults of `None` use 3600 seconds, and framework cache writes pass TTLs explicitly.
+- `MemoryDocumentStore.insert` uses hash indexes for identity and unique keys instead of scanning every row; the recorded 2,770-result benchmark improved from 2.7 s to 0.04 s.
+- The `dev` extra includes the `rmq`, `kafka`, `http`, and `s3` extras imported by tests, so the documented `pip install -e ".[dev]"` supplies the test dependencies.
+
 ## [0.5.0] — 2026-09-19
 
 > Adds the in-process `memory` backend: a whole pipeline in one process, no

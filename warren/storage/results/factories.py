@@ -18,6 +18,7 @@ from warren.storage.results.binary import (
 from warren.storage.results.default import (
     DefaultResultsStore,
 )
+from warren.storage.scoping import ScopedDatabase
 
 
 async def create_default_results_store(
@@ -29,6 +30,7 @@ async def create_default_results_store(
     doc_id_field: str = "result_id",
     cache_base_key_prefix: str = "results",
     cache_ttl_seconds: int = 3600,
+    scoped_database: ScopedDatabase | None = None,
 ) -> DefaultResultsStore:
     """
     Create a DefaultResultsStore with MongoDB persistence and optional Redis cache.
@@ -46,6 +48,7 @@ async def create_default_results_store(
     """
     doc_store = MongoDBDocumentStore(
         client=mongo_client,
+        scoped_database=scoped_database,
         database_name=database_name,
         collection_name=collection_name,
         doc_id_field=doc_id_field,
@@ -57,6 +60,8 @@ async def create_default_results_store(
     if redis_client is not None:
         cache = RedisDictCache(
             client=redis_client,
+            scoping_enabled=scoped_database is not None,
+            scope_required=scoped_database.required if scoped_database else True,
             base_key=f"{cache_base_key_prefix}:{collection_name}",
             default_ttl_seconds=cache_ttl_seconds,
         )
@@ -65,6 +70,7 @@ async def create_default_results_store(
         document_store=doc_store,
         cache=cache,
         result_type=collection_name,
+        cache_ttl_seconds=cache_ttl_seconds,
     )
     await store.setup()
 
@@ -79,7 +85,8 @@ async def create_binary_results_store(
     database_name: str = "document_processing",
     doc_id_field: str = "result_id",
     cache_base_key: str = "documents",
-    cache_ttl_seconds: int | None = None,
+    cache_ttl_seconds: int = 3600,
+    scoped_database: ScopedDatabase | None = None,
 ) -> BinaryResultsStore:
     """Create a ``BinaryResultsStore`` wired with MongoDB + RedisBinaryCache.
 
@@ -90,12 +97,13 @@ async def create_binary_results_store(
     :param doc_id_field: Field name for the per-result primary key.
     :param cache_base_key: Redis namespace. Defaults to ``"documents"``
         so the bytes land under the same cache namespace
-        ``CachedDocumentFetcher`` reads from — downstream workers that
+        ``CachedDocumentFetcher`` reads from; downstream workers that
         use ``GetDocumentFunc`` hit these bytes transparently.
-    :param cache_ttl_seconds: Default TTL. ``None`` = no expiry.
+    :param cache_ttl_seconds: Expiry for cached payloads in seconds (default 3600).
     """
     doc_store = MongoDBDocumentStore(
         client=mongo_client,
+        scoped_database=scoped_database,
         database_name=database_name,
         collection_name=collection_name,
         doc_id_field=doc_id_field,
@@ -107,6 +115,8 @@ async def create_binary_results_store(
     if redis_client is not None:
         cache = RedisBinaryCache(
             client=redis_client,
+            scoping_enabled=scoped_database is not None,
+            scope_required=scoped_database.required if scoped_database else True,
             base_key=cache_base_key,
             default_ttl_seconds=cache_ttl_seconds,
         )
@@ -115,6 +125,7 @@ async def create_binary_results_store(
         document_store=doc_store,
         cache=cache,
         result_type=collection_name,
+        cache_ttl_seconds=cache_ttl_seconds,
     )
     await store.setup()
 

@@ -25,6 +25,7 @@ from warren.pubsub.routing import (
     ReplayRouter,
     observer_binding_key,
 )
+from warren.retry_management.lease import MongoRetryLease
 from warren.retry_management.retry_worker import (
     RetryWorker,
 )
@@ -145,8 +146,19 @@ class RetryWorkerRunner(WorkerRunnerBase):
         self._retry_worker = RetryWorker(
             worker_name=self._worker_name,
             retry_store=self._retry_store,
+            scoping_enabled=self._config.scoping.enabled,
             republish_publisher=self._republish_publisher,
             message_key_func=self._message_key_func,
+            lease=(
+                MongoRetryLease(
+                    self._infra.mongo_client,
+                    database_name=self._config.mongodb.database,
+                    collection_name=self._config.retry.collection_name,
+                )
+                if self._config.backend != "memory"
+                else None
+            ),
+            lease_ttl_seconds=self._config.retry.lease_ttl_seconds,
         )
 
         with self._exception_wrapping("Consumer manager setup"):
@@ -156,7 +168,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
             await self._consumer_manager.setup()
 
         with self._exception_wrapping("Scheduling pending retries"):
-            await self._retry_worker.schedule_pending()
+            await self._retry_worker.start()
         self._mark_setup_succeeded()
 
     async def _on_teardown(self) -> None:
@@ -191,14 +203,22 @@ class RetryWorkerRunner(WorkerRunnerBase):
             database_name=self._config.mongodb.database,
             collection_name=retry_cfg.collection_name,
             doc_id_field=RetryWorker.REQUIRED_DOC_ID_FIELD,
+            fields_to_index=["scope"] if self._config.scoping.enabled else None,
         )
         await mongo_store.setup()
+        if self._config.scoping.enabled:
+            return mongo_store
 
+        # Allow scheduling slack beyond the longest retry delay.
+        cache_ttl_seconds = max(0, retry_cfg.policy.max_delay_cap) + 60
         cache = RedisDictCache(
             client=self._infra.redis_client,
             base_key=f"retry:{retry_cfg.collection_name}",
+            default_ttl_seconds=cache_ttl_seconds,
         )
-        return CachedDocumentStore(mongo_store, cache)
+        return CachedDocumentStore(
+            mongo_store, cache, cache_ttl_seconds=cache_ttl_seconds
+        )
 
     def _create_default_publisher(self) -> PublisherInterface:
         # Republish to the DATA exchange, replaying the original routing key

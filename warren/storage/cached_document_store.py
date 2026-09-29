@@ -14,6 +14,7 @@ from collections.abc import AsyncGenerator
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
 
+from warren.common import HardFailureException
 from warren.storage.cache.interface import (
     CacheInterface,
 )
@@ -35,8 +36,7 @@ class CachedDocumentStore(Base):
 
     :param store: Persistent document store.
     :param cache: Cache for fast reads.
-    :param cache_ttl_seconds: TTL for cached entries. None uses
-        cache default.
+    :param cache_ttl_seconds: Expiry for cached entries in seconds.
     """
 
     def __init__(
@@ -44,7 +44,7 @@ class CachedDocumentStore(Base):
         store: DocumentStoreInterface,
         cache: CacheInterface[dict],
         *,
-        cache_ttl_seconds: int | None = None,
+        cache_ttl_seconds: int = 3600,
         name: str | None = None,
     ) -> None:
         super().__init__(pybase_logger_name=name)
@@ -71,6 +71,22 @@ class CachedDocumentStore(Base):
         await self._safe_cache_set(doc_id, doc)
         return doc_id
 
+    async def upsert_many(self, docs: list[dict]) -> list[str | None]:
+        ids = await self._store.upsert_many(docs)
+        if any(doc_id is None for doc_id in ids):
+            try:
+                await self._cache.clear()
+            except HardFailureException:
+                raise
+            except Exception as e:
+                self._log.warning(
+                    f"Cache invalidation failed: {summarize_exception_chain(e)}"
+                )
+        for doc_id, doc in zip(ids, docs, strict=True):
+            if doc_id is not None:
+                await self._safe_cache_set(doc_id, doc)
+        return ids
+
     async def update(
         self,
         doc_id: str,
@@ -89,14 +105,21 @@ class CachedDocumentStore(Base):
     async def delete(
         self,
         doc_id: str,
+        *,
+        expected: dict | None = None,
     ) -> bool:
         """Delete document from store and cache.
 
         :param doc_id: Document ID.
+        :param expected: Additional field values required for deletion.
 
         :return: True if document existed and was deleted.
         """
-        deleted = await self._store.delete(doc_id)
+        deleted = (
+            await self._store.delete(doc_id)
+            if expected is None
+            else await self._store.delete(doc_id, expected=expected)
+        )
         await self._safe_cache_delete(doc_id)
         return deleted
 
@@ -113,6 +136,8 @@ class CachedDocumentStore(Base):
         try:
             if await self._cache.exists(doc_id):
                 return True
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Cache exists check failed for doc_id={doc_id}: "
@@ -136,6 +161,8 @@ class CachedDocumentStore(Base):
             cached = await self._cache.get(doc_id)
             if cached is not None:
                 return cached
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Cache get failed for doc_id={doc_id}: {summarize_exception_chain(e)}"
@@ -148,6 +175,8 @@ class CachedDocumentStore(Base):
     def query(
         self,
         params: dict,
+        *,
+        sort_by: str | None = None,
     ) -> AsyncGenerator[dict, None]:
         """Query document store (cache is bypassed).
 
@@ -155,7 +184,7 @@ class CachedDocumentStore(Base):
 
         :return: Async generator of documents found.
         """
-        return self._store.query(params)
+        return self._store.query(params, sort_by=sort_by)
 
     def get_document_type(self) -> str:
         """Return document type from underlying store."""
@@ -173,6 +202,8 @@ class CachedDocumentStore(Base):
         """Set cache entry, logging failures as warnings."""
         try:
             await self._cache.set(key, value, self._cache_ttl)
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Cache set failed for key={key}: {summarize_exception_chain(e)}"
@@ -182,6 +213,8 @@ class CachedDocumentStore(Base):
         """Delete cache entry, logging failures as warnings."""
         try:
             await self._cache.delete(key)
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Cache delete failed for key={key}: {summarize_exception_chain(e)}"

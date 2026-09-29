@@ -22,7 +22,3 @@ redis:
 retry:
   enabled: true
   collection_name: retries
-
-e2e:
-  check_timeout_seconds: 120
-  check_poll_interval_seconds: 2

@@ -17,6 +17,8 @@ from warren.storage.jobs.interface import (
 from warren.storage.mongo_errors import (
     classify_transient_methods,
 )
+from warren.storage.mongo_retention import configure_ttl_index
+from warren.storage.scoping import scope_fields
 
 
 if TYPE_CHECKING:
@@ -40,17 +42,31 @@ class MongoDBJobStore(Base, JobStoreInterface):
         *,
         database_name: str,
         collection_name: str = "jobs",
+        job_records_ttl_seconds: int | None = None,
+        job_records_max_age_seconds: int | None = None,
         name: str | None = None,
+        scoping_enabled: bool = False,
     ) -> None:
         super().__init__(pybase_logger_name=name)
+        self._scoping_enabled = scoping_enabled
         self._client = client
         self._database_name = database_name
         self._collection_name = collection_name
         self._collection: AsyncCollection = client[database_name][collection_name]
+        self._job_records_ttl_seconds = job_records_ttl_seconds
+        self._job_records_max_age_seconds = job_records_max_age_seconds
 
     async def setup(self) -> None:
-        """Create unique index on job_id."""
+        """Create job identity and retention indexes."""
+        if self._scoping_enabled:
+            await self._collection.create_index("scope")
         await self._collection.create_index("job_id", unique=True)
+        await configure_ttl_index(
+            self._collection, "status.completed_at", self._job_records_ttl_seconds
+        )
+        await configure_ttl_index(
+            self._collection, "created_at", self._job_records_max_age_seconds
+        )
 
     async def create_job(
         self,
@@ -58,10 +74,12 @@ class MongoDBJobStore(Base, JobStoreInterface):
         parameters: dict | None = None,
         num_documents: int | None = None,
         metadata: dict | None = None,
+        scope: str | None = None,
     ) -> str:
         job_id = self._generate_job_id()
         now = datetime.now(UTC)
         doc = {
+            **scope_fields(self._scoping_enabled, scope),
             "job_id": job_id,
             "final_data_type": final_data_type,
             "parameters": parameters or {},
@@ -99,6 +117,7 @@ class MongoDBJobStore(Base, JobStoreInterface):
             {"job_id": job_id},
             {
                 "$set": {
+                    **scope_fields(self._scoping_enabled),
                     "num_documents": num_documents,
                     "updated_at": datetime.now(UTC),
                 },
@@ -117,7 +136,10 @@ class MongoDBJobStore(Base, JobStoreInterface):
             {"job_id": job_id},
             {
                 "$inc": {"num_documents": count},
-                "$set": {"updated_at": datetime.now(UTC)},
+                "$set": {
+                    **scope_fields(self._scoping_enabled),
+                    "updated_at": datetime.now(UTC),
+                },
             },
             return_document=True,
         )
@@ -131,10 +153,11 @@ class MongoDBJobStore(Base, JobStoreInterface):
         job_id: str,
         completed: bool,
         with_failures: bool,
-    ) -> None:
+    ) -> bool:
         now = datetime.now(UTC)
         update: dict = {
             "$set": {
+                **scope_fields(self._scoping_enabled),
                 "status.completed": completed,
                 "status.with_failures": with_failures,
                 "status.completed_at": now if completed else None,
@@ -142,12 +165,15 @@ class MongoDBJobStore(Base, JobStoreInterface):
             },
         }
         result = await self._collection.update_one(
-            {"job_id": job_id},
+            {"job_id": job_id, "status.completed_at": None},
             update,
         )
         if result.matched_count == 0:
-            msg = f"Job '{job_id}' not found"
-            raise JobNotFoundError(msg)
+            if await self._collection.find_one({"job_id": job_id}, {"_id": 1}) is None:
+                msg = f"Job '{job_id}' not found"
+                raise JobNotFoundError(msg)
+            return False
+        return True
 
     async def get_status(self, job_id: str) -> dict:
         doc = await self._collection.find_one(
@@ -168,6 +194,7 @@ class MongoDBJobStore(Base, JobStoreInterface):
             return
         now = datetime.now(UTC)
         set_fields: dict = {f"vector_db.{key}": value for key, value in fields.items()}
+        set_fields.update(scope_fields(self._scoping_enabled))
         set_fields["updated_at"] = now
         result = await self._collection.update_one(
             {"job_id": job_id},

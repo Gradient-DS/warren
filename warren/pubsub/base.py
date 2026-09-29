@@ -1,8 +1,12 @@
+import asyncio
+import inspect
+import time
 from abc import ABCMeta, abstractmethod
+from contextvars import copy_context
 
 from basics.base import Base
 
-from warren.common import MessageConsumerInterface
+from warren.common import MessageConsumerInterface, SoftFailureException
 from warren.pubsub.common import (
     ConsumerHealth,
     ConsumerManagerInterface,
@@ -10,6 +14,7 @@ from warren.pubsub.common import (
     Route,
     RouteFunc,
 )
+from warren.storage.scoping import current_scope
 
 
 class BasePublisher(Base, PublisherInterface, metaclass=ABCMeta):
@@ -62,13 +67,61 @@ class ConsumerManagerBase(Base, ConsumerManagerInterface, metaclass=ABCMeta):
         consumer: MessageConsumerInterface,
         *,
         publishers: list[PublisherInterface] | None = None,
+        handler_timeout_seconds: float | None = None,
+        concurrency: int = 1,
     ) -> None:
         classname = type(self).__name__
         logger_name = f"[{classname}] {consumer.name}" if consumer.name else None
         super().__init__(pybase_logger_name=logger_name)
 
+        # RabbitMQ prefetch zero permits unlimited in-flight deliveries.
+        self._handler_slots = asyncio.Semaphore(concurrency) if concurrency else None
+        self._handler_timeout_seconds = handler_timeout_seconds
+        self._handler_started_at: dict[object, float] = {}
         self._consumer = consumer
         self._publishers: list[PublisherInterface] = publishers or []
+
+    async def _call_handler(self, body: dict) -> dict | None:
+        if self._handler_slots is not None:
+            await self._handler_slots.acquire()
+        token = object()
+        self._handler_started_at[token] = time.monotonic()
+        deadline = asyncio.timeout(self._handler_timeout_seconds)
+        executor_running = False
+        scope_token = current_scope.set(body.get("scope"))
+        try:
+            async with deadline:
+                is_async = inspect.iscoroutinefunction(
+                    self._consumer
+                ) or inspect.iscoroutinefunction(
+                    getattr(self._consumer, "__call__", None)
+                )
+                if is_async:
+                    return await self._consumer(body)
+                future = asyncio.get_running_loop().run_in_executor(
+                    None, copy_context().run, self._consumer, body
+                )
+                # A timeout cannot stop the executor thread; track it until it exits.
+                executor_running = True
+
+                def finished(_: asyncio.Future) -> None:
+                    self._handler_started_at.pop(token, None)
+                    if self._handler_slots is not None:
+                        self._handler_slots.release()
+
+                future.add_done_callback(finished)
+                return await asyncio.shield(future)
+        except TimeoutError as e:
+            if not deadline.expired():
+                raise
+            reason = f"handler timed out after {self._handler_timeout_seconds:g}s"
+            raise SoftFailureException(reason) from e
+        finally:
+            current_scope.reset(scope_token)
+            if not executor_running:
+                self._handler_started_at.pop(token, None)
+                if self._handler_slots is not None:
+                    self._handler_slots.release()
 
     @abstractmethod
     async def setup(self) -> None:

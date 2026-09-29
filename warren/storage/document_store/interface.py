@@ -45,6 +45,10 @@ class DocumentStoreInterface(Protocol):
         """
         ...
 
+    async def upsert_many(self, docs: list[dict]) -> list[str | None]:
+        """Replace rows by unique key, returning IDs where the backend provides them."""
+        ...
+
     async def update(self, doc_id: str, updates: dict) -> None:
         """
         Update document with document id with given updates.
@@ -84,13 +88,16 @@ class DocumentStoreInterface(Protocol):
         """
         ...
 
-    def query(self, params: dict) -> AsyncGenerator[dict, None]:
+    def query(
+        self, params: dict, *, sort_by: str | None = None
+    ) -> AsyncGenerator[dict, None]:
         """
         Query document store.
 
         Returns an async generator — callers use ``async for doc in store.query(params)``.
 
         :param params: Query parameters.
+        :param sort_by: Optional field to sort by in ascending order.
 
         :return: Async generator of documents found.
         """
@@ -99,14 +106,17 @@ class DocumentStoreInterface(Protocol):
     async def delete(
         self,
         doc_id: str,
+        *,
+        expected: dict | None = None,
     ) -> bool:
         """
         Delete a document by its ID.
 
         :param doc_id: Document ID.
+        :param expected: Additional field values required for deletion.
 
         :return: True if document existed and was deleted, False if
-            document was not found.
+            it was not found or expected values did not match.
         """
         ...
 

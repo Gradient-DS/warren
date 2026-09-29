@@ -5,7 +5,7 @@ from collections.abc import AsyncGenerator
 
 from basics.base import Base
 from bson import ObjectId
-from pymongo import AsyncMongoClient, ReturnDocument
+from pymongo import AsyncMongoClient, ReplaceOne, ReturnDocument
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.errors import DuplicateKeyError
 
@@ -15,6 +15,7 @@ from warren.storage.document_store.interface import (
     DocumentStoreInterface,
     IndexSpec,
 )
+from warren.storage.scoping import ScopedDatabase
 
 
 # Type alias for MongoDB document IDs (either ObjectId or string)
@@ -43,6 +44,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         fields_to_index: list[IndexSpec] | None = None,
         unique_indexes: list[IndexSpec] | None = None,
         name: str | None = None,
+        scoped_database: ScopedDatabase | None = None,
     ) -> None:
         """
         Initialize the MongoDB document store.
@@ -60,6 +62,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         """
         super().__init__(pybase_logger_name=name)
 
+        self._scoped_database = scoped_database
         self._client = client
         self._database_name = database_name
         self._collection_name = collection_name
@@ -67,7 +70,9 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         self._fields_to_index = fields_to_index if fields_to_index is not None else []
         self._unique_indexes = unique_indexes if unique_indexes is not None else []
         # Collection reference is sync in pymongo async — no I/O, just a reference.
-        self._collection: AsyncCollection = self._ensure_collection()
+        self._collection: AsyncCollection | None = (
+            self._ensure_collection() if scoped_database is None else None
+        )
 
     async def setup(self) -> None:
         """
@@ -76,7 +81,8 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         Must be called after construction before using the store.
         The factory function handles this automatically.
         """
-        await self._create_indexes()
+        if self._scoped_database is None:
+            await self._create_indexes(self._collection)
 
     async def insert(
         self,
@@ -96,6 +102,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         :raises DocumentAlreadyExistsError: If overwrite_existing is False
             and a document with the same ID already exists.
         """
+        collection = await self._get_collection()
         doc_copy = doc.copy()
         self._ensure_doc_id(doc_copy)
 
@@ -104,10 +111,10 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
                 await self._upsert_by_unique_index(doc_copy)
             else:
                 query = {self._doc_id_field: doc_copy[self._doc_id_field]}
-                await self._collection.replace_one(query, doc_copy, upsert=True)
+                await collection.replace_one(query, doc_copy, upsert=True)
         else:
             try:
-                await self._collection.insert_one(doc_copy)
+                await collection.insert_one(doc_copy)
             except DuplicateKeyError as e:
                 msg = (
                     f"Document with id '{self._normalize_doc_id(doc_copy[self._doc_id_field])}' "
@@ -116,6 +123,28 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
                 raise DocumentAlreadyExistsError(msg) from e
 
         return self._normalize_doc_id(doc_copy[self._doc_id_field])
+
+    async def upsert_many(self, docs: list[dict]) -> list[str | None]:
+        """Upsert rows in one unordered bulk write, preserving MongoDB IDs."""
+        if not docs:
+            return []
+        collection = await self._get_collection()
+        fields = self._unique_indexes[0] if self._unique_indexes else self._doc_id_field
+        fields = (fields,) if isinstance(fields, str) else fields
+        rows = [doc.copy() for doc in docs]
+        operations = []
+        for row in rows:
+            self._ensure_doc_id(row)
+            query = {field: row.get(field) for field in fields}
+            if self._unique_indexes:
+                row.pop("_id", None)
+            operations.append(ReplaceOne(query, row, upsert=True))
+        result = await collection.bulk_write(operations, ordered=False)
+        ids: list[str | None] = []
+        for index, row in enumerate(rows):
+            value = row.get(self._doc_id_field, result.upserted_ids.get(index))
+            ids.append(str(value) if value is not None else None)
+        return ids
 
     async def update(
         self,
@@ -131,8 +160,9 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         :raises ValueError: If doc_id is None, empty, or invalid format.
         :raises DocumentNotFoundError: If document with doc_id does not exist.
         """
+        collection = await self._get_collection()
         query = {self._doc_id_field: self._denormalize_doc_id(doc_id)}
-        result = await self._collection.update_one(query, {"$set": updates})
+        result = await collection.update_one(query, {"$set": updates})
         if result.matched_count == 0:
             msg = f"Document with id '{doc_id}' not found"
             raise DocumentNotFoundError(msg)
@@ -150,26 +180,33 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
 
         :raises ValueError: If doc_id is None, empty, or invalid format.
         """
+        collection = await self._get_collection()
         query = {self._doc_id_field: self._denormalize_doc_id(doc_id)}
-        count = await self._collection.count_documents(query, limit=1)
+        count = await collection.count_documents(query, limit=1)
         return count > 0
 
     async def delete(
         self,
         doc_id: str,
+        *,
+        expected: dict | None = None,
     ) -> bool:
         """
         Delete a document by its ID.
 
         :param doc_id: ID of the document to delete.
+        :param expected: Additional field values required for deletion.
 
         :return: True if document existed and was deleted, False if
             document was not found.
 
         :raises ValueError: If doc_id is None, empty, or invalid format.
         """
+        collection = await self._get_collection()
         query = {self._doc_id_field: self._denormalize_doc_id(doc_id)}
-        result = await self._collection.delete_one(query)
+        if expected is not None:
+            query = {"$and": [query, expected]}
+        result = await collection.delete_one(query)
         return result.deleted_count > 0
 
     async def get_document(
@@ -186,8 +223,9 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         :raises ValueError: If doc_id is None, empty, or invalid format.
         :raises DocumentNotFoundError: If document with doc_id does not exist.
         """
+        collection = await self._get_collection()
         query = {self._doc_id_field: self._denormalize_doc_id(doc_id)}
-        doc = await self._collection.find_one(query)
+        doc = await collection.find_one(query)
         if doc is None:
             msg = f"Document with id '{doc_id}' not found"
             raise DocumentNotFoundError(msg)
@@ -196,15 +234,21 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
     async def query(
         self,
         params: dict,
+        *,
+        sort_by: str | None = None,
     ) -> AsyncGenerator[dict, None]:
         """
         Query documents matching the given parameters.
 
         :param params: MongoDB query parameters.
+        :param sort_by: Optional field to sort by in ascending order.
 
         :return: Async generator yielding matching documents.
         """
-        cursor = self._collection.find(params)
+        collection = await self._get_collection()
+        cursor = collection.find(params)
+        if sort_by is not None:
+            cursor = cursor.sort(sort_by, 1)
         async for doc in cursor:
             yield self._prepare_doc_for_return(doc)
 
@@ -232,8 +276,14 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
 
         :return: True if a unique index exists on exactly these fields.
         """
+        if self._scoped_database is not None:
+            # Setup checks the index declaration; creation waits for a scope.
+            return (
+                index_spec in self._unique_indexes or index_spec == self._doc_id_field
+            )
         target_fields = (index_spec,) if isinstance(index_spec, str) else index_spec
-        indexes = await self._collection.index_information()
+        collection = await self._get_collection()
+        indexes = await collection.index_information()
         for index_info in indexes.values():
             index_keys = tuple(field for field, _ in index_info.get("key", []))
             if index_keys == target_fields and index_info.get("unique", False):
@@ -245,20 +295,27 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         db = self._client[self._database_name]
         return db[self._collection_name]
 
-    async def _create_indexes(self) -> None:
+    async def _get_collection(self) -> AsyncCollection:
+        if self._scoped_database is not None:
+            return await self._scoped_database.collection(
+                self._collection_name, self._create_indexes
+            )
+        return self._collection
+
+    async def _create_indexes(self, collection: AsyncCollection) -> None:
         """Create indexes on configured fields."""
         for index_spec in self._fields_to_index:
             keys = self._index_spec_to_keys(index_spec)
             is_unique = index_spec in self._unique_indexes
-            await self._collection.create_index(keys, unique=is_unique)
+            await collection.create_index(keys, unique=is_unique)
 
         for index_spec in self._unique_indexes:
             if index_spec not in self._fields_to_index:
                 keys = self._index_spec_to_keys(index_spec)
-                await self._collection.create_index(keys, unique=True)
+                await collection.create_index(keys, unique=True)
 
         if self._doc_id_field != "_id":
-            await self._collection.create_index(self._doc_id_field, unique=True)
+            await collection.create_index(self._doc_id_field, unique=True)
 
     def _index_spec_to_keys(self, index_spec: IndexSpec) -> list[tuple[str, int]]:
         """Convert an index specification to MongoDB index keys format."""
@@ -280,6 +337,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
 
         :raises RuntimeError: If no unique indexes are configured.
         """
+        collection = await self._get_collection()
         if not self._unique_indexes:
             msg = "Cannot upsert by unique index: no unique_indexes configured"
             raise RuntimeError(msg)
@@ -294,7 +352,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         # Note: custom doc_id_field (if any) is already set by _ensure_doc_id before this call
         doc.pop("_id", None)
 
-        result = await self._collection.find_one_and_replace(
+        result = await collection.find_one_and_replace(
             query,
             doc,
             upsert=True,

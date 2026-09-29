@@ -26,6 +26,8 @@ def create_cached_document_fetcher(
     resolvers: Mapping[str, ResolveDocumentFunc],
     cache_base_key: str = "documents",
     default_ttl_seconds: int = DEFAULT_TTL_SECONDS,
+    scoping_enabled: bool = False,
+    scope_required: bool = True,
 ) -> CachedDocumentFetcher:
     """Create a CachedDocumentFetcher with a RedisBinaryCache backend.
 
@@ -38,7 +40,11 @@ def create_cached_document_fetcher(
     """
     cache = RedisBinaryCache(
         client=redis_client,
+        scoping_enabled=scoping_enabled,
+        scope_required=scope_required,
         base_key=cache_base_key,
         default_ttl_seconds=default_ttl_seconds,
     )
-    return CachedDocumentFetcher(cache=cache, resolvers=resolvers)
+    return CachedDocumentFetcher(
+        cache=cache, resolvers=resolvers, cache_ttl_seconds=default_ttl_seconds
+    )

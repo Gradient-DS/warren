@@ -71,8 +71,11 @@ class _FakeJobStore:
 
     async def update_completion(
         self, job_id: str, completed: bool, with_failures: bool
-    ) -> None:
+    ) -> bool:
+        if self.completion is not None and self.completion[0]:
+            return False
         self.completion = (completed, with_failures)
+        return True
 
 
 class _StubPublisher(JobDocumentsPublisher):
@@ -138,3 +141,22 @@ def test_record_failure_raising_does_not_abort_loop() -> None:
     # are still published.
     assert len(pub.calls) == 2
     assert result == {"published": 2, "failed": 1, "total": 3}
+
+
+def test_publication_carries_scope_and_restores_context() -> None:
+    from warren.storage.scoping import current_scope
+
+    async def scenario() -> None:
+        pub = _FakePublisher()
+        publisher = _StubPublisher(
+            publisher=pub, tracker=_FakeTracker(), job_store=_FakeJobStore()
+        )
+        token = current_scope.set("outer")
+        try:
+            await publisher.publish_job("job-1", _agen(["a"]), scope="a")
+            assert pub.calls[0]["scope"] == "a"
+            assert current_scope.get() == "outer"
+        finally:
+            current_scope.reset(token)
+
+    asyncio.run(scenario())

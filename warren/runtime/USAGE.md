@@ -50,7 +50,7 @@ A `WorkerSpec` describes one worker type — what it needs and how to build it:
 WorkerSpec(
     collections={"read": "chunks", "write": "embeddings"},
     factory=create_embedder,
-    binding_key=None,  # required for topic/direct, None for fanout
+    binding_keys=(),  # required for topic/direct, ignored on fanout
     publish=PublishSpec(),  # None = no downstream data (terminal)
     needs_document_fetcher=False,
     needs_document_store=False,
@@ -59,7 +59,7 @@ WorkerSpec(
 
 - `collections` maps roles to MongoDB collection names. Workers typically have a "read" collection (upstream results to consume) and a "write" collection (where this worker stores its own processing results). The runner creates a `DefaultResultsStore` per role and passes them to the factory via `ctx.stores["read"]`, `ctx.stores["write"]`, etc. Some workers have additional roles (e.g. the embedder reads from "chunks", "summaries", and "item_metadata").
 - `factory` is an async callable `(WorkerFactoryContext) -> MessageConsumerInterface`. It creates and returns the worker instance. See [Defining a pipeline](#defining-a-pipeline).
-- `binding_key` is the queue's binding pattern on the pipeline exchange. It must be `None` on a `fanout` exchange (which ignores keys) and is required on `topic`/`direct` exchanges (e.g. a `data_type` like `"markdown_document"`, or a `topic` wildcard like `"document.*"`).
+- `binding_keys` contains queue binding patterns, for example `("input.*", "retry.#")`. Topic/direct require non-empty keys; fanout ignores them. `binding_key` remains a constructor alias for one key.
 - `publish` is a `PublishSpec(route=None, route_func=None)` describing how the worker publishes its result to the pipeline exchange, or `None` if it publishes nothing downstream (terminal — there is no separate `terminal` flag). On `fanout`, leave `route`/`route_func` unset; on `topic`/`direct`, set one (e.g. `route_func=MessageFieldRouter()` to route by `data_type`).
 - `needs_document_fetcher` — if `True`, the runner builds a `CachedDocumentFetcher` (with path, GCS, S3, and HTTP(S) resolvers — the claim-check pattern: messages carry a location, workers resolve bytes on demand, Redis caches them) and passes it as `ctx.get_document_func`. (Note: there is an open design question about whether this should be the factory's responsibility instead of the runner's — see TODOs.)
 - `needs_document_store` — if `True`, the runner creates a `MongoDBDocumentStore` on the `documents` collection and passes it as `ctx.document_store`. (Same design note as above.)
@@ -96,7 +96,7 @@ rabbitmq:
     host: localhost
     port: 5672
     login: guest
-    password: guest
+    password: ${RABBITMQ_PASSWORD}
     heartbeat: 600          # seconds; unset keeps aiormq's 60
   consumer:
     prefetch_count: 4
@@ -104,6 +104,11 @@ rabbitmq:
     max_deliveries: 3       # dead-letter after N broker deliveries; unset = unbounded
     redelivery_delay: 5     # seconds before a counted redelivery is replayed
     queue_arguments: null   # e.g. {x-queue-type: quorum}; forwarded verbatim
+
+documents:
+  cache_ttl_seconds: 86400
+results:
+  cache_ttl_seconds: 3600
 
 retry:
   enabled: true
@@ -128,19 +133,69 @@ redis:
 
 All fields have sensible defaults. Load via `RuntimeConfig.from_yaml("config.yaml")`.
 
+Optional `retention.job_records_ttl_seconds` and
+`retention.job_records_max_age_seconds` control MongoDB job record expiry.
+Both default to `null`. See [Job stores](../docs/job_stores.md) for index fields,
+setup behavior and custom factory wiring.
+
 The worker serves `GET /ready` (200 while it holds a live consumer on an
 unblocked connection, else 503) and `GET /live` (200 while the process runs)
 on `health.port`. When the consumer is lost while the connection is alive for
 longer than `health.consumer_lost_grace_s`, the worker exits non-zero so the
 orchestrator restarts it; a blocked or reconnecting connection is waited out.
 
-Note: MongoDB and Redis currently only accept `host`/`port` pairs. Connection string support (`mongodb://...`, `redis://...`) is planned but not yet implemented.
+Keep secrets in environment variables. `from_yaml` expands `${VAR}` in string
+values, including lists, after parsing YAML. An unset variable raises an error
+naming it. Expansion is not recursive; values are not parsed as YAML again.
+
+```yaml
+mongodb:
+  uri: ${MONGODB_URI}
+  database: my_pipeline
+  max_pool_size: 20
+  server_selection_timeout_ms: 5000
+redis:
+  url: ${REDIS_URL}
+  max_connections: 20
+  socket_timeout: 5.0
+```
+
+`mongodb.uri` and `redis.url` take precedence over their `host`/`port` fields.
+MongoDB also accepts `username`, `password`, `auth_source`, and `tls` (default
+`false`). Explicit options override URI options; omitted options preserve driver
+or URI defaults. `database` still selects the runtime's database.
+
+Redis also accepts `username`, `password`, `db` (default `0`), and `ssl` (default
+`false`). Use `rediss://` for TLS with a URL. URL options take precedence over
+separate fields, following redis-py; `ssl: true` also enables TLS for `redis://`.
+Pool limits and timeouts default to `null`, preserving driver defaults. MongoDB's
+timeout is in milliseconds; Redis's is in seconds.
+
+Passwords and connection strings use `SecretStr`, so config representations hide
+their contents. Reference environment variables for these fields in YAML.
+
+Startup checks the pubsub connection, then pings MongoDB and Redis. Configure
+bounded exponential backoff when services may still be starting:
+
+```yaml
+startup:
+  attempts: 5
+  initial_delay_seconds: 1.0
+  max_delay_seconds: 30.0
+```
+
+Defaults are one attempt, a one-second initial delay and a 30-second delay cap.
+Each failed attempt closes its connections and logs a warning. The next attempt
+recreates all three connections; delays double up to the cap, including a cap on
+the first delay. Exhaustion raises the last error. The `memory` backend skips
+store connections and startup retries. Driver timeouts apply within each attempt;
+this policy bounds attempts and delays, not total startup time.
 
 **Three reuse modes:**
 
 1. **Defaults + YAML override** (most common) — start from defaults, override what you need in the YAML file. Fields you omit keep their defaults.
 2. **Programmatic override** — construct `RuntimeConfig(rabbitmq=..., mongodb=...)` directly in Python. Useful for tests or embedded use.
-3. **Subclass** — extend `RuntimeConfig` with additional fields for your deployment. The YAML loader (`model_validate`) ignores unknown fields by default.
+3. **Subclass** — extend `RuntimeConfig` with additional fields for your deployment. Unknown fields are rejected, including in nested config sections.
 
 ### DefaultWorkerRunner
 
@@ -150,7 +205,7 @@ The runner that wires everything together. Given a `RuntimeConfig` and a `Worker
 2. Builds `ResultsStoreInterface` instances from `collections`
 3. Optionally creates a `CachedDocumentFetcher` and/or `DocumentStoreInterface`
 4. Calls the factory function with a `WorkerFactoryContext`
-5. Creates the worker's publisher (none if `publish` is `None`) and a consumer manager bound to the pipeline exchange with `binding_key` — both via `warren.runtime.backends`, so the same runner serves RabbitMQ and Kafka
+5. Creates the worker publisher and a consumer manager with `binding_keys` through `warren.runtime.backends`.
 6. Runs the consumer until `SIGINT`/`SIGTERM`
 7. Tears down everything on shutdown
 
@@ -180,6 +235,33 @@ schedules retries with in-process timers. State is not persisted, and queues
 are unbounded. See [`warren/docs/memory.md`](../docs/memory.md) for the usage
 pattern and limits, and [`examples/rag/run_local.py`](../../examples/rag/run_local.py)
 for a complete example.
+
+## Consumer limits
+
+RabbitMQ uses `rabbitmq.consumer.concurrency`, Kafka uses
+`kafka.consumer.concurrency`, and memory uses `memory.concurrency`.
+The default is `null`, preserving existing behavior: RabbitMQ limits handlers
+to `prefetch_count`, while Kafka and memory process one at a time. RabbitMQ
+prefetch zero remains unlimited when concurrency is unset.
+An explicit concurrency must be at least one and sets the handler limit.
+RabbitMQ sets prefetch to `max(prefetch_count, concurrency or 0)`.
+Kafka currently rejects values above one to preserve offset commit ordering.
+Handlers must support concurrent calls when the effective limit exceeds one.
+
+Each section also accepts `handler_timeout_seconds` (positive seconds or
+`null`, which disables the deadline). Expiry produces a soft failure and uses
+the existing retry limits. A synchronous handler runs in an executor thread;
+timeout cannot terminate that thread, so it retains its concurrency slot until
+it finishes.
+
+Health responses include `in_flight_handlers`. The `/live` endpoint returns
+503 if a handler in the latest health sample has run longer than twice its
+timeout, including handlers that suppress cancellation.
+
+For memory pipelines, `create_in_process_runners(..., instances={"transform": 2})`
+creates two instances named `transform-0` and `transform-1`. Each instance
+has its own concurrency limit and shares the worker type's queue and stores.
+Unspecified worker types get one instance.
 
 ## Defining a pipeline
 

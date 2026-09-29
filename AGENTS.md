@@ -54,7 +54,10 @@ Work lands on `main` via PRs. Publishing to PyPI is triggered by a GitHub
 Release (not by pushing a tag). Update CHANGELOG.md as part of any
 user-visible change.
 
-The version in `pyproject.toml` always matches the last published release;
-between releases, new work accumulates under `[Unreleased]` in CHANGELOG.md.
-Cutting a release is a single PR that bumps the version and dates the
-changelog heading, followed by a tag + GitHub Release on the merge commit.
+The package version comes from Git tags via hatch-vcs; do not bump a version
+in `pyproject.toml`. Between releases, new work accumulates under
+`[Unreleased]` in CHANGELOG.md. To release, move those entries under a dated
+`## [X.Y.Z]` heading in a PR, keeping an empty `[Unreleased]` section. Merge
+the PR, then create and publish the GitHub Release `vX.Y.Z` on that merge
+commit on `main`. The publish workflow checks that every distribution
+matches the release tag before uploading.

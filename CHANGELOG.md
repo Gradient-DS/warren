@@ -7,12 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-09-29
+
+> Configurable publication routing, and release versions derived from Git tags. Patch: additive and backward compatible.
+
 ### Added
 
 - Optional `route_func` on `JobPublicationWorkerRunner` configures routing for
   published documents. The standard publication worker launcher reads it from
   `PipelineSpec.publication=PublishSpec(route_func=...)`; omitting the spec keeps
   the existing exchange-based routing.
+
+### Fixed
+
+- Release versions now come from Git tags via hatch-vcs, with a `0.0.0`
+  fallback when version detection is unavailable. Publishing rejects
+  distributions whose versions do not match the GitHub Release tag, preventing
+  stale versions from being uploaded to PyPI.
 
 ## [0.6.1] — 2026-09-29
 

@@ -46,6 +46,7 @@ from warren.jobs.publishing.job_publication_worker_runner import (
     DocumentsPublisherFactoryFunc,
     JobPublicationWorkerRunner,
 )
+from warren.runtime.validation import validate_pipeline
 
 
 module_logger: logging.Logger = get_logger(__name__)
@@ -126,7 +127,7 @@ async def start_job_publication_worker(
         function (``module:func``) matching
         ``DocumentsPublisherFactoryFunc``.
     :param pipeline_spec: pipeline spec location (see ``--pipeline-spec``).
-        Used to resolve the exchange the worker publishes on.
+        Used to resolve the exchange and publication routing.
     :param config_file: path to RuntimeConfig YAML.
     :param worker_name: unique worker instance name.
     :param debug: enable DEBUG logging.
@@ -156,6 +157,7 @@ async def start_job_publication_worker(
         msg = f"Unable to load pipeline spec from: {spec_str}"
         raise WarrenError(msg) from e
 
+    validate_pipeline(pipeline, logger=log)
     exchange = resolve_observation_exchange(pipeline)
     resolved_config = resolve_config_path(
         Path(config_file) if config_file else None, pipeline_dir
@@ -165,6 +167,11 @@ async def start_job_publication_worker(
         JobPublicationWorkerRunner,
         exchange=exchange,
         publish_exchange=pipeline.exchange,
+        route_func=(
+            pipeline.publication.route_func
+            if pipeline.publication is not None
+            else None
+        ),
         documents_publisher_factory=pub_factory_func,
     )
 

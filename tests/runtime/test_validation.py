@@ -1,7 +1,10 @@
 """Unit tests for deploy-time pipeline validation (no broker needed)."""
 
+from dataclasses import replace
+
 import pytest
 
+from warren.pubsub.common import Route
 from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 from warren.pubsub.routing import MessageFieldRouter, RoutingPlan
 from warren.runtime.spec import PipelineSpec, PublishSpec, WorkerSpec
@@ -72,8 +75,6 @@ def test_topic_publish_requires_route():
 
 
 def test_fanout_publish_forbids_route():
-    from warren.pubsub.common import Route
-
     worker = WorkerSpec(
         collections={"write": "c"},
         factory=_factory,
@@ -81,6 +82,44 @@ def test_fanout_publish_forbids_route():
     )
     with pytest.raises(PipelineValidationError, match="publish route must be unset"):
         validate_pipeline(_pipeline(worker))
+
+
+@pytest.mark.parametrize("exchange_type", ["fanout", "topic", "direct"])
+@pytest.mark.parametrize(
+    "publication", [None, PublishSpec(route_func=MessageFieldRouter())]
+)
+def test_publication_default_and_custom_routing_pass(exchange_type, publication):
+    pipeline = replace(
+        _pipeline(WorkerSpec({}, _factory), exchange_type),
+        workers={},
+        publication=publication,
+    )
+    validate_pipeline(pipeline)
+
+
+@pytest.mark.parametrize("exchange_type", ["fanout", "topic", "direct"])
+def test_publication_static_route_is_rejected(exchange_type):
+    pipeline = replace(
+        _pipeline(WorkerSpec({}, _factory), exchange_type),
+        workers={},
+        publication=PublishSpec(route=Route("input")),
+    )
+    with pytest.raises(PipelineValidationError, match="publication: static route"):
+        validate_pipeline(pipeline)
+
+
+@pytest.mark.parametrize("exchange_type", ["fanout", "topic", "direct"])
+def test_empty_publication_spec_requires_router_unless_fanout(exchange_type):
+    pipeline = replace(
+        _pipeline(WorkerSpec({}, _factory), exchange_type),
+        workers={},
+        publication=PublishSpec(),
+    )
+    if exchange_type == "fanout":
+        validate_pipeline(pipeline)
+    else:
+        with pytest.raises(PipelineValidationError, match=r"publication: .*route_func"):
+            validate_pipeline(pipeline)
 
 
 # --- validate_routing_plan (submission-time) ---

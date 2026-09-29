@@ -177,6 +177,9 @@ class PipelineSpec:
     :param final_data_type: The data_type that marks a document as fully
         processed (e.g., "embedded_document"). Used by the job store for
         completion detection.
+    :param publication: Optional routing for the publication worker's document
+        messages. Set ``route_func``; static ``route`` is not supported.
+        ``None`` preserves exchange-based default routing.
     """
 
     workers: dict[str, WorkerSpec]
@@ -185,3 +188,4 @@ class PipelineSpec:
     reference_collection: str
     completion_collection: str
     final_data_type: str
+    publication: PublishSpec | None = None

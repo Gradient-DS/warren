@@ -3,11 +3,38 @@ from dataclasses import asdict, dataclass, replace
 import pytest
 
 from warren.common import MessageConsumerInterface
-from warren.runtime.spec import WorkerFactoryContext, WorkerSpec
+from warren.pubsub.rabbitmq.config import RMQExchangeConfig
+from warren.pubsub.routing import MessageFieldRouter
+from warren.runtime.spec import (
+    PipelineSpec,
+    PublishSpec,
+    WorkerFactoryContext,
+    WorkerSpec,
+)
 
 
 async def factory(ctx: WorkerFactoryContext) -> MessageConsumerInterface:
     raise NotImplementedError
+
+
+def test_pipeline_publication_defaults_to_none() -> None:
+    pipeline = PipelineSpec({}, RMQExchangeConfig(name="x"), [], "c", "c", "done")
+    assert pipeline.publication is None
+
+
+def test_pipeline_accepts_publication_spec() -> None:
+    publication = PublishSpec(route_func=MessageFieldRouter())
+    pipeline = PipelineSpec(
+        workers={},
+        exchange=RMQExchangeConfig(name="x", type="topic"),
+        result_collections=[],
+        reference_collection="c",
+        completion_collection="c",
+        final_data_type="done",
+        publication=publication,
+    )
+    assert pipeline.publication is publication
+    assert replace(pipeline, final_data_type="output").publication is publication
 
 
 def test_binding_key_constructor_alias() -> None:

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-09-29
+
+> Configurable publication routing: `PipelineSpec.publication` (and `JobPublicationWorkerRunner(route_func=...)`) sets the router for the publication worker's document messages. Patch: additive and backward compatible.
+
 ### Added
 
 - Optional `route_func` on `JobPublicationWorkerRunner` configures routing for

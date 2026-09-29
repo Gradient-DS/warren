@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `erase_scope` removes a scope's MongoDB content, Redis keys and control rows,
+  returning deletion counts. Collection-by-collection removal is supported when
+  MongoDB denies database drops. See `warren/docs/scoping.md`.
+
 - Enabled scoping isolates content in per-scope MongoDB databases and Redis
   namespaces, with lazy validation at storage access. Control rows retain valid
   scopes in the control database; worker factories receive the database resolver.

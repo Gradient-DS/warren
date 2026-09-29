@@ -22,7 +22,7 @@ import re
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from warren.pubsub.common import RetryConfig
 from warren.pubsub.kafka.config import (
@@ -111,6 +111,16 @@ class RuntimeRetryConfig(BaseModel):
     policy: RetryConfig = RetryConfig()
 
 
+class StartupConfig(BaseModel):
+    """Connection attempts and bounded exponential backoff at startup."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    attempts: int = Field(default=1, ge=1)
+    initial_delay_seconds: float = Field(default=1.0, ge=0, allow_inf_nan=False)
+    max_delay_seconds: float = Field(default=30.0, ge=0, allow_inf_nan=False)
+
+
 class RuntimeConfig(BaseModel):
     """Top-level runtime configuration.
 
@@ -125,6 +135,7 @@ class RuntimeConfig(BaseModel):
     :param redis: Redis connection settings.
     :param retry: Retry worker toggle and collection name.
     :param health: Watchdog and readiness endpoint settings.
+    :param startup: Connection attempts and backoff settings.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -136,6 +147,7 @@ class RuntimeConfig(BaseModel):
     redis: RedisConfig = RedisConfig()
     retry: RuntimeRetryConfig = RuntimeRetryConfig()
     health: HealthConfig = HealthConfig()
+    startup: StartupConfig = StartupConfig()
 
     @classmethod
     def from_yaml(cls, path: Path) -> "RuntimeConfig":

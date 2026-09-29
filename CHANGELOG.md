@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Configurable startup connection attempts with bounded exponential backoff,
+  MongoDB and Redis pings, and cleanup between failed attempts. The default
+  remains one attempt; the memory backend needs no external connections.
 - MongoDB and Redis connection strings, credentials, TLS, pool limits and
   connection timeouts in runtime configuration. YAML string values expand
   `${VAR}` from the environment and fail clearly when a variable is unset.

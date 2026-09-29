@@ -160,6 +160,7 @@ def test_memory_backend_is_a_valid_choice() -> None:
         ("retry",),
         ("retry", "policy"),
         ("health",),
+        ("startup",),
     ],
 )
 @pytest.mark.parametrize("from_yaml", [False, True])
@@ -230,3 +231,19 @@ def test_yaml_rejects_unset_environment_variable(
     path = _write_yaml(tmp_path, "mongodb:\n  password: ${WARREN_TEST_MISSING}\n")
     with pytest.raises(ValueError, match=r"WARREN_TEST_MISSING.*not set"):
         RuntimeConfig.from_yaml(path)
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"attempts": 0},
+        {"attempts": -1},
+        {"initial_delay_seconds": -1},
+        {"max_delay_seconds": -1},
+        {"initial_delay_seconds": float("inf")},
+        {"max_delay_seconds": float("nan")},
+    ],
+)
+def test_invalid_startup_settings(settings: dict[str, int | float]) -> None:
+    with pytest.raises(ValidationError):
+        RuntimeConfig.model_validate({"startup": settings})

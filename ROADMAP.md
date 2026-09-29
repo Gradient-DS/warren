@@ -45,9 +45,6 @@ and so pipelines can be composed dynamically against a live worker fleet.
 
 ## Resilience
 
-- **Startup connection retry** — workers currently fail fast if the broker or
-  stores aren't reachable at startup; add retry with backoff so orchestrators
-  don't have to crash-loop them.
 - **Transient store-error mapping** — map transient storage errors to soft
   failures (bus-level retry) for primary consumers, extending the
   local-retry policy that observers already use.

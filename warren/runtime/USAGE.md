@@ -164,6 +164,23 @@ timeout is in milliseconds; Redis's is in seconds.
 Passwords and connection strings use `SecretStr`, so config representations hide
 their contents. Reference environment variables for these fields in YAML.
 
+Startup checks the pubsub connection, then pings MongoDB and Redis. Configure
+bounded exponential backoff when services may still be starting:
+
+```yaml
+startup:
+  attempts: 5
+  initial_delay_seconds: 1.0
+  max_delay_seconds: 30.0
+```
+
+Defaults are one attempt, a one-second initial delay and a 30-second delay cap.
+Each failed attempt closes its connections and logs a warning. The next attempt
+recreates all three connections; delays double up to the cap, including a cap on
+the first delay. Exhaustion raises the last error. The `memory` backend skips
+store connections and startup retries. Driver timeouts apply within each attempt;
+this policy bounds attempts and delays, not total startup time.
+
 **Three reuse modes:**
 
 1. **Defaults + YAML override** (most common) — start from defaults, override what you need in the YAML file. Fields you omit keep their defaults.

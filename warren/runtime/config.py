@@ -95,6 +95,14 @@ class RedisConfig(BaseModel):
     socket_timeout: float | None = None
 
 
+class CacheConfig(BaseModel):
+    """Expiry for cached payloads, in seconds."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cache_ttl_seconds: int = Field(default=3600, gt=0)
+
+
 class RuntimeRetryConfig(BaseModel):
     """Retry worker toggle plus the retry policy every consumer manager applies.
 
@@ -135,6 +143,8 @@ class RuntimeConfig(BaseModel):
     :param memory: In-process consumer settings.
     :param mongodb: MongoDB connection settings.
     :param redis: Redis connection settings.
+    :param documents: Fetched payload cache expiry.
+    :param results: Processing result cache expiry.
     :param retry: Retry worker toggle and collection name.
     :param health: Watchdog and readiness endpoint settings.
     :param startup: Connection attempts and backoff settings.
@@ -148,6 +158,8 @@ class RuntimeConfig(BaseModel):
     memory: MemoryConsumerConfig = MemoryConsumerConfig()
     mongodb: MongoDBConfig = MongoDBConfig()
     redis: RedisConfig = RedisConfig()
+    documents: CacheConfig = CacheConfig(cache_ttl_seconds=86400)
+    results: CacheConfig = CacheConfig()
     retry: RuntimeRetryConfig = RuntimeRetryConfig()
     health: HealthConfig = HealthConfig()
     startup: StartupConfig = StartupConfig()

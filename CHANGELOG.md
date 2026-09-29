@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Runtime `documents.cache_ttl_seconds` (86400) and `results.cache_ttl_seconds`
+  (3600) configure cache expiry and reject non-positive values. The fetched
+  payload TTL applies to both shared and job-scoped keys.
+
 - `ResultsStoreInterface.store_many` batches result upserts into one unordered
   MongoDB bulk write and one cache pipeline. Memory stores support the same API;
   repeated keys in a batch use the last item.
@@ -52,6 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an update too. Before, it silently kept both.
 
 ### Fixed
+
+- Binary result caches now expire after 3600 seconds by default. Retry caches
+  expire after the policy's maximum delay cap plus 60 seconds of scheduling slack.
+  Redis caches always use a positive TTL; an omitted or `None` default uses 3600
+  seconds. Framework cache writes pass their TTL explicitly.
 
 - `MemoryDocumentStore.insert` compared every new document against every
   stored one, so filling a collection took quadratic time: 2,770 results took

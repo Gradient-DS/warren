@@ -65,6 +65,7 @@ async def create_default_results_store(
         document_store=doc_store,
         cache=cache,
         result_type=collection_name,
+        cache_ttl_seconds=cache_ttl_seconds,
     )
     await store.setup()
 
@@ -79,7 +80,7 @@ async def create_binary_results_store(
     database_name: str = "document_processing",
     doc_id_field: str = "result_id",
     cache_base_key: str = "documents",
-    cache_ttl_seconds: int | None = None,
+    cache_ttl_seconds: int = 3600,
 ) -> BinaryResultsStore:
     """Create a ``BinaryResultsStore`` wired with MongoDB + RedisBinaryCache.
 
@@ -90,9 +91,9 @@ async def create_binary_results_store(
     :param doc_id_field: Field name for the per-result primary key.
     :param cache_base_key: Redis namespace. Defaults to ``"documents"``
         so the bytes land under the same cache namespace
-        ``CachedDocumentFetcher`` reads from — downstream workers that
+        ``CachedDocumentFetcher`` reads from; downstream workers that
         use ``GetDocumentFunc`` hit these bytes transparently.
-    :param cache_ttl_seconds: Default TTL. ``None`` = no expiry.
+    :param cache_ttl_seconds: Expiry for cached payloads in seconds (default 3600).
     """
     doc_store = MongoDBDocumentStore(
         client=mongo_client,
@@ -115,6 +116,7 @@ async def create_binary_results_store(
         document_store=doc_store,
         cache=cache,
         result_type=collection_name,
+        cache_ttl_seconds=cache_ttl_seconds,
     )
     await store.setup()
 

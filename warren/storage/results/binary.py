@@ -73,6 +73,7 @@ class BinaryResultsStore(Base):
     :param result_type: Type identifier; defaults to the document
         store's collection name.
     :param name: Optional logger name.
+    :param cache_ttl_seconds: Expiry for cached payloads.
     """
 
     def __init__(
@@ -81,8 +82,11 @@ class BinaryResultsStore(Base):
         cache: CacheInterface[bytes] | None = None,
         result_type: str | None = None,
         name: str | None = None,
+        *,
+        cache_ttl_seconds: int = 3600,
     ) -> None:
         super().__init__(pybase_logger_name=name)
+        self._cache_ttl_seconds = cache_ttl_seconds
         self._document_store: DocumentStoreInterface = document_store
         self._cache: CacheInterface[bytes] | None = cache
         self._result_type: str = (
@@ -200,7 +204,11 @@ class BinaryResultsStore(Base):
         if self._cache is None:
             return
         try:
-            await self._cache.set(build_document_cache_key(doc_id, job_id), payload)
+            await self._cache.set(
+                build_document_cache_key(doc_id, job_id),
+                payload,
+                ttl_seconds=self._cache_ttl_seconds,
+            )
         except Exception as exc:
             self._log.warning(
                 f"BinaryResultsStore cache set failed for doc_id={doc_id}: "

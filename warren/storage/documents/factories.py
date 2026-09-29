@@ -41,4 +41,6 @@ def create_cached_document_fetcher(
         base_key=cache_base_key,
         default_ttl_seconds=default_ttl_seconds,
     )
-    return CachedDocumentFetcher(cache=cache, resolvers=resolvers)
+    return CachedDocumentFetcher(
+        cache=cache, resolvers=resolvers, cache_ttl_seconds=default_ttl_seconds
+    )

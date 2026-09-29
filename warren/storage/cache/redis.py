@@ -31,7 +31,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
         client: Redis,
         *,
         base_key: str,
-        default_ttl_seconds: int | None = None,
+        default_ttl_seconds: int | None = 3600,
         key_separator: str = ":",
         name: str | None = None,
     ) -> None:
@@ -40,8 +40,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
 
         :param client: Async Redis client instance (injected, not created internally).
         :param base_key: Namespace prefix for all keys in this cache.
-        :param default_ttl_seconds: Default TTL for cached values. None means
-            no expiration.
+        :param default_ttl_seconds: Default expiry in seconds. None uses 3600.
         :param key_separator: Separator between base_key and key.
             Defaults to ":" (Redis convention). Colon is preferred over dot
             because dots commonly appear in data (filenames, versions).
@@ -51,7 +50,12 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
 
         self._client = client
         self._base_key = base_key
-        self._default_ttl_seconds = default_ttl_seconds
+        self._default_ttl_seconds = (
+            3600 if default_ttl_seconds is None else default_ttl_seconds
+        )
+        if self._default_ttl_seconds <= 0:
+            msg = "default_ttl_seconds must be positive"
+            raise ValueError(msg)
         self._key_separator = key_separator
 
     async def get(self, key: str) -> T | None:
@@ -246,11 +250,13 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
 
         return full_key
 
-    def _get_ttl(self, ttl_seconds: int | None) -> int | None:
-        """Return TTL to use: explicit value or default."""
-        if ttl_seconds is not None:
-            return ttl_seconds
-        return self._default_ttl_seconds
+    def _get_ttl(self, ttl_seconds: int | None) -> int:
+        """Return a positive TTL, using the default when omitted."""
+        ttl = self._default_ttl_seconds if ttl_seconds is None else ttl_seconds
+        if ttl <= 0:
+            msg = "ttl_seconds must be positive"
+            raise ValueError(msg)
+        return ttl
 
     async def _scan_keys(self, pattern: str) -> list[str]:
         """

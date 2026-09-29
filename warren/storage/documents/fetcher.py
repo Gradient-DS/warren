@@ -57,6 +57,7 @@ class CachedDocumentFetcher(Base):
     :param cache: Binary cache instance for storing resolved bytes.
     :param resolvers: Mapping of location_type to resolver function.
     :param name: Optional name for logging.
+    :param cache_ttl_seconds: Expiry for both shared and job-scoped keys.
     """
 
     def __init__(
@@ -65,9 +66,11 @@ class CachedDocumentFetcher(Base):
         cache: CacheInterface[bytes],
         resolvers: Mapping[str, ResolveDocumentFunc],
         name: str | None = None,
+        cache_ttl_seconds: int = 86400,
     ) -> None:
         super().__init__(pybase_logger_name=name)
         self._cache = cache
+        self._cache_ttl_seconds = cache_ttl_seconds
         self._resolvers = resolvers
 
     async def __call__(
@@ -97,6 +100,7 @@ class CachedDocumentFetcher(Base):
             self._cache,
             cache_key,
             factory=lambda: self._resolve(doc_id, document_location),
+            ttl_seconds=self._cache_ttl_seconds,
         )
 
     async def _resolve(

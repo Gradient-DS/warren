@@ -35,8 +35,7 @@ class CachedDocumentStore(Base):
 
     :param store: Persistent document store.
     :param cache: Cache for fast reads.
-    :param cache_ttl_seconds: TTL for cached entries. None uses
-        cache default.
+    :param cache_ttl_seconds: Expiry for cached entries in seconds.
     """
 
     def __init__(
@@ -44,7 +43,7 @@ class CachedDocumentStore(Base):
         store: DocumentStoreInterface,
         cache: CacheInterface[dict],
         *,
-        cache_ttl_seconds: int | None = None,
+        cache_ttl_seconds: int = 3600,
         name: str | None = None,
     ) -> None:
         super().__init__(pybase_logger_name=name)

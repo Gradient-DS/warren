@@ -194,11 +194,16 @@ class RetryWorkerRunner(WorkerRunnerBase):
         )
         await mongo_store.setup()
 
+        # Allow scheduling slack beyond the longest retry delay.
+        cache_ttl_seconds = max(0, retry_cfg.policy.max_delay_cap) + 60
         cache = RedisDictCache(
             client=self._infra.redis_client,
             base_key=f"retry:{retry_cfg.collection_name}",
+            default_ttl_seconds=cache_ttl_seconds,
         )
-        return CachedDocumentStore(mongo_store, cache)
+        return CachedDocumentStore(
+            mongo_store, cache, cache_ttl_seconds=cache_ttl_seconds
+        )
 
     def _create_default_publisher(self) -> PublisherInterface:
         # Republish to the DATA exchange, replaying the original routing key

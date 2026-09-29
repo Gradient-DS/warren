@@ -50,6 +50,11 @@ class MongoClient:
         self.single_calls += 1
         return self._replace(query, row)[0]
 
+    async def replace_one(self, query: dict, row: dict, *, upsert: bool) -> None:
+        assert upsert
+        self.single_calls += 1
+        self._replace(query, row)
+
     async def bulk_write(
         self, operations: list[ReplaceOne], *, ordered: bool
     ) -> BulkWriteResult:

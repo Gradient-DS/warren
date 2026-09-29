@@ -157,6 +157,8 @@ def test_memory_backend_is_a_valid_choice() -> None:
         ("kafka", "consumer"),
         ("mongodb",),
         ("redis",),
+        ("documents",),
+        ("results",),
         ("retry",),
         ("retry", "policy"),
         ("health",),

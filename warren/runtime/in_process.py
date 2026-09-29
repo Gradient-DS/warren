@@ -77,6 +77,7 @@ async def create_in_process_runners(
             CachedDocumentFetcher(
                 cache=stores.cache("documents"),
                 resolvers=create_default_resolvers(),
+                cache_ttl_seconds=config.documents.cache_ttl_seconds,
             )
             if spec.needs_document_fetcher
             else None

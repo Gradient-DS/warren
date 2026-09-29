@@ -43,6 +43,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         cache: CacheInterface[dict] | None = None,
         result_type: str | None = None,
         name: str | None = None,
+        *,
+        cache_ttl_seconds: int = 3600,
     ) -> None:
         """
         Initialize the results store.
@@ -53,8 +55,10 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         :param result_type: Type identifier for cache keys. If None, uses
             document_store.get_document_type().
         :param name: Optional name for logging purposes.
+        :param cache_ttl_seconds: Expiry for cached results.
         """
         super().__init__(pybase_logger_name=name)
+        self._cache_ttl_seconds = cache_ttl_seconds
 
         self._document_store = document_store
         self._cache = cache
@@ -140,7 +144,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
                             doc["doc_id"], doc["part_idx"], doc["job_id"]
                         ): doc
                         for doc in docs
-                    }
+                    },
+                    ttl_seconds=self._cache_ttl_seconds,
                 )
             except Exception as e:
                 self._log.warning(
@@ -254,7 +259,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
             return
         try:
             cache_key = self._build_cache_key(doc_id, part_idx, job_id)
-            await self._cache.set(cache_key, doc)
+            await self._cache.set(cache_key, doc, ttl_seconds=self._cache_ttl_seconds)
         except Exception as e:
             self._log.warning(
                 f"Caching of document failed:\n"

@@ -105,6 +105,11 @@ rabbitmq:
     redelivery_delay: 5     # seconds before a counted redelivery is replayed
     queue_arguments: null   # e.g. {x-queue-type: quorum}; forwarded verbatim
 
+documents:
+  cache_ttl_seconds: 86400
+results:
+  cache_ttl_seconds: 3600
+
 retry:
   enabled: true
   collection_name: retries

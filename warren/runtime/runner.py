@@ -366,6 +366,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
                 mongo_client=self._infra.mongo_client,
                 redis_client=self._infra.redis_client,
                 database_name=self._config.mongodb.database,
+                cache_ttl_seconds=self._config.results.cache_ttl_seconds,
             )
 
         return stores
@@ -389,6 +390,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         return create_cached_document_fetcher(
             redis_client=self._infra.redis_client,
             resolvers=resolvers,
+            default_ttl_seconds=self._config.documents.cache_ttl_seconds,
         )
 
     async def _create_worker(

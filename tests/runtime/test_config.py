@@ -196,3 +196,37 @@ def test_unknown_config_keys_are_rejected(
 )
 def test_repository_yaml_configs(path: Path) -> None:
     RuntimeConfig.from_yaml(path)
+
+
+def test_yaml_expands_environment_in_string_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("WARREN_TEST_HOST", "broker.example")
+    monkeypatch.setenv("WARREN_TEST_PASSWORD", "value: # ${NOT_EXPANDED}")
+    path = _write_yaml(
+        tmp_path,
+        """
+kafka:
+  connection:
+    bootstrap_servers: ["${WARREN_TEST_HOST}:9092"]
+mongodb:
+  password: ${WARREN_TEST_PASSWORD}
+redis:
+  url: redis://${WARREN_TEST_HOST}:6379/2
+  db: 2
+""",
+    )
+    config = RuntimeConfig.from_yaml(path)
+    assert config.kafka.connection.bootstrap_servers == ["broker.example:9092"]
+    assert config.mongodb.password.get_secret_value() == "value: # ${NOT_EXPANDED}"
+    assert config.redis.url.get_secret_value() == "redis://broker.example:6379/2"
+    assert config.redis.db == 2
+
+
+def test_yaml_rejects_unset_environment_variable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("WARREN_TEST_MISSING", raising=False)
+    path = _write_yaml(tmp_path, "mongodb:\n  password: ${WARREN_TEST_MISSING}\n")
+    with pytest.raises(ValueError, match=r"WARREN_TEST_MISSING.*not set"):
+        RuntimeConfig.from_yaml(path)

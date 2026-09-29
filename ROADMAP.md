@@ -64,8 +64,6 @@ and so pipelines can be composed dynamically against a live worker fleet.
 
 ## Developer experience and API polish
 
-- Connection-string configuration (`mongodb://`, `redis://`) alongside
-  host/port fields.
 - Batch storage on the results-store interface (`batch_store`).
 - Job lookup by metadata as a first-class `JobStore` query instead of direct
   collection access.

@@ -96,7 +96,7 @@ rabbitmq:
     host: localhost
     port: 5672
     login: guest
-    password: guest
+    password: ${RABBITMQ_PASSWORD}
     heartbeat: 600          # seconds; unset keeps aiormq's 60
   consumer:
     prefetch_count: 4
@@ -134,7 +134,35 @@ on `health.port`. When the consumer is lost while the connection is alive for
 longer than `health.consumer_lost_grace_s`, the worker exits non-zero so the
 orchestrator restarts it; a blocked or reconnecting connection is waited out.
 
-Note: MongoDB and Redis currently only accept `host`/`port` pairs. Connection string support (`mongodb://...`, `redis://...`) is planned but not yet implemented.
+Keep secrets in environment variables. `from_yaml` expands `${VAR}` in string
+values, including lists, after parsing YAML. An unset variable raises an error
+naming it. Expansion is not recursive; values are not parsed as YAML again.
+
+```yaml
+mongodb:
+  uri: ${MONGODB_URI}
+  database: my_pipeline
+  max_pool_size: 20
+  server_selection_timeout_ms: 5000
+redis:
+  url: ${REDIS_URL}
+  max_connections: 20
+  socket_timeout: 5.0
+```
+
+`mongodb.uri` and `redis.url` take precedence over their `host`/`port` fields.
+MongoDB also accepts `username`, `password`, `auth_source`, and `tls` (default
+`false`). Explicit options override URI options; omitted options preserve driver
+or URI defaults. `database` still selects the runtime's database.
+
+Redis also accepts `username`, `password`, `db` (default `0`), and `ssl` (default
+`false`). Use `rediss://` for TLS with a URL. URL options take precedence over
+separate fields, following redis-py; `ssl: true` also enables TLS for `redis://`.
+Pool limits and timeouts default to `null`, preserving driver defaults. MongoDB's
+timeout is in milliseconds; Redis's is in seconds.
+
+Passwords and connection strings use `SecretStr`, so config representations hide
+their contents. Reference environment variables for these fields in YAML.
 
 **Three reuse modes:**
 

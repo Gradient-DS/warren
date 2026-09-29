@@ -17,13 +17,49 @@ from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
 from pymongo import AsyncMongoClient
 from redis.asyncio import Redis
+from redis.asyncio.connection import SSLConnection
 
 from warren.exceptions import WarrenError
 from warren.runtime import backends
-from warren.runtime.config import RuntimeConfig
+from warren.runtime.config import MongoDBConfig, RedisConfig, RuntimeConfig
 
 
 module_logger: logging.Logger = get_logger(__name__)
+
+
+def _create_mongo_client(config: MongoDBConfig) -> AsyncMongoClient:
+    kwargs: dict[str, Any] = {}
+    for field, option in (
+        ("username", "username"),
+        ("auth_source", "authSource"),
+        ("max_pool_size", "maxPoolSize"),
+        ("server_selection_timeout_ms", "serverSelectionTimeoutMS"),
+    ):
+        value = getattr(config, field)
+        if value is not None:
+            kwargs[option] = value
+    if config.password is not None:
+        kwargs["password"] = config.password.get_secret_value()
+    if config.uri is None or "tls" in config.model_fields_set:
+        kwargs["tls"] = config.tls
+    if config.uri is not None:
+        return AsyncMongoClient(config.uri.get_secret_value(), **kwargs)
+    return AsyncMongoClient(host=config.host, port=config.port, **kwargs)
+
+
+def _create_redis_client(config: RedisConfig) -> Redis:
+    kwargs: dict[str, Any] = {"db": config.db}
+    for field in ("username", "max_connections", "socket_timeout"):
+        value = getattr(config, field)
+        if value is not None:
+            kwargs[field] = value
+    if config.password is not None:
+        kwargs["password"] = config.password.get_secret_value()
+    if config.url is not None:
+        if config.ssl:
+            kwargs["connection_class"] = SSLConnection
+        return Redis.from_url(config.url.get_secret_value(), **kwargs)
+    return Redis(host=config.host, port=config.port, ssl=config.ssl, **kwargs)
 
 
 class RuntimeInfra(NamedTuple):
@@ -57,14 +93,8 @@ async def create_runtime_infrastructure(config: RuntimeConfig) -> RuntimeInfra:
             "is persisted. For local runs and tests only."
         )
     else:
-        mongo_client = AsyncMongoClient(
-            host=config.mongodb.host,
-            port=config.mongodb.port,
-        )
-        redis_client = Redis(
-            host=config.redis.host,
-            port=config.redis.port,
-        )
+        mongo_client = _create_mongo_client(config.mongodb)
+        redis_client = _create_redis_client(config.redis)
 
     pubsub_connection_manager = backends.create_connection_manager(config)
     await pubsub_connection_manager.setup()

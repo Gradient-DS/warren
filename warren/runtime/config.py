@@ -15,12 +15,14 @@ backend factory in :mod:`warren.runtime.backends`.
 Load from YAML via ``RuntimeConfig.from_yaml(path)``.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
+import os
+import re
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, SecretStr
 
 from warren.pubsub.common import RetryConfig
 from warren.pubsub.kafka.config import (
@@ -65,15 +67,31 @@ class RuntimeKafkaConfig(BaseModel):
 
 class MongoDBConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    uri: SecretStr | None = None
     host: str = "localhost"
     port: int = 27017
     database: str = "distributed_processing"
+    username: str | None = None
+    password: SecretStr | None = None
+    auth_source: str | None = None
+    tls: bool = False
+    max_pool_size: int | None = None
+    server_selection_timeout_ms: int | None = None
 
 
 class RedisConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    url: SecretStr | None = None
     host: str = "localhost"
     port: int = 6379
+    username: str | None = None
+    password: SecretStr | None = None
+    db: int = 0
+    ssl: bool = False
+    max_connections: int | None = None
+    socket_timeout: float | None = None
 
 
 class RuntimeRetryConfig(BaseModel):
@@ -129,4 +147,24 @@ class RuntimeConfig(BaseModel):
         """
         with Path(path).open() as f:
             data = yaml.safe_load(f)
-        return cls.model_validate(data)
+        return cls.model_validate(_expand_env(data))
+
+
+def _expand_env(value: Any) -> Any:
+    """Expand environment references in YAML string values."""
+    if isinstance(value, str):
+
+        def replace(match: re.Match[str]) -> str:
+            name = match.group(1)
+            try:
+                return os.environ[name]
+            except KeyError:
+                msg = f"Environment variable {name!r} is not set"
+                raise ValueError(msg) from None
+
+        return re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", replace, value)
+    if isinstance(value, dict):
+        return {key: _expand_env(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_expand_env(item) for item in value]
+    return value

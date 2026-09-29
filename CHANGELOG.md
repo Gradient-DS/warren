@@ -10,7 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Optional `route_func` on `JobPublicationWorkerRunner` configures routing for
-  published documents, with the existing exchange-based routing as the default.
+  published documents. The standard publication worker launcher reads it from
+  `PipelineSpec.publication=PublishSpec(route_func=...)`; omitting the spec keeps
+  the existing exchange-based routing.
 
 ## [0.6.1] — 2026-09-29
 

@@ -39,6 +39,7 @@ PipelineSpec(
 
 - `exchange` is the single `RMQExchangeConfig` (`type` is `fanout`, `topic`, or `direct`) all workers consume from and publish to. It's pipeline topology, so it lives here in the spec — `config.yaml` holds only per-environment infra (hosts, credentials, prefetch). The support workers (job-status, retry, publication) observe the pipeline through it — directly for `fanout`/`topic`, or through a fanout *observer exchange* the framework derives automatically for `direct`, so all three types are supported with no extra wiring. Multi-exchange deployments are deferred — see [`warren/docs/routing.md`](../docs/routing.md).
 - `workers` maps a worker type name (string) to its `WorkerSpec`. The type name determines the RabbitMQ queue name (`{exchange}.{worker_type}`).
+- `publication` is an optional `PublishSpec` for the publication worker's document routing. The publication launcher forwards its `route_func` to the runner. `None` keeps the exchange-based defaults; static `route` is not supported here.
 - `final_data_type` is the message type that signals a document is fully processed. The `JobStatusWorker` uses this to detect completion and mark jobs as done in the job store.
 - `result_collections`, `reference_collection`, `completion_collection` — currently used only by the E2E test's `check_completion.py` polling script (count-comparison heuristic). Not used by any framework component. These should be moved out of `PipelineSpec` into E2E-specific config in a future cleanup (see TODOs).
 
@@ -387,29 +388,29 @@ python -m runtime_scripts.start_job_publication_worker \
 
 The factory function must match the `DocumentsPublisherFactoryFunc` protocol — it receives `(publisher, infra, config, worker_name)` and returns a `JobDocumentsPublisher`. See `warren/jobs/publishing/job_publication_worker_runner.py` for details.
 
-For custom publication routing, construct `JobPublicationWorkerRunner` in your
-application's launcher and pass `route_func`, using the same callable type as
-`PublishSpec.route_func`:
+For custom publication routing through the standard launcher, set `publication`
+on your `PipelineSpec`, using the same `PublishSpec` as processing workers:
 
 ```python
-from warren.jobs.publishing.job_publication_worker_runner import JobPublicationWorkerRunner
-from warren.pubsub.routing import LANE_FIELD, MessageFieldRouter, observer_exchange
+from warren.pubsub.routing import LANE_FIELD, MessageFieldRouter
+from warren.runtime import PipelineSpec, PublishSpec
 
-runner = JobPublicationWorkerRunner(
-    config,
-    "publication-worker",
-    exchange=observer_exchange(pipeline.exchange),
-    publish_exchange=pipeline.exchange,
-    documents_publisher_factory=create_documents_publisher,
-    route_func=MessageFieldRouter(prefix_field=LANE_FIELD, default_prefix="bulk"),
+PIPELINE = PipelineSpec(
+    # ... existing exchange, workers, and completion settings ...
+    publication=PublishSpec(
+        route_func=MessageFieldRouter(prefix_field=LANE_FIELD, default_prefix="bulk"),
+    ),
 )
 ```
 
 The router receives each document message built by the documents publisher.
-Omitting `route_func` (or passing `None`) keeps the default: no routing key on
-fanout, or routing by `data_type` on topic/direct. This option affects document
+Omitting `publication` (or setting it to `None`) keeps the default: no routing key
+on fanout, or routing by `data_type` on topic/direct. An explicit publication spec
+requires `route_func` on topic/direct; static `route` is not supported.
+Applications constructing `JobPublicationWorkerRunner` directly can pass
+`route_func` to its constructor. This option affects document
 publication only; the worker still consumes job submissions on the observer
-exchange. The standard CLI launcher uses the default routing.
+exchange.
 
 ### Support workers
 

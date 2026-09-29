@@ -73,6 +73,17 @@ def validate_pipeline(
                 f"requires a publish route or route_func"
             )
 
+    publication = pipeline.publication
+    if publication is not None:
+        if publication.route is not None:
+            errors.append(
+                "publication: static route is not supported; use route_func instead"
+            )
+        elif not is_fanout and publication.route_func is None:
+            errors.append(
+                f"publication: {pipeline.exchange.type} exchange requires a route_func"
+            )
+
     if errors:
         bullets = "\n  - ".join(errors)
         msg = f"Invalid pipeline ({len(errors)} problem(s)):\n  - {bullets}"

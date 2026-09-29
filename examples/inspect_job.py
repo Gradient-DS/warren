@@ -51,9 +51,16 @@ def _render(status: dict, stages: list[dict]) -> str:
 
 async def _watch(config: RuntimeConfig, job_name: str, *, once: bool) -> None:
     client = AsyncMongoClient(host=config.mongodb.host, port=config.mongodb.port)
-    job_store = MongoDBJobStore(client=client, database_name=config.mongodb.database)
+    job_store = MongoDBJobStore(
+        client=client,
+        database_name=config.mongodb.database,
+        job_records_ttl_seconds=config.retention.job_records_ttl_seconds,
+        job_records_max_age_seconds=config.retention.job_records_max_age_seconds,
+    )
     results_store = MongoDBJobResultsStore(
-        client=client, database_name=config.mongodb.database
+        client=client,
+        database_name=config.mongodb.database,
+        job_records_ttl_seconds=config.retention.job_records_ttl_seconds,
     )
     try:
         job_id = await _find_job_id(client, config.mongodb.database, job_name)

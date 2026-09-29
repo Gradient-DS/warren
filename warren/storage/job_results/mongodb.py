@@ -13,6 +13,7 @@ from warren.storage.job_results.interface import (
 from warren.storage.mongo_errors import (
     classify_transient_methods,
 )
+from warren.storage.mongo_retention import configure_ttl_index
 
 
 if TYPE_CHECKING:
@@ -50,6 +51,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
         *,
         database_name: str,
         collection_name: str = "job_results",
+        job_records_ttl_seconds: int | None = None,
         name: str | None = None,
     ) -> None:
         super().__init__(pybase_logger_name=name)
@@ -57,6 +59,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
         self._database_name = database_name
         self._collection_name = collection_name
         self._collection: AsyncCollection = client[database_name][collection_name]
+        self._job_records_ttl_seconds = job_records_ttl_seconds
 
     async def setup(self) -> None:
         """Create indexes for the job_results collection."""
@@ -83,6 +86,10 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
                 ("job_id", ASCENDING),
                 ("success", ASCENDING),
             ],
+        )
+
+        await configure_ttl_index(
+            self._collection, "time", self._job_records_ttl_seconds
         )
 
     # --- Recording results ---

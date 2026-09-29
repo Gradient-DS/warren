@@ -47,7 +47,10 @@ async def _publish(
 ) -> str:
     mongo_client = AsyncMongoClient(host=config.mongodb.host, port=config.mongodb.port)
     job_store = MongoDBJobStore(
-        client=mongo_client, database_name=config.mongodb.database
+        client=mongo_client,
+        database_name=config.mongodb.database,
+        job_records_ttl_seconds=config.retention.job_records_ttl_seconds,
+        job_records_max_age_seconds=config.retention.job_records_max_age_seconds,
     )
     await job_store.setup()
     job_id = await job_store.create_job(

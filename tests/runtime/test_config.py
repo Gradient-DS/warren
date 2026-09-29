@@ -159,6 +159,7 @@ def test_memory_backend_is_a_valid_choice() -> None:
         ("redis",),
         ("documents",),
         ("results",),
+        ("retention",),
         ("retry",),
         ("retry", "policy"),
         ("health",),
@@ -249,3 +250,34 @@ def test_yaml_rejects_unset_environment_variable(
 def test_invalid_startup_settings(settings: dict[str, int | float]) -> None:
     with pytest.raises(ValidationError):
         RuntimeConfig.model_validate({"startup": settings})
+
+
+def test_retention_defaults_to_disabled() -> None:
+    config = RuntimeConfig()
+    assert config.retention.job_records_ttl_seconds is None
+    assert config.retention.job_records_max_age_seconds is None
+
+
+@pytest.mark.parametrize(
+    ("ttl", "max_age"),
+    [(None, None), (None, 60), (0, 0), (60, None), (60, 60), (60, 90)],
+)
+def test_retention_from_yaml(
+    tmp_path: Path, ttl: int | None, max_age: int | None
+) -> None:
+    settings = {"job_records_ttl_seconds": ttl, "job_records_max_age_seconds": max_age}
+    path = _write_yaml(tmp_path, yaml.safe_dump({"retention": settings}))
+    assert RuntimeConfig.from_yaml(path).retention.model_dump() == settings
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"job_records_ttl_seconds": -1},
+        {"job_records_max_age_seconds": -1},
+        {"job_records_ttl_seconds": 60, "job_records_max_age_seconds": 59},
+    ],
+)
+def test_invalid_retention_settings(settings: dict[str, int]) -> None:
+    with pytest.raises(ValidationError):
+        RuntimeConfig.model_validate({"retention": settings})

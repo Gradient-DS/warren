@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from basics.base import Base
 from pymongo import ASCENDING, AsyncMongoClient
 
+from warren.storage.mongo_retention import configure_ttl_index
 from warren.storage.publishing_tracker.interface import (
     PublishingTrackerInterface,
 )
@@ -34,6 +35,7 @@ class MongoDBPublishingTracker(Base, PublishingTrackerInterface):
         *,
         database_name: str,
         collection_name: str = "job_publishing_results",
+        job_records_ttl_seconds: int | None = None,
         name: str | None = None,
     ) -> None:
         super().__init__(pybase_logger_name=name)
@@ -41,6 +43,7 @@ class MongoDBPublishingTracker(Base, PublishingTrackerInterface):
         self._database_name = database_name
         self._collection_name = collection_name
         self._collection: AsyncCollection = client[database_name][collection_name]
+        self._job_records_ttl_seconds = job_records_ttl_seconds
 
     async def setup(self) -> None:
         """Create indexes for the job_publishing_results collection."""
@@ -59,6 +62,10 @@ class MongoDBPublishingTracker(Base, PublishingTrackerInterface):
                 ("job_id", ASCENDING),
                 ("success", ASCENDING),
             ],
+        )
+
+        await configure_ttl_index(
+            self._collection, "time", self._job_records_ttl_seconds
         )
 
     async def record_success(

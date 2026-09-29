@@ -15,14 +15,14 @@ backend factory in :mod:`warren.runtime.backends`.
 Load from YAML via ``RuntimeConfig.from_yaml(path)``.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 import os
 import re
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 from warren.pubsub.common import RetryConfig
 from warren.pubsub.kafka.config import (
@@ -103,6 +103,24 @@ class CacheConfig(BaseModel):
     cache_ttl_seconds: int = Field(default=3600, gt=0)
 
 
+class RetentionConfig(BaseModel):
+    """MongoDB job record expiry, in seconds."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    job_records_ttl_seconds: int | None = Field(default=None, ge=0)
+    job_records_max_age_seconds: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_max_age(self) -> Self:
+        ttl = self.job_records_ttl_seconds
+        max_age = self.job_records_max_age_seconds
+        if ttl is not None and max_age is not None and max_age < ttl:
+            msg = "job_records_max_age_seconds must be >= job_records_ttl_seconds"
+            raise ValueError(msg)
+        return self
+
+
 class RuntimeRetryConfig(BaseModel):
     """Retry worker toggle plus the retry policy every consumer manager applies.
 
@@ -145,6 +163,7 @@ class RuntimeConfig(BaseModel):
     :param redis: Redis connection settings.
     :param documents: Fetched payload cache expiry.
     :param results: Processing result cache expiry.
+    :param retention: MongoDB job record expiry.
     :param retry: Retry worker toggle and collection name.
     :param health: Watchdog and readiness endpoint settings.
     :param startup: Connection attempts and backoff settings.
@@ -160,6 +179,7 @@ class RuntimeConfig(BaseModel):
     redis: RedisConfig = RedisConfig()
     documents: CacheConfig = CacheConfig(cache_ttl_seconds=86400)
     results: CacheConfig = CacheConfig()
+    retention: RetentionConfig = RetentionConfig()
     retry: RuntimeRetryConfig = RuntimeRetryConfig()
     health: HealthConfig = HealthConfig()
     startup: StartupConfig = StartupConfig()

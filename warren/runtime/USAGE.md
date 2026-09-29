@@ -133,6 +133,11 @@ redis:
 
 All fields have sensible defaults. Load via `RuntimeConfig.from_yaml("config.yaml")`.
 
+Optional `retention.job_records_ttl_seconds` and
+`retention.job_records_max_age_seconds` control MongoDB job record expiry.
+Both default to `null`. See [Job stores](../docs/job_stores.md) for index fields,
+setup behavior and custom factory wiring.
+
 The worker serves `GET /ready` (200 while it holds a live consumer on an
 unblocked connection, else 503) and `GET /live` (200 while the process runs)
 on `health.port`. When the consumer is lost while the connection is alive for

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Optional runtime job-record retention creates MongoDB TTL indexes for job
+  completion, result updates and publishing outcomes, including failures without
+  an item ID. A maximum-age backstop bounds unfinished jobs. Store setup replaces
+  conflicting indexes and removes TTL indexes when retention is disabled.
+
 - Runtime `documents.cache_ttl_seconds` (86400) and `results.cache_ttl_seconds`
   (3600) configure cache expiry and reject non-positive values. The fetched
   payload TTL applies to both shared and job-scoped keys.

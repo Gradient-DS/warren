@@ -17,6 +17,7 @@ from warren.storage.jobs.interface import (
 from warren.storage.mongo_errors import (
     classify_transient_methods,
 )
+from warren.storage.mongo_retention import configure_ttl_index
 
 
 if TYPE_CHECKING:
@@ -40,6 +41,8 @@ class MongoDBJobStore(Base, JobStoreInterface):
         *,
         database_name: str,
         collection_name: str = "jobs",
+        job_records_ttl_seconds: int | None = None,
+        job_records_max_age_seconds: int | None = None,
         name: str | None = None,
     ) -> None:
         super().__init__(pybase_logger_name=name)
@@ -47,10 +50,18 @@ class MongoDBJobStore(Base, JobStoreInterface):
         self._database_name = database_name
         self._collection_name = collection_name
         self._collection: AsyncCollection = client[database_name][collection_name]
+        self._job_records_ttl_seconds = job_records_ttl_seconds
+        self._job_records_max_age_seconds = job_records_max_age_seconds
 
     async def setup(self) -> None:
-        """Create unique index on job_id."""
+        """Create job identity and retention indexes."""
         await self._collection.create_index("job_id", unique=True)
+        await configure_ttl_index(
+            self._collection, "status.completed_at", self._job_records_ttl_seconds
+        )
+        await configure_ttl_index(
+            self._collection, "created_at", self._job_records_max_age_seconds
+        )
 
     async def create_job(
         self,

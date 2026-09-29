@@ -56,7 +56,8 @@ class HealthServer:
     """Minimal HTTP readiness endpoint.
 
     ``GET /ready`` → 200 while the last sample says ready, else 503;
-    ``GET /live`` → 200 while the process runs; anything else → 404. The
+    ``GET /live`` → 503 if a handler exceeds twice its timeout, else 200.
+    Anything else → 404. The
     body is the sample as JSON.
 
     :param get_health: Returns the last observed health, or None before the
@@ -134,13 +135,18 @@ class HealthServer:
     def _respond(self, path: str) -> tuple[str, bytes]:
         health = self._get_health()
         payload: dict[str, Any] = (
-            {**dataclasses.asdict(health), "state": health.state}
+            {
+                **dataclasses.asdict(health),
+                "state": health.state,
+                "in_flight_handlers": health.in_flight_handlers,
+            }
             if health is not None
             else {"detail": "no health sample yet"}
         )
         body = json.dumps(payload).encode()
         if path == "/live":
-            return "200 OK", body
+            live = health is None or health.live
+            return ("200 OK" if live else "503 Service Unavailable"), body
         if path == "/ready":
             ready = health is not None and health.ready
             return ("200 OK" if ready else "503 Service Unavailable"), body

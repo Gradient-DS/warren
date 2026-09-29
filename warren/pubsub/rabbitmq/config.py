@@ -104,6 +104,9 @@ class RMQConsumerConfig(BaseModel):
 
     # TODO: prefetch count is influenced by the worker's concurrency level. How to handle this?
     prefetch_count: int = 1
+    handler_timeout_seconds: float | None = Field(
+        default=None, gt=0, allow_inf_nan=False
+    )
     on_shutdown_timeout: float = 30.0
     max_deliveries: int | None = Field(default=None, ge=1)
     redelivery_delay: int = Field(default=5, ge=1)

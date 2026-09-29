@@ -7,6 +7,7 @@ For shared contracts between pubsub and workers, see distributed/common.py.
 
 from typing import Literal, Protocol
 
+import time
 from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict
@@ -56,6 +57,19 @@ class ConsumerHealth:
     channel_open: bool
     consumer_registered: bool | None
     detail: str = ""
+    handler_timeout_seconds: float | None = None
+    handler_started_at: tuple[float, ...] = ()
+
+    @property
+    def live(self) -> bool:
+        return self.handler_timeout_seconds is None or all(
+            time.monotonic() - started <= 2 * self.handler_timeout_seconds
+            for started in self.handler_started_at
+        )
+
+    @property
+    def in_flight_handlers(self) -> int:
+        return len(self.handler_started_at)
 
     @property
     def ready(self) -> bool:

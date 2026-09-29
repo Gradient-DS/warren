@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 import json
 import random
 
@@ -65,6 +64,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
         retry_config: RetryConfig | None = None,
         extract_identity_func: ExtractMessageIdentityFunc | None = None,
         publish_hard_failures: bool = True,
+        handler_timeout_seconds: float | None = None,
         on_shutdown_timeout: float = _DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
     ) -> None:
         # Same three publishing paths as the other backends (see
@@ -75,7 +75,11 @@ class MemoryConsumerManager(ConsumerManagerBase):
             for p in (data_publisher, control_publisher, observer_publisher)
             if p is not None
         ]
-        super().__init__(consumer, publishers=all_publishers)
+        super().__init__(
+            consumer,
+            publishers=all_publishers,
+            handler_timeout_seconds=handler_timeout_seconds,
+        )
 
         self._data_publisher = data_publisher
         self._control_publisher = control_publisher
@@ -166,6 +170,8 @@ class MemoryConsumerManager(ConsumerManagerBase):
         bound = self._queue is not None
         consuming = self._consume_task is not None and not self._consume_task.done()
         return ConsumerHealth(
+            handler_timeout_seconds=self._handler_timeout_seconds,
+            handler_started_at=tuple(self._handler_started_at.values()),
             connected=bound,
             blocked=False,
             channel_open=bound,
@@ -228,17 +234,8 @@ class MemoryConsumerManager(ConsumerManagerBase):
             )
             return  # reject(requeue=False)
 
-        # iscoroutinefunction checks plain async functions; callable objects
-        # with an async __call__ need the second check.
         try:
-            is_async = inspect.iscoroutinefunction(
-                self._consumer
-            ) or inspect.iscoroutinefunction(getattr(self._consumer, "__call__", None))
-            if is_async:
-                result = await self._consumer(body)
-            else:
-                loop = asyncio.get_running_loop()
-                result = await loop.run_in_executor(None, self._consumer, body)
+            result = await self._call_handler(body)
 
             if result is not None:
                 if self._data_publisher is not None:

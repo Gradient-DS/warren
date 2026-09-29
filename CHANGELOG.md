@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Optional per-handler timeouts on RabbitMQ, Kafka and memory consumers use
+  the existing retry policy. Liveness fails when a handler runs longer than
+  twice its timeout, including handlers that ignore cancellation.
+
 - Configurable startup connection attempts with bounded exponential backoff,
   MongoDB and Redis pings, and cleanup between failed attempts. The default
   remains one attempt; the memory backend needs no external connections.

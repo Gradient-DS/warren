@@ -1,7 +1,6 @@
 from typing import Any, Literal
 
 import asyncio
-import inspect
 import json
 import random
 from collections.abc import Awaitable
@@ -109,6 +108,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         super().__init__(
             consumer,
             publishers=all_publishers,
+            handler_timeout_seconds=config.consumer.handler_timeout_seconds,
         )
 
         self._data_publisher = data_publisher
@@ -267,6 +267,8 @@ class RMQConsumerManager(ConsumerManagerBase):
         )
         if not connected:
             return ConsumerHealth(
+                handler_timeout_seconds=self._handler_timeout_seconds,
+                handler_started_at=tuple(self._handler_started_at.values()),
                 connected=False,
                 blocked=False,
                 channel_open=False,
@@ -298,6 +300,8 @@ class RMQConsumerManager(ConsumerManagerBase):
         else:
             detail = ""
         return ConsumerHealth(
+            handler_timeout_seconds=self._handler_timeout_seconds,
+            handler_started_at=tuple(self._handler_started_at.values()),
             connected=True,
             blocked=blocked,
             channel_open=channel_open,
@@ -362,22 +366,8 @@ class RMQConsumerManager(ConsumerManagerBase):
         ):
             return
 
-        # Process — dispatch sync consumers to thread pool, await async directly.
-        # iscoroutinefunction checks both plain async functions and callable
-        # objects with async __call__ (the latter requires checking __call__).
         try:
-            is_async = inspect.iscoroutinefunction(
-                self._consumer
-            ) or inspect.iscoroutinefunction(getattr(self._consumer, "__call__", None))
-            if is_async:
-                result = await self._consumer(body)
-            else:
-                loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(
-                    None,
-                    self._consumer,
-                    body,
-                )
+            result = await self._call_handler(body)
 
             # The last point at which a duplicate downstream publish can be
             # avoided: a dead channel means the broker redelivers this

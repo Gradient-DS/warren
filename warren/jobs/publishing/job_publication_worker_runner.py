@@ -27,6 +27,7 @@ from warren.jobs.publishing.job_publication_worker import (
 from warren.pubsub.common import (
     ConsumerManagerInterface,
     PublisherInterface,
+    RouteFunc,
 )
 from warren.pubsub.rabbitmq.config import (
     RMQExchangeConfig,
@@ -103,6 +104,9 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         the message ``data`` dict and returns an ``AsyncIterable``
         of document sources. When ``None``, defaults to iterating
         ``data["items"]``.
+    :param route_func: per-document publish routing function, as in
+        ``PublishSpec.route_func``. When ``None``, preserves the default:
+        no routing key on fanout, or routing by ``data_type`` otherwise.
     """
 
     def __init__(
@@ -112,6 +116,7 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         *,
         exchange: RMQExchangeConfig,
         publish_exchange: RMQExchangeConfig | None = None,
+        route_func: RouteFunc | None = None,
         documents_publisher_factory: DocumentsPublisherFactoryFunc,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
         create_source_generator: Callable[[dict], AsyncIterable] | None = None,
@@ -124,6 +129,7 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
         # exchange). They coincide for fanout/topic.
         self._exchange = exchange
         self._publish_exchange = publish_exchange or exchange
+        self._route_func = route_func
         self._documents_publisher_factory = documents_publisher_factory
         self._consumer_manager_factory = consumer_manager_factory
         self._create_source_generator = create_source_generator
@@ -190,7 +196,11 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
             self._config,
             self._infra.pubsub_connection_manager,
             exchange=self._publish_exchange,
-            route_func=observer_route_func(self._publish_exchange),
+            route_func=(
+                self._route_func
+                if self._route_func is not None
+                else observer_route_func(self._publish_exchange)
+            ),
         )
 
     def _create_default_consumer_factory(self) -> ConsumerManagerFactory:

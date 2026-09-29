@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional `route_func` on `JobPublicationWorkerRunner` configures routing for
+  published documents, with the existing exchange-based routing as the default.
+
 ## [0.6.1] — 2026-09-29
 
 > Queue lanes and message priority: optional `lane` and `priority` on the message envelope, lane-prefixed routing keys and AMQP priority on publish. Patch: additive and backward compatible.

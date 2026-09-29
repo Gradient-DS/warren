@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-09-29
+
+> Production hardening: connection auth and startup retries, handler timeouts, consumer concurrency, multi-key bindings, bulk result writes, cache expiry, job-record retention, scopes and a single active retry scheduler. Minor, not patch: unknown config keys are now rejected.
+
 ### Added
 
 - `erase_scope` removes scoped MongoDB content, Redis keys, and control rows with deletion counts, falling back to collection drops when database drops are denied; see `warren/docs/scoping.md`.

@@ -13,6 +13,7 @@ config models, asserting that:
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from warren.runtime.config import RuntimeConfig
@@ -141,3 +142,57 @@ health:
 
 def test_memory_backend_is_a_valid_choice() -> None:
     assert RuntimeConfig.model_validate({"backend": "memory"}).backend == "memory"
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        (),
+        ("rabbitmq",),
+        ("rabbitmq", "connection"),
+        ("rabbitmq", "consumer"),
+        ("kafka",),
+        ("kafka", "connection"),
+        ("kafka", "topic"),
+        ("kafka", "consumer"),
+        ("mongodb",),
+        ("redis",),
+        ("retry",),
+        ("retry", "policy"),
+        ("health",),
+    ],
+)
+@pytest.mark.parametrize("from_yaml", [False, True])
+def test_unknown_config_keys_are_rejected(
+    tmp_path: Path, section: tuple[str, ...], *, from_yaml: bool
+) -> None:
+    data = RuntimeConfig().model_dump(mode="json")
+    target = data
+    for key in section:
+        target = target[key]
+    target["hosst"] = "localhost"
+
+    if from_yaml:
+        load = RuntimeConfig.from_yaml
+        value = _write_yaml(tmp_path, yaml.safe_dump(data))
+    else:
+        load = RuntimeConfig.model_validate
+        value = data
+    with pytest.raises(ValidationError) as exc:
+        load(value)
+
+    assert exc.value.errors()[0]["type"] == "extra_forbidden"
+    assert exc.value.errors()[0]["loc"] == (*section, "hosst")
+
+
+@pytest.mark.parametrize(
+    "path",
+    sorted(
+        path
+        for directory in ("examples", "runtime_scripts", "tests")
+        for path in (Path(__file__).resolve().parents[2] / directory).rglob("*")
+        if path.suffix in {".yaml", ".yml"}
+    ),
+)
+def test_repository_yaml_configs(path: Path) -> None:
+    RuntimeConfig.from_yaml(path)

@@ -15,7 +15,7 @@ The transport-agnostic retry policy (``RetryConfig``) lives in
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class KafkaConnectionConfig(BaseModel):
@@ -36,6 +36,8 @@ class KafkaConnectionConfig(BaseModel):
         None, aiokafka uses its own default.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     bootstrap_servers: list[str] = Field(default_factory=lambda: ["localhost:9092"])
     security_protocol: Literal["PLAINTEXT", "SSL"] = "PLAINTEXT"
     ssl_cafile: str | None = None
@@ -54,6 +56,8 @@ class KafkaTopicConfig(BaseModel):
         Enable locally; disable on platforms where topics are
         provisioned out-of-band (e.g. via a console).
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str
     num_partitions: int = 6
@@ -78,6 +82,8 @@ class KafkaConsumerConfig(BaseModel):
     :param on_shutdown_timeout: Seconds to wait for the in-flight
         message during shutdown (mirrors ``RMQConsumerConfig``).
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     group_id: str | None = None
     auto_offset_reset: Literal["earliest", "latest"] = "earliest"

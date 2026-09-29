@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Runtime configuration rejects unknown keys at every modeled level, catching
+  misspelled settings instead of silently ignoring them.
+
 - `MemoryDocumentStore.update` raises `DocumentAlreadyExistsError` when the
   update would give two documents the same unique key, as MongoDB rejects such
   an update too. Before, it silently kept both.

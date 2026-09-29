@@ -9,7 +9,7 @@ from typing import Literal, Protocol
 
 from dataclasses import dataclass
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from warren.exceptions import WarrenError
 
@@ -110,6 +110,8 @@ class RetryConfig(BaseModel):
         nack+requeue when no retry publisher is configured.
         Prevents tight retry loops.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     initial_delay: int = 30
     max_retries: int = 5

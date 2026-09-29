@@ -20,7 +20,7 @@ from typing import Literal
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from warren.pubsub.common import RetryConfig
 from warren.pubsub.kafka.config import (
@@ -43,6 +43,8 @@ class RuntimeRMQConfig(BaseModel):
     deployment: where the broker is and how to consume.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     connection: RMQConnectionConfig = RMQConnectionConfig()
     consumer: RMQConsumerConfig = RMQConsumerConfig()
 
@@ -54,18 +56,22 @@ class RuntimeKafkaConfig(BaseModel):
     ``jobs`` fanout exchange.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     connection: KafkaConnectionConfig = KafkaConnectionConfig()
     topic: KafkaTopicConfig = KafkaTopicConfig(name="jobs")
     consumer: KafkaConsumerConfig = KafkaConsumerConfig()
 
 
 class MongoDBConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     host: str = "localhost"
     port: int = 27017
     database: str = "distributed_processing"
 
 
 class RedisConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     host: str = "localhost"
     port: int = 6379
 
@@ -79,6 +85,8 @@ class RuntimeRetryConfig(BaseModel):
         every consumer manager the runner builds, so ``max_delay_cap`` and
         friends are deployment settings rather than library constants.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = False
     collection_name: str = "retries"
@@ -100,6 +108,8 @@ class RuntimeConfig(BaseModel):
     :param retry: Retry worker toggle and collection name.
     :param health: Watchdog and readiness endpoint settings.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     backend: Literal["rabbitmq", "kafka", "memory"] = "rabbitmq"
     rabbitmq: RuntimeRMQConfig = RuntimeRMQConfig()

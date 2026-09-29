@@ -18,7 +18,7 @@ from collections.abc import Callable
 from contextlib import suppress
 
 from basics.logging import get_logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from warren.pubsub.common import ConsumerHealth
 
@@ -39,6 +39,8 @@ class HealthConfig(BaseModel):
         live connection, before the process exits so the orchestrator
         restarts it.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
     # All interfaces on purpose: a kubelet probe must reach it. Flagged by

@@ -140,7 +140,7 @@ Note: MongoDB and Redis currently only accept `host`/`port` pairs. Connection st
 
 1. **Defaults + YAML override** (most common) — start from defaults, override what you need in the YAML file. Fields you omit keep their defaults.
 2. **Programmatic override** — construct `RuntimeConfig(rabbitmq=..., mongodb=...)` directly in Python. Useful for tests or embedded use.
-3. **Subclass** — extend `RuntimeConfig` with additional fields for your deployment. The YAML loader (`model_validate`) ignores unknown fields by default.
+3. **Subclass** — extend `RuntimeConfig` with additional fields for your deployment. Unknown fields are rejected, including in nested config sections.
 
 ### DefaultWorkerRunner
 

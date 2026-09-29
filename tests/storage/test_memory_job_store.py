@@ -59,24 +59,25 @@ def test_update_and_increment_num_documents(make) -> None:
 
 
 @pytest.mark.parametrize("make", STORE_FACTORIES)
-def test_update_completion_sets_status_and_timestamp(make) -> None:
-    async def scenario() -> tuple[dict, dict]:
+def test_update_completion_preserves_the_first_completion(make) -> None:
+    async def scenario() -> dict:
         store = make()
         job_id = await store.create_job("final")
-        await store.update_completion(job_id, completed=True, with_failures=True)
+        assert await store.update_completion(job_id, completed=True, with_failures=True)
         done = await store.get_status(job_id)
-        await store.update_completion(job_id, completed=False, with_failures=False)
-        return done, await store.get_status(job_id)
+        assert not await store.update_completion(
+            job_id, completed=True, with_failures=False
+        )
+        assert not await store.update_completion(
+            job_id, completed=False, with_failures=False
+        )
+        assert await store.get_status(job_id) == done
+        return done
 
-    done, reopened = asyncio.run(scenario())
+    done = asyncio.run(scenario())
     assert done["completed"] is True
     assert done["with_failures"] is True
     assert done["completed_at"] is not None
-    assert reopened == {
-        "completed": False,
-        "with_failures": False,
-        "completed_at": None,
-    }
 
 
 @pytest.mark.parametrize("make", STORE_FACTORIES)

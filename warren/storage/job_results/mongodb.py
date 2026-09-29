@@ -87,6 +87,10 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
                 ("success", ASCENDING),
             ],
         )
+        await self._collection.create_index(
+            [("job_id", ASCENDING), ("doc_id", ASCENDING)],
+            partialFilterExpression={"hard_failure": {"$exists": True}},
+        )
 
         await configure_ttl_index(
             self._collection, "time", self._job_records_ttl_seconds

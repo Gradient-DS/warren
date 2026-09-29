@@ -123,15 +123,7 @@ class JobStatusWorker(FilteringWorkerBase):
         job_id: str,
         message: dict,
     ) -> dict | None:
-        """Record the observation for ``message`` and check job completion.
-
-        Store operations are idempotent (deterministic upserts keyed on
-        ``(job_id, data_type, doc_id)``; ``update_completion`` is a
-        ``$set``), so re-running the whole record+check after a partial
-        transient failure is safe. ``message["data"]`` stays unguarded: a
-        missing field is malformed, not transient, so it fails loud
-        immediately (not retried).
-        """
+        """Record the observation and conditionally complete the job."""
         if data_type == "soft-failure":
             await self._handle_soft_failure(job_id, message["data"], message)
         elif data_type == "hard-failure":
@@ -247,11 +239,13 @@ class JobStatusWorker(FilteringWorkerBase):
             return None
 
         with_failures = hard_failed_count > 0
-        await self._job_store.update_completion(
+        transitioned = await self._job_store.update_completion(
             job_id=job_id,
             completed=True,
             with_failures=with_failures,
         )
+        if not transitioned:
+            return None
 
         self._log.info(
             f"Job {job_id} completed: {completed_count} succeeded, "

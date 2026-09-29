@@ -71,8 +71,11 @@ class _FakeJobStore:
 
     async def update_completion(
         self, job_id: str, completed: bool, with_failures: bool
-    ) -> None:
+    ) -> bool:
+        if self.completion is not None and self.completion[0]:
+            return False
         self.completion = (completed, with_failures)
+        return True
 
 
 class _StubPublisher(JobDocumentsPublisher):

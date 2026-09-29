@@ -142,7 +142,7 @@ class MongoDBJobStore(Base, JobStoreInterface):
         job_id: str,
         completed: bool,
         with_failures: bool,
-    ) -> None:
+    ) -> bool:
         now = datetime.now(UTC)
         update: dict = {
             "$set": {
@@ -153,12 +153,15 @@ class MongoDBJobStore(Base, JobStoreInterface):
             },
         }
         result = await self._collection.update_one(
-            {"job_id": job_id},
+            {"job_id": job_id, "status.completed_at": None},
             update,
         )
         if result.matched_count == 0:
-            msg = f"Job '{job_id}' not found"
-            raise JobNotFoundError(msg)
+            if await self._collection.find_one({"job_id": job_id}, {"_id": 1}) is None:
+                msg = f"Job '{job_id}' not found"
+                raise JobNotFoundError(msg)
+            return False
+        return True
 
     async def get_status(self, job_id: str) -> dict:
         doc = await self._collection.find_one(

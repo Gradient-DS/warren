@@ -44,3 +44,21 @@ stores. Custom factories should pass `config.retention.job_records_ttl_seconds`
 to all three MongoDB stores and `config.retention.job_records_max_age_seconds`
 to `MongoDBJobStore`. Injected stores own their retention policy. Memory stores
 remain in-process stores without background expiry.
+
+## Completion
+
+The status worker recounts successful final-stage items and distinct failed
+item IDs across stages. A partial index on `(job_id, doc_id)` includes only
+rows where `hard_failure` exists. The failure-count query uses the same
+`$exists` predicate so MongoDB can use that index.
+
+`update_completion` updates only jobs whose `status.completed_at` is null or
+missing, and returns whether the update was applied. Completed jobs keep
+their status and timestamp; this method cannot reopen them. The memory store
+uses the same contract. Only the status worker that applies the completion
+update emits `job-completed`.
+
+The completion update and signal publication are separate operations. A
+process failure or an ambiguous write response after committing completion
+can still lose the signal; conditional completion prevents duplicate signals
+from competing workers but does not guarantee delivery.

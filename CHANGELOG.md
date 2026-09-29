@@ -47,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Job hard-failure counts use a partial MongoDB index on `(job_id, doc_id)`
+  while retaining distinct-item counting across stages.
+
 - Multi-part result reads always query persistence in ascending `part_idx` order,
   preventing incomplete results after cache eviction or partial rewrites.
   `stream_doc_processing_results(try_cache=...)` still accepts the parameter,
@@ -61,6 +64,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an update too. Before, it silently kept both.
 
 ### Fixed
+
+- Concurrent status workers emit a single completion signal by conditionally
+  setting the job's completion timestamp. `update_completion` returns whether
+  it applied the update; completed jobs keep their original status and timestamp
+  and cannot be reopened through this method.
 
 - Binary result caches now expire after 3600 seconds by default. Retry caches
   expire after the policy's maximum delay cap plus 60 seconds of scheduling slack.

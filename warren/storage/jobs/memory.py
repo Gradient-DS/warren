@@ -67,8 +67,10 @@ class MemoryJobStore(Base, JobStoreInterface):
         job_id: str,
         completed: bool,
         with_failures: bool,
-    ) -> None:
+    ) -> bool:
         job = self._job(job_id)
+        if job["status"].get("completed_at") is not None:
+            return False
         now = datetime.now(UTC)
         job["status"] = {
             "completed": completed,
@@ -76,6 +78,7 @@ class MemoryJobStore(Base, JobStoreInterface):
             "completed_at": now if completed else None,
         }
         job["updated_at"] = now
+        return True
 
     async def get_status(self, job_id: str) -> dict:
         return copy.deepcopy(self._job(job_id)["status"])

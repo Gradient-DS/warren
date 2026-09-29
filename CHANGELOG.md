@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Store deletes accept expected field values so retry cleanup cannot delete a replacement written by a standby.
+
 - `erase_scope` removes a scope's MongoDB content, Redis keys and control rows,
   returning deletion counts. Collection-by-collection removal is supported when
   MongoDB denies database drops. See `warren/docs/scoping.md`.
@@ -76,6 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an update too. Before, it silently kept both.
 
 ### Fixed
+
+- Distributed retry workers share a MongoDB lease, renew every third of `retry.lease_ttl_seconds` (default 30), and cancel local retries on lease loss; a standby recovers persisted retries after expiry.
 
 - Concurrent status workers emit a single completion signal by conditionally
   setting the job's completion timestamp. `update_completion` returns whether

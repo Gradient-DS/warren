@@ -105,14 +105,21 @@ class CachedDocumentStore(Base):
     async def delete(
         self,
         doc_id: str,
+        *,
+        expected: dict | None = None,
     ) -> bool:
         """Delete document from store and cache.
 
         :param doc_id: Document ID.
+        :param expected: Additional field values required for deletion.
 
         :return: True if document existed and was deleted.
         """
-        deleted = await self._store.delete(doc_id)
+        deleted = (
+            await self._store.delete(doc_id)
+            if expected is None
+            else await self._store.delete(doc_id, expected=expected)
+        )
         await self._safe_cache_delete(doc_id)
         return deleted
 

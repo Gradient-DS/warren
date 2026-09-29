@@ -106,14 +106,17 @@ class DocumentStoreInterface(Protocol):
     async def delete(
         self,
         doc_id: str,
+        *,
+        expected: dict | None = None,
     ) -> bool:
         """
         Delete a document by its ID.
 
         :param doc_id: Document ID.
+        :param expected: Additional field values required for deletion.
 
         :return: True if document existed and was deleted, False if
-            document was not found.
+            it was not found or expected values did not match.
         """
         ...
 

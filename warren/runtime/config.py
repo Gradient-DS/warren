@@ -135,6 +135,7 @@ class RuntimeRetryConfig(BaseModel):
 
     enabled: bool = False
     collection_name: str = "retries"
+    lease_ttl_seconds: int = Field(default=30, gt=0)
     policy: RetryConfig = RetryConfig()
 
 

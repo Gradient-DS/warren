@@ -25,6 +25,7 @@ from warren.pubsub.routing import (
     ReplayRouter,
     observer_binding_key,
 )
+from warren.retry_management.lease import MongoRetryLease
 from warren.retry_management.retry_worker import (
     RetryWorker,
 )
@@ -148,6 +149,16 @@ class RetryWorkerRunner(WorkerRunnerBase):
             scoping_enabled=self._config.scoping.enabled,
             republish_publisher=self._republish_publisher,
             message_key_func=self._message_key_func,
+            lease=(
+                MongoRetryLease(
+                    self._infra.mongo_client,
+                    database_name=self._config.mongodb.database,
+                    collection_name=self._config.retry.collection_name,
+                )
+                if self._config.backend != "memory"
+                else None
+            ),
+            lease_ttl_seconds=self._config.retry.lease_ttl_seconds,
         )
 
         with self._exception_wrapping("Consumer manager setup"):
@@ -157,7 +168,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
             await self._consumer_manager.setup()
 
         with self._exception_wrapping("Scheduling pending retries"):
-            await self._retry_worker.schedule_pending()
+            await self._retry_worker.start()
         self._mark_setup_succeeded()
 
     async def _on_teardown(self) -> None:

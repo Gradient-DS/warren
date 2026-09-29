@@ -133,11 +133,14 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
         for doc in matches:
             yield copy.deepcopy(doc)
 
-    async def delete(self, doc_id: str) -> bool:
+    async def delete(self, doc_id: str, *, expected: dict | None = None) -> bool:
         key = self._require_id(doc_id)
-        doc = self._docs.pop(key, None)
-        if doc is None:
+        doc = self._docs.get(key)
+        if doc is None or any(
+            doc.get(field) != value for field, value in (expected or {}).items()
+        ):
             return False
+        del self._docs[key]
         self._remove_from_indexes(doc)
         return True
 

@@ -188,11 +188,14 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
     async def delete(
         self,
         doc_id: str,
+        *,
+        expected: dict | None = None,
     ) -> bool:
         """
         Delete a document by its ID.
 
         :param doc_id: ID of the document to delete.
+        :param expected: Additional field values required for deletion.
 
         :return: True if document existed and was deleted, False if
             document was not found.
@@ -201,6 +204,8 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         """
         collection = await self._get_collection()
         query = {self._doc_id_field: self._denormalize_doc_id(doc_id)}
+        if expected is not None:
+            query = {"$and": [query, expected]}
         result = await collection.delete_one(query)
         return result.deleted_count > 0
 

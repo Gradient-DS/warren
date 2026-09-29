@@ -15,6 +15,7 @@ from collections.abc import AsyncIterable
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
 
+from warren.common import HardFailureException
 from warren.pubsub.common import PublisherInterface
 from warren.storage.jobs.interface import (
     JobStoreInterface,
@@ -146,6 +147,8 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
         """
         try:
             doc_data = await self._load_document(source)
+        except HardFailureException:
+            raise
         except Exception as e:
             chain = summarize_exception_chain(e)
             self._log.error(f"Failed to load {source_id}: {chain}")
@@ -154,6 +157,8 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
 
         try:
             doc_id = await self._register_document(job_id, doc_data)
+        except HardFailureException:
+            raise
         except Exception as e:
             chain = summarize_exception_chain(e)
             self._log.error(f"Failed to register {source_id}: {chain}")
@@ -171,6 +176,8 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
             if scope is not None:
                 message = {**message, "scope": scope}
             await self._publisher(message)
+        except HardFailureException:
+            raise
         except Exception as e:
             chain = summarize_exception_chain(e)
             self._log.error(f"Failed to publish {source_id}: {chain}")
@@ -199,6 +206,8 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
         """
         try:
             await self._tracker.record_failure(job_id, doc_id, source_id, error, stage)
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Failed to record '{stage}' failure for {source_id}: "
@@ -214,6 +223,8 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
         """
         try:
             await self._tracker.record_success(job_id, doc_id)
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Failed to record success for doc '{doc_id}': "

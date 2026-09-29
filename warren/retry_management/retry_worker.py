@@ -22,6 +22,7 @@ from warren.storage.document_store.interface import (
     DocumentNotFoundError,
     DocumentStoreInterface,
 )
+from warren.storage.scoping import scope_fields
 from warren.workers.messages import (
     build_message_key,
     extract_message_identity,
@@ -64,6 +65,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
         retry_store: DocumentStoreInterface,
         republish_publisher: PublisherInterface,
         message_key_func: Callable[[dict], str] | None = None,
+        scoping_enabled: bool = False,
     ) -> None:
         super().__init__(worker_name)
 
@@ -76,6 +78,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
             )
             raise ValueError(msg)
 
+        self._scoping_enabled = scoping_enabled
         self._retry_store = retry_store
         self._republish_publisher = republish_publisher
         self._message_key_func = message_key_func or self._default_message_key
@@ -128,13 +131,17 @@ class RetryWorker(AsyncProcessingWorkerBase):
 
         failed_message: dict = message["data"]
         retry_info = failed_message.get("retry", {})
+        fields = scope_fields(self._scoping_enabled, failed_message.get("scope"))
         retry_key = self._message_key_func(failed_message)
+        if fields:
+            retry_key = f"s:{fields['scope']}:{retry_key}"
         delay_seconds = retry_info.get("after", 30)
 
         generation = self._envelope_generation.get(retry_key, 0) + 1
         self._envelope_generation[retry_key] = generation
 
         envelope = {
+            **fields,
             self.REQUIRED_DOC_ID_FIELD: retry_key,
             "message": failed_message,
             "fire_at": time.time() + delay_seconds,

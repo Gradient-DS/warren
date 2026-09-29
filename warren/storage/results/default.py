@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
 
+from warren.common import HardFailureException
 from warren.storage.cache.interface import (
     CacheInterface,
 )
@@ -147,6 +148,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
                     },
                     ttl_seconds=self._cache_ttl_seconds,
                 )
+            except HardFailureException:
+                raise
             except Exception as e:
                 self._log.warning(
                     f"Caching results failed: {summarize_exception_chain(e)}"
@@ -260,6 +263,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         try:
             cache_key = self._build_cache_key(doc_id, part_idx, job_id)
             await self._cache.set(cache_key, doc, ttl_seconds=self._cache_ttl_seconds)
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Caching of document failed:\n"
@@ -281,6 +286,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         try:
             cache_key = self._build_cache_key(doc_id, part_idx, job_id)
             return await self._cache.get(cache_key)
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Retrieving from cache failed for:\n"

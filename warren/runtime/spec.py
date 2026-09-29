@@ -30,6 +30,7 @@ from warren.storage.documents.interface import (
 from warren.storage.results.interface import (
     ResultsStoreInterface,
 )
+from warren.storage.scoping import ScopedDatabase, get_current_scope
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,11 @@ class WorkerFactoryContext:
     produces: str | None = None
     get_document_func: GetDocumentFunc | None = None
     document_store: DocumentStoreInterface | None = None
+    scoped_database: ScopedDatabase | None = None
+
+    @property
+    def current_scope(self) -> str | None:
+        return get_current_scope()
 
 
 WorkerFactory = Callable[[WorkerFactoryContext], Awaitable[MessageConsumerInterface]]

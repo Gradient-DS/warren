@@ -18,6 +18,7 @@ from warren.storage.results.binary import (
 from warren.storage.results.default import (
     DefaultResultsStore,
 )
+from warren.storage.scoping import ScopedDatabase
 
 
 async def create_default_results_store(
@@ -29,6 +30,7 @@ async def create_default_results_store(
     doc_id_field: str = "result_id",
     cache_base_key_prefix: str = "results",
     cache_ttl_seconds: int = 3600,
+    scoped_database: ScopedDatabase | None = None,
 ) -> DefaultResultsStore:
     """
     Create a DefaultResultsStore with MongoDB persistence and optional Redis cache.
@@ -46,6 +48,7 @@ async def create_default_results_store(
     """
     doc_store = MongoDBDocumentStore(
         client=mongo_client,
+        scoped_database=scoped_database,
         database_name=database_name,
         collection_name=collection_name,
         doc_id_field=doc_id_field,
@@ -57,6 +60,8 @@ async def create_default_results_store(
     if redis_client is not None:
         cache = RedisDictCache(
             client=redis_client,
+            scoping_enabled=scoped_database is not None,
+            scope_required=scoped_database.required if scoped_database else True,
             base_key=f"{cache_base_key_prefix}:{collection_name}",
             default_ttl_seconds=cache_ttl_seconds,
         )
@@ -81,6 +86,7 @@ async def create_binary_results_store(
     doc_id_field: str = "result_id",
     cache_base_key: str = "documents",
     cache_ttl_seconds: int = 3600,
+    scoped_database: ScopedDatabase | None = None,
 ) -> BinaryResultsStore:
     """Create a ``BinaryResultsStore`` wired with MongoDB + RedisBinaryCache.
 
@@ -97,6 +103,7 @@ async def create_binary_results_store(
     """
     doc_store = MongoDBDocumentStore(
         client=mongo_client,
+        scoped_database=scoped_database,
         database_name=database_name,
         collection_name=collection_name,
         doc_id_field=doc_id_field,
@@ -108,6 +115,8 @@ async def create_binary_results_store(
     if redis_client is not None:
         cache = RedisBinaryCache(
             client=redis_client,
+            scoping_enabled=scoped_database is not None,
+            scope_required=scoped_database.required if scoped_database else True,
             base_key=cache_base_key,
             default_ttl_seconds=cache_ttl_seconds,
         )

@@ -145,6 +145,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
         self._retry_worker = RetryWorker(
             worker_name=self._worker_name,
             retry_store=self._retry_store,
+            scoping_enabled=self._config.scoping.enabled,
             republish_publisher=self._republish_publisher,
             message_key_func=self._message_key_func,
         )
@@ -191,8 +192,11 @@ class RetryWorkerRunner(WorkerRunnerBase):
             database_name=self._config.mongodb.database,
             collection_name=retry_cfg.collection_name,
             doc_id_field=RetryWorker.REQUIRED_DOC_ID_FIELD,
+            fields_to_index=["scope"] if self._config.scoping.enabled else None,
         )
         await mongo_store.setup()
+        if self._config.scoping.enabled:
+            return mongo_store
 
         # Allow scheduling slack beyond the longest retry delay.
         cache_ttl_seconds = max(0, retry_cfg.policy.max_delay_cap) + 60

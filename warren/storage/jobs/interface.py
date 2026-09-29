@@ -45,6 +45,7 @@ class JobStoreInterface(Protocol):
         parameters: dict | None = None,
         num_documents: int | None = None,
         metadata: dict | None = None,
+        scope: str | None = None,
     ) -> str:
         """Create a new job entry with a store-generated ID.
 

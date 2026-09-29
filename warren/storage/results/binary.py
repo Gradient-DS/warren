@@ -40,6 +40,7 @@ from datetime import UTC, datetime
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
 
+from warren.common import HardFailureException
 from warren.storage.cache.interface import (
     CacheInterface,
 )
@@ -209,6 +210,8 @@ class BinaryResultsStore(Base):
                 payload,
                 ttl_seconds=self._cache_ttl_seconds,
             )
+        except HardFailureException:
+            raise
         except Exception as exc:
             self._log.warning(
                 f"BinaryResultsStore cache set failed for doc_id={doc_id}: "
@@ -225,6 +228,8 @@ class BinaryResultsStore(Base):
             return None
         try:
             return await self._cache.get(build_document_cache_key(doc_id, job_id))
+        except HardFailureException:
+            raise
         except Exception as exc:
             self._log.warning(
                 f"BinaryResultsStore cache get failed for doc_id={doc_id}: "

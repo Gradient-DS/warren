@@ -14,6 +14,7 @@ from collections.abc import AsyncGenerator
 from basics.base import Base
 from basics.logging_utils import summarize_exception_chain
 
+from warren.common import HardFailureException
 from warren.storage.cache.interface import (
     CacheInterface,
 )
@@ -75,6 +76,8 @@ class CachedDocumentStore(Base):
         if any(doc_id is None for doc_id in ids):
             try:
                 await self._cache.clear()
+            except HardFailureException:
+                raise
             except Exception as e:
                 self._log.warning(
                     f"Cache invalidation failed: {summarize_exception_chain(e)}"
@@ -126,6 +129,8 @@ class CachedDocumentStore(Base):
         try:
             if await self._cache.exists(doc_id):
                 return True
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Cache exists check failed for doc_id={doc_id}: "
@@ -149,6 +154,8 @@ class CachedDocumentStore(Base):
             cached = await self._cache.get(doc_id)
             if cached is not None:
                 return cached
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Cache get failed for doc_id={doc_id}: {summarize_exception_chain(e)}"
@@ -188,6 +195,8 @@ class CachedDocumentStore(Base):
         """Set cache entry, logging failures as warnings."""
         try:
             await self._cache.set(key, value, self._cache_ttl)
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Cache set failed for key={key}: {summarize_exception_chain(e)}"
@@ -197,6 +206,8 @@ class CachedDocumentStore(Base):
         """Delete cache entry, logging failures as warnings."""
         try:
             await self._cache.delete(key)
+        except HardFailureException:
+            raise
         except Exception as e:
             self._log.warning(
                 f"Cache delete failed for key={key}: {summarize_exception_chain(e)}"

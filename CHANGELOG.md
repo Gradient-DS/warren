@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Enabled scoping isolates content in per-scope MongoDB databases and Redis
+  namespaces, with lazy validation at storage access. Control rows retain valid
+  scopes in the control database; worker factories receive the database resolver.
+
 - Optional message scopes propagate through worker, failure, retry and job
   publication envelopes. Handler scope context also reaches executor threads.
   Runtime scoping settings default to disabled.

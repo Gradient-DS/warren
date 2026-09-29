@@ -164,6 +164,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         store = MongoDBJobStore(
             client=self._infra.mongo_client,
             database_name=self._config.mongodb.database,
+            scoping_enabled=self._config.scoping.enabled,
             job_records_ttl_seconds=self._config.retention.job_records_ttl_seconds,
             job_records_max_age_seconds=self._config.retention.job_records_max_age_seconds,
         )
@@ -176,6 +177,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         store = MongoDBJobResultsStore(
             client=self._infra.mongo_client,
             database_name=self._config.mongodb.database,
+            scoping_enabled=self._config.scoping.enabled,
             job_records_ttl_seconds=self._config.retention.job_records_ttl_seconds,
         )
         await store.setup()

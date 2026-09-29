@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from 0 through 255, excluding booleans.
 - Optional `prefix_field` and `default_prefix` on `MessageFieldRouter` for
   lane-prefixed routing keys. RabbitMQ publishers forward message priority;
-  the memory backend supports lane routing and ignores priority ordering.
+  the memory backend supports lane routing and ignores priority ordering;
+  the Kafka backend ignores priority.
 
 ## [0.6.0] — 2026-09-29
 

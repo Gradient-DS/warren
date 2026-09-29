@@ -47,16 +47,17 @@ def test_valid_topic_pipeline_passes():
 
 def test_topic_consumer_requires_binding_key():
     worker = WorkerSpec(collections={"write": "c"}, factory=_factory)  # no binding_key
-    with pytest.raises(PipelineValidationError, match="requires a binding_key"):
+    with pytest.raises(
+        PipelineValidationError, match="requires non-empty binding_keys"
+    ):
         validate_pipeline(_pipeline(worker, exchange_type="topic"))
 
 
-def test_fanout_consumer_forbids_binding_key():
+def test_fanout_consumer_ignores_binding_key():
     worker = WorkerSpec(
         collections={"write": "c"}, factory=_factory, binding_key="oops"
     )
-    with pytest.raises(PipelineValidationError, match="binding_key must be None"):
-        validate_pipeline(_pipeline(worker))
+    validate_pipeline(_pipeline(worker))
 
 
 def test_topic_publish_requires_route():
@@ -117,3 +118,15 @@ def test_routing_plan_entry_rejects_input_type():
     plan = RoutingPlan(entry=["parser"], edges={"parser": ["chunker"]})
     with pytest.raises(RoutingPlanValidationError, match="does not accept"):
         validate_routing_plan(plan, _REGISTRY, entry_data_type="png")
+
+
+@pytest.mark.parametrize("keys", [("input.*", "retry.#"), ("input", "retry")])
+def test_multiple_binding_keys_pass_validation(keys: tuple[str, ...]) -> None:
+    worker = WorkerSpec(collections={}, factory=_factory, binding_keys=keys)
+    validate_pipeline(_pipeline(worker, exchange_type="topic"))
+
+
+def test_empty_binding_key_is_rejected() -> None:
+    worker = WorkerSpec(collections={}, factory=_factory, binding_keys=("input.*", ""))
+    with pytest.raises(PipelineValidationError, match="non-empty binding_keys"):
+        validate_pipeline(_pipeline(worker, exchange_type="topic"))

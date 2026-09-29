@@ -13,7 +13,7 @@ treat them uniformly.
 """
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import InitVar, dataclass, field
 
 from pymongo import AsyncMongoClient
 from redis.asyncio import Redis
@@ -113,8 +113,9 @@ class WorkerSpec:
         name. The runner creates a DefaultResultsStore per role.
     :param factory: Callable that creates the worker given a
         ``WorkerFactoryContext``.
-    :param binding_key: Queue binding pattern for direct/topic exchanges.
-        Must be ``None`` for a fanout exchange; required for direct/topic.
+    :param binding_keys: Queue binding patterns for direct/topic exchanges.
+        Required for direct/topic and ignored on fanout.
+    :param binding_key: Backward-compatible constructor alias for one key.
     :param publish: How the worker publishes its result, or ``None`` if it
         publishes nothing downstream (terminal). Job completion does not key
         off this — see ``PipelineSpec.final_data_type``.
@@ -134,12 +135,21 @@ class WorkerSpec:
 
     collections: dict[str, str]
     factory: WorkerFactory
-    binding_key: str | None = None
+    binding_key: InitVar[str | None] = None
     publish: PublishSpec | None = None
     accepts: frozenset[str] = frozenset()
     produces: str | None = None
     needs_document_fetcher: bool = False
     needs_document_store: bool = False
+
+    binding_keys: tuple[str, ...] = field(default=(), kw_only=True)
+
+    def __post_init__(self, binding_key: str | None) -> None:
+        if binding_key is not None:
+            if self.binding_keys:
+                msg = "Specify either binding_key or binding_keys, not both"
+                raise ValueError(msg)
+            object.__setattr__(self, "binding_keys", (binding_key,))
 
 
 @dataclass(frozen=True)

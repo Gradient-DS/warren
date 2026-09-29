@@ -4,7 +4,7 @@ Deploy-time validation for a ``PipelineSpec``.
 ``validate_pipeline`` is a cheap, fail-fast check run at launcher startup (and
 available as a standalone CLI) to catch topology mistakes before any worker
 connects to infrastructure: binding/route settings that don't match the
-exchange type (e.g. a topic worker with no binding_key).
+exchange type (e.g. a topic worker with no binding_keys).
 
 Scope (see warren/docs/routing.md): this validates binding/route *presence*,
 not *reachability*. It does NOT verify that a published routing key actually
@@ -48,17 +48,12 @@ def validate_pipeline(
     errors: list[str] = []
 
     for worker_type, spec in pipeline.workers.items():
-        # Consume-side binding key.
-        if is_fanout:
-            if spec.binding_key is not None:
-                errors.append(
-                    f"worker '{worker_type}': fanout exchange ignores routing "
-                    f"keys, so binding_key must be None (got '{spec.binding_key}')"
-                )
-        elif not spec.binding_key:
+        if not is_fanout and (
+            not spec.binding_keys or any(not key for key in spec.binding_keys)
+        ):
             errors.append(
                 f"worker '{worker_type}': {pipeline.exchange.type} exchange "
-                f"requires a binding_key"
+                f"requires non-empty binding_keys"
             )
 
         # Publish-side route.

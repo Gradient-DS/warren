@@ -207,7 +207,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
     :param worker_name: unique worker instance identifier.
     :param worker_type: name of the worker type (used for queue naming).
     :param worker_spec: spec defining collections, factory, exchange
-        wiring (binding_key, publish), and flags.
+        wiring (binding_keys, publish), and flags.
     :param exchange: the pipeline's exchange (from ``PipelineSpec.exchange``)
         this worker consumes from and publishes to.
     :param document_fetcher: optional override for the document fetcher.
@@ -470,7 +470,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             self._infra.pubsub_connection_manager,
             exchange=self._exchange,
             worker_type=self._worker_type,
-            binding_key=self._worker_spec.binding_key,
+            binding_keys=self._worker_spec.binding_keys,
             consumer=consumer,
             data_publisher=data_publisher,
             control_publisher=control_publisher,

@@ -129,7 +129,7 @@ def test_consumer_manager_rabbitmq_binding_key_threaded() -> None:
         consumer=_FakeConsumer(),
     )
 
-    assert manager._config.queue.routing_key == "pdf_document"
+    assert manager._config.queue.binding_keys == ("pdf_document",)
 
 
 def test_consumer_manager_kafka_resolved_group_id() -> None:
@@ -247,4 +247,4 @@ def test_consumer_manager_memory_owns_queue_naming() -> None:
 
     assert isinstance(manager, MemoryConsumerManager)
     assert manager._queue_name == f"jobs.{WORKER_TYPE}"
-    assert manager._binding_key == "doc.#"
+    assert manager._binding_keys == ("doc.#",)

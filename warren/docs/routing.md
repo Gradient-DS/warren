@@ -60,15 +60,20 @@ PipelineSpec(
 
 ```python
 WorkerSpec(
-    collections={"read": "chunks", "write": "embeddings"},
-    factory=create_embedder,
-    binding_key=None,  # required for topic/direct, None for fanout
+    collections={"read": "inputs", "write": "outputs"},
+    factory=create_worker,
+    binding_keys=(),  # required for topic/direct, ignored on fanout
     publish=PublishSpec(),  # None = no downstream data (terminal)
 )
 ```
 
-- `binding_key` — the queue's binding pattern. Must be `None` on a fanout
-  exchange (which ignores keys) and is required on topic/direct exchanges.
+- `binding_keys` is a tuple of queue binding patterns, such as
+  `("input.*", "retry.#")`. Topic/direct consumers require at least one
+  non-empty key. Fanout consumers ignore keys and log at debug level.
+  `binding_key="input.*"` remains a constructor alias for one key; supplying
+  both forms raises `ValueError`. RabbitMQ and memory deliver a message only
+  once per queue even when several keys match. Kafka accepts keys on fanout
+  and continues to reject topic/direct exchanges.
 - `publish` — a `PublishSpec(route=None, route_func=None)` describing how the
   worker publishes its result to the pipeline exchange, or `None` if the worker
   publishes nothing downstream (terminal — there is no separate `terminal`
@@ -77,7 +82,7 @@ WorkerSpec(
 ### Competing consumers / autoscaling
 
 Binding and consuming are independent. One queue (`{exchange}.{worker_type}`,
-one binding) can be consumed by N worker instances — the broker round-robins
+one or more bindings) can be consumed by N worker instances; the broker round-robins
 among them by prefetch. This is identical on fanout, direct, and topic, so
 horizontal scaling (e.g. KEDA on queue depth) needs no code changes.
 
@@ -214,8 +219,8 @@ cannot schedule two retries.
 ## Validation
 
 - **Deploy-time** (`validate_pipeline`, run at launcher startup and as a
-  standalone check): a non-fanout consumer has a `binding_key` and a fanout
-  consumer does not; a non-fanout publish has a route. Reachability of **dynamic**
+  standalone check): a non-fanout consumer has non-empty `binding_keys`;
+  fanout consumers ignore keys. A non-fanout publish has a route. Reachability of **dynamic**
   route functions cannot be enumerated statically and is not checked.
 - **Submission-time** (`validate_routing_plan`): every node in a job's
   `RoutingPlan` maps to a deployed worker, every edge is nominally

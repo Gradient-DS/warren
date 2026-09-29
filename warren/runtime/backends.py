@@ -57,6 +57,8 @@ for direct construction.
 
 from typing import Any
 
+from basics.logging import get_logger
+
 from warren.common import MessageConsumerInterface
 from warren.exceptions import WarrenError
 from warren.pubsub.common import (
@@ -183,6 +185,7 @@ def create_consumer_manager(
     worker_type: str,
     consumer: MessageConsumerInterface,
     binding_key: str | None = None,
+    binding_keys: tuple[str, ...] = (),
     data_publisher: PublisherInterface | None = None,
     control_publisher: PublisherInterface | None = None,
     observer_publisher: PublisherInterface | None = None,
@@ -195,10 +198,10 @@ def create_consumer_manager(
     Owns the queue/group naming convention for all call sites:
 
     - RabbitMQ: queue ``f"{exchange.name}.{worker_type}"``, bound with
-      ``binding_key``.
+      ``binding_keys``.
     - Kafka: consumer group ``config.kafka.consumer.group_id or
-      f"{topic.name}.{worker_type}"`` (pre-resolved here); ``binding_key``
-      is ``None`` on a fanout pipeline and unused.
+      f"{topic.name}.{worker_type}"`` (pre-resolved here); binding keys
+      are ignored on fanout.
 
     The publisher split (data / control / observer — see
     ``warren/docs/routing.md``) is forwarded verbatim to the backend
@@ -212,8 +215,8 @@ def create_consumer_manager(
     :param worker_type: Worker type name — the queue suffix (RMQ) or the
         group suffix (Kafka).
     :param consumer: The worker that processes each message.
-    :param binding_key: Queue binding pattern (RabbitMQ topic/direct
-        only; ``None`` on fanout).
+    :param binding_keys: Queue binding patterns; ignored on fanout.
+    :param binding_key: Backward-compatible alias for one binding key.
     :param data_publisher: Downstream publisher for successful results,
         or ``None`` if the worker is terminal.
     :param control_publisher: Publisher for lifecycle envelopes
@@ -231,6 +234,17 @@ def create_consumer_manager(
     :raises OptionalDependencyError: if the selected backend's transport
         extra is not installed.
     """
+    if binding_key is not None:
+        if binding_keys:
+            msg = "Specify either binding_key or binding_keys, not both"
+            raise ValueError(msg)
+        binding_keys = (binding_key,)
+    if exchange.type == "fanout" and binding_keys:
+        get_logger(__name__).debug(
+            "Ignoring binding keys on fanout exchange %s", exchange.name
+        )
+        binding_keys = ()
+
     if config.backend == "memory":
         from warren.pubsub.memory.consumer import MemoryConsumerManager
 
@@ -239,7 +253,7 @@ def create_consumer_manager(
             consumer,
             exchange=exchange,
             queue_name=f"{exchange.name}.{worker_type}",
-            binding_key=binding_key,
+            binding_keys=binding_keys,
             data_publisher=data_publisher,
             control_publisher=control_publisher,
             observer_publisher=observer_publisher,
@@ -288,7 +302,7 @@ def create_consumer_manager(
     queue_config = RMQQueueConfig(
         name=f"{exchange.name}.{worker_type}",
         durable=True,
-        routing_key=binding_key,
+        binding_keys=binding_keys,
         arguments=config.rabbitmq.consumer.queue_arguments,
     )
     manager_config = RMQConsumerManagerConfig(

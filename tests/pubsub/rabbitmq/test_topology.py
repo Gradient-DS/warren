@@ -46,3 +46,41 @@ def test_declare_queue_default_has_no_arguments() -> None:
     )
 
     assert channel.declared["arguments"] is None
+
+
+def test_declare_queue_binds_each_key() -> None:
+    queue = asyncio.run(
+        declare_queue(
+            _FakeChannel(),
+            _FakeExchange(),
+            RMQQueueConfig(name="q", binding_keys=("input.*", "retry.#")),
+            exchange_type="topic",
+        )
+    )
+    assert queue.bound == [("jobs", "input.*"), ("jobs", "retry.#")]
+
+
+def test_declare_queue_keeps_legacy_routing_key() -> None:
+    queue = asyncio.run(
+        declare_queue(
+            _FakeChannel(),
+            _FakeExchange(),
+            RMQQueueConfig(name="q", routing_key="input"),
+            exchange_type="direct",
+        )
+    )
+    assert queue.bound == [("jobs", "input")]
+
+
+def test_fanout_ignores_binding_keys(caplog) -> None:
+    with caplog.at_level("DEBUG"):
+        queue = asyncio.run(
+            declare_queue(
+                _FakeChannel(),
+                _FakeExchange(),
+                RMQQueueConfig(name="q", binding_keys=("a", "b")),
+                exchange_type="fanout",
+            )
+        )
+    assert queue.bound == [("jobs", "")]
+    assert "Ignoring binding keys" in caplog.text

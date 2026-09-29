@@ -81,6 +81,7 @@ class RMQQueueConfig(BaseModel):
     exclusive: bool = False
     auto_delete: bool = False
     routing_key: str | None = None
+    binding_keys: tuple[str, ...] = ()
     arguments: dict[str, Any] | None = None
 
 

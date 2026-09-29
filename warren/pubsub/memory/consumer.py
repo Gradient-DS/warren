@@ -58,6 +58,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
         exchange: RMQExchangeConfig,
         queue_name: str,
         binding_key: str | None = None,
+        binding_keys: tuple[str, ...] = (),
         data_publisher: PublisherInterface | None = None,
         control_publisher: PublisherInterface | None = None,
         observer_publisher: PublisherInterface | None = None,
@@ -88,7 +89,12 @@ class MemoryConsumerManager(ConsumerManagerBase):
         self._connection_manager = connection_manager
         self._exchange = exchange
         self._queue_name = queue_name
-        self._binding_key = binding_key
+        if binding_key is not None:
+            if binding_keys:
+                msg = "Specify either binding_key or binding_keys, not both"
+                raise ValueError(msg)
+            binding_keys = (binding_key,)
+        self._binding_keys = binding_keys
         self._retry_config = retry_config or RetryConfig()
         self._extract_identity = extract_identity_func or extract_message_identity
         self._publish_hard_failures = publish_hard_failures
@@ -108,11 +114,17 @@ class MemoryConsumerManager(ConsumerManagerBase):
         """
         for publisher in self._publishers:
             await publisher.setup()
-        self._queue = self._connection_manager.broker.bind(
-            self._exchange,
-            self._queue_name,
-            self._binding_key,
-        )
+        keys = self._binding_keys
+        if self._exchange.type == "fanout":
+            if keys:
+                self._log.debug(
+                    "Ignoring binding keys on fanout exchange %s", self._exchange.name
+                )
+            keys = ()
+        for key in keys or ("",):
+            self._queue = self._connection_manager.broker.bind(
+                self._exchange, self._queue_name, key
+            )
 
     async def start_consuming(self) -> None:
         if self._queue is None:

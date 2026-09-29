@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Workers can bind their queue to several keys with binding_keys, retaining
+  binding_key as a single-key constructor alias. Fanout consumers ignore keys;
+  RabbitMQ and memory route each message once per matching queue.
+
 - Optional per-handler timeouts on RabbitMQ, Kafka and memory consumers use
   the existing retry policy. Liveness fails when a handler runs longer than
   twice its timeout, including handlers that ignore cancellation.

@@ -40,7 +40,7 @@ async def _factory(ctx):
     return _FakeWorker()
 
 
-def test_runner_passes_retry_policy_to_consumer_manager(
+def test_runner_passes_retry_policy_and_binding_keys_to_consumer_manager(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict = {}
@@ -57,7 +57,9 @@ def test_runner_passes_retry_policy_to_consumer_manager(
         config,
         "worker-1",
         worker_type="test_worker",
-        worker_spec=WorkerSpec(collections={}, factory=_factory),
+        worker_spec=WorkerSpec(
+            collections={}, factory=_factory, binding_keys=("input.*", "retry.#")
+        ),
         exchange=RMQExchangeConfig(name="jobs", type="fanout"),
     )
     runner._infra = SimpleNamespace(pubsub_connection_manager=object())
@@ -65,6 +67,7 @@ def test_runner_passes_retry_policy_to_consumer_manager(
     runner._create_consumer_manager(_FakeWorker(), None, None, None)
 
     assert captured["retry_config"].max_delay_cap == 900
+    assert captured["binding_keys"] == ("input.*", "retry.#")
 
 
 def test_runner_takes_health_config_from_runtime_config() -> None:

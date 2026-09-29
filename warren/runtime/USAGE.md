@@ -50,7 +50,7 @@ A `WorkerSpec` describes one worker type — what it needs and how to build it:
 WorkerSpec(
     collections={"read": "chunks", "write": "embeddings"},
     factory=create_embedder,
-    binding_key=None,  # required for topic/direct, None for fanout
+    binding_keys=(),  # required for topic/direct, ignored on fanout
     publish=PublishSpec(),  # None = no downstream data (terminal)
     needs_document_fetcher=False,
     needs_document_store=False,
@@ -59,7 +59,7 @@ WorkerSpec(
 
 - `collections` maps roles to MongoDB collection names. Workers typically have a "read" collection (upstream results to consume) and a "write" collection (where this worker stores its own processing results). The runner creates a `DefaultResultsStore` per role and passes them to the factory via `ctx.stores["read"]`, `ctx.stores["write"]`, etc. Some workers have additional roles (e.g. the embedder reads from "chunks", "summaries", and "item_metadata").
 - `factory` is an async callable `(WorkerFactoryContext) -> MessageConsumerInterface`. It creates and returns the worker instance. See [Defining a pipeline](#defining-a-pipeline).
-- `binding_key` is the queue's binding pattern on the pipeline exchange. It must be `None` on a `fanout` exchange (which ignores keys) and is required on `topic`/`direct` exchanges (e.g. a `data_type` like `"markdown_document"`, or a `topic` wildcard like `"document.*"`).
+- `binding_keys` contains queue binding patterns, for example `("input.*", "retry.#")`. Topic/direct require non-empty keys; fanout ignores them. `binding_key` remains a constructor alias for one key.
 - `publish` is a `PublishSpec(route=None, route_func=None)` describing how the worker publishes its result to the pipeline exchange, or `None` if it publishes nothing downstream (terminal — there is no separate `terminal` flag). On `fanout`, leave `route`/`route_func` unset; on `topic`/`direct`, set one (e.g. `route_func=MessageFieldRouter()` to route by `data_type`).
 - `needs_document_fetcher` — if `True`, the runner builds a `CachedDocumentFetcher` (with path, GCS, S3, and HTTP(S) resolvers — the claim-check pattern: messages carry a location, workers resolve bytes on demand, Redis caches them) and passes it as `ctx.get_document_func`. (Note: there is an open design question about whether this should be the factory's responsibility instead of the runner's — see TODOs.)
 - `needs_document_store` — if `True`, the runner creates a `MongoDBDocumentStore` on the `documents` collection and passes it as `ctx.document_store`. (Same design note as above.)
@@ -195,7 +195,7 @@ The runner that wires everything together. Given a `RuntimeConfig` and a `Worker
 2. Builds `ResultsStoreInterface` instances from `collections`
 3. Optionally creates a `CachedDocumentFetcher` and/or `DocumentStoreInterface`
 4. Calls the factory function with a `WorkerFactoryContext`
-5. Creates the worker's publisher (none if `publish` is `None`) and a consumer manager bound to the pipeline exchange with `binding_key` — both via `warren.runtime.backends`, so the same runner serves RabbitMQ and Kafka
+5. Creates the worker publisher and a consumer manager with `binding_keys` through `warren.runtime.backends`.
 6. Runs the consumer until `SIGINT`/`SIGTERM`
 7. Tears down everything on shutdown
 

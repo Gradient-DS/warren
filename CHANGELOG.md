@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ResultsStoreInterface.store_many` batches result upserts into one unordered
+  MongoDB bulk write and one cache pipeline. Memory stores support the same API;
+  repeated keys in a batch use the last item.
+
 - Configurable consumer concurrency on RabbitMQ and memory, with in-flight
   handler counts in health responses. Unset concurrency preserves existing
   behavior: RabbitMQ uses `prefetch_count`; memory and Kafka use one handler.

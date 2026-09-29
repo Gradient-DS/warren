@@ -71,6 +71,20 @@ class CachedDocumentStore(Base):
         await self._safe_cache_set(doc_id, doc)
         return doc_id
 
+    async def upsert_many(self, docs: list[dict]) -> list[str | None]:
+        ids = await self._store.upsert_many(docs)
+        if any(doc_id is None for doc_id in ids):
+            try:
+                await self._cache.clear()
+            except Exception as e:
+                self._log.warning(
+                    f"Cache invalidation failed: {summarize_exception_chain(e)}"
+                )
+        for doc_id, doc in zip(ids, docs, strict=True):
+            if doc_id is not None:
+                await self._safe_cache_set(doc_id, doc)
+        return ids
+
     async def update(
         self,
         doc_id: str,

@@ -85,6 +85,9 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
         self._add_to_indexes(new_id, new)
         return new_id
 
+    async def upsert_many(self, docs: list[dict]) -> list[str | None]:
+        return [await self.insert(doc, overwrite_existing=True) for doc in docs]
+
     async def update(self, doc_id: str, updates: dict) -> None:
         key = self._require_id(doc_id)
         if key not in self._docs:

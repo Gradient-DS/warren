@@ -1,4 +1,4 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from datetime import UTC, datetime
 
 from basics.base import Base
@@ -13,6 +13,7 @@ from warren.storage.document_store.interface import (
 from warren.storage.results.interface import (
     DocumentProcessingResultsNotFound,
     ResultDoc,
+    ResultItem,
     ResultNotFound,
     ResultsStoreInterface,
 )
@@ -107,24 +108,55 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
 
         :return: Document ID from the document store.
         """
-        normalized_part_idx = 0 if part_idx is None else part_idx
-
-        doc = {
-            "doc_id": doc_id,
-            "part_idx": normalized_part_idx,
-            "job_id": job_id,
-            "result": result,
-            "result_metadata": result_metadata,
-            "created_at": datetime.now(UTC),
-        }
+        doc = self._build_row(
+            ResultItem(result, doc_id, part_idx, job_id, result_metadata)
+        )
 
         result_id = await self._document_store.insert(doc, overwrite_existing)
         doc["result_id"] = result_id
 
         if do_cache:
-            await self._cache_set(doc_id, normalized_part_idx, job_id, doc)
+            await self._cache_set(doc_id, doc["part_idx"], job_id, doc)
 
         return result_id
+
+    async def store_many(self, items: Sequence[ResultItem]) -> None:
+        """Upsert results in bulk. For repeated keys, the last item wins."""
+        if not items:
+            return
+        rows = {
+            (item.doc_id, item.job_id, item.part_idx or 0): self._build_row(item)
+            for item in items
+        }
+        docs = list(rows.values())
+        ids = await self._document_store.upsert_many(docs)
+        for doc, result_id in zip(docs, ids, strict=True):
+            if result_id is not None:
+                doc["result_id"] = result_id
+        if self._cache is not None:
+            try:
+                await self._cache.set_many(
+                    {
+                        self._build_cache_key(
+                            doc["doc_id"], doc["part_idx"], doc["job_id"]
+                        ): doc
+                        for doc in docs
+                    }
+                )
+            except Exception as e:
+                self._log.warning(
+                    f"Caching results failed: {summarize_exception_chain(e)}"
+                )
+
+    def _build_row(self, item: ResultItem) -> dict:
+        return {
+            "doc_id": item.doc_id,
+            "part_idx": 0 if item.part_idx is None else item.part_idx,
+            "job_id": item.job_id,
+            "result": item.result,
+            "result_metadata": item.result_metadata,
+            "created_at": datetime.now(UTC),
+        }
 
     async def get_result(
         self,
@@ -146,7 +178,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         normalized_part_idx = 0 if part_idx is None else part_idx
 
         cached = await self._cache_get(doc_id, normalized_part_idx, job_id)
-        if cached is not None:
+        # Bulk replacements do not return existing MongoDB _id values.
+        if cached is not None and cached.get("result_id") is not None:
             return self._dict_to_result_doc(cached)
 
         query = self._build_query(doc_id, normalized_part_idx, job_id)

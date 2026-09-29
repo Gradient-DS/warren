@@ -5,7 +5,7 @@ from collections.abc import AsyncGenerator
 
 from basics.base import Base
 from bson import ObjectId
-from pymongo import AsyncMongoClient, ReturnDocument
+from pymongo import AsyncMongoClient, ReplaceOne, ReturnDocument
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.errors import DuplicateKeyError
 
@@ -116,6 +116,27 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
                 raise DocumentAlreadyExistsError(msg) from e
 
         return self._normalize_doc_id(doc_copy[self._doc_id_field])
+
+    async def upsert_many(self, docs: list[dict]) -> list[str | None]:
+        """Upsert rows in one unordered bulk write, preserving MongoDB IDs."""
+        if not docs:
+            return []
+        fields = self._unique_indexes[0] if self._unique_indexes else self._doc_id_field
+        fields = (fields,) if isinstance(fields, str) else fields
+        rows = [doc.copy() for doc in docs]
+        operations = []
+        for row in rows:
+            self._ensure_doc_id(row)
+            query = {field: row.get(field) for field in fields}
+            if self._unique_indexes:
+                row.pop("_id", None)
+            operations.append(ReplaceOne(query, row, upsert=True))
+        result = await self._collection.bulk_write(operations, ordered=False)
+        ids: list[str | None] = []
+        for index, row in enumerate(rows):
+            value = row.get(self._doc_id_field, result.upserted_ids.get(index))
+            ids.append(str(value) if value is not None else None)
+        return ids
 
     async def update(
         self,

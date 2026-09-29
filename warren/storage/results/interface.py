@@ -1,6 +1,7 @@
 from typing import Protocol
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 
 from pydantic import BaseModel
@@ -22,6 +23,17 @@ class ResultDoc(BaseModel):
     result_id: str | None = None
 
 
+@dataclass(frozen=True)
+class ResultItem:
+    """A processing result and its storage keys."""
+
+    result: dict
+    doc_id: str
+    part_idx: int | None = None
+    job_id: str | None = None
+    result_metadata: dict | None = None
+
+
 class ResultNotFound(ResourceNotFoundError):
     pass
 
@@ -40,11 +52,6 @@ class ResultsStoreInterface(Protocol):
     Assumes storage and caching capabilities that are aware of the specific result type.
     The implementation is dependent on the result/worker type.
     """
-
-    # TODO: Add batch_store() method for storing multiple results in a single
-    #   call, enabling bulk writes and reducing round-trips to the storage
-    #   backend. Signature should accept a sequence of (result, doc_id,
-    #   part_idx, job_id) tuples.
 
     async def store(
         self,
@@ -69,6 +76,10 @@ class ResultsStoreInterface(Protocol):
 
         :returns: ID of the stored result.
         """
+        ...
+
+    async def store_many(self, items: Sequence[ResultItem]) -> None:
+        """Upsert results in bulk. For repeated keys, the last item wins."""
         ...
 
     async def get_result(

@@ -45,6 +45,10 @@ class DocumentStoreInterface(Protocol):
         """
         ...
 
+    async def upsert_many(self, docs: list[dict]) -> list[str | None]:
+        """Replace rows by unique key, returning IDs where the backend provides them."""
+        ...
+
     async def update(self, doc_id: str, updates: dict) -> None:
         """
         Update document with document id with given updates.

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Runtime scripts write JSON lines with `WARREN_LOG_FORMAT=json`: time, level,
+  logger, message, any `extra=` fields and the error, for log collectors.
+- `WARREN_LOG_CONFIG` names a `logging.config.dictConfig` file (JSON or YAML)
+  that replaces the scripts' logging setup, so a host can use its own
+  formatter. `disable_existing_loggers` defaults to false.
+
 ## [0.6.2] — 2026-09-29
 
 > Configurable publication routing, and release versions derived from Git tags. Patch: additive and backward compatible.

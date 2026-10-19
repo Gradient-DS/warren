@@ -145,6 +145,18 @@ on `health.port`. When the consumer is lost while the connection is alive for
 longer than `health.consumer_lost_grace_s`, the worker exits non-zero so the
 orchestrator restarts it; a blocked or reconnecting connection is waited out.
 
+## Logging
+
+Every runtime script logs to stderr as text. Two environment variables change that:
+
+- `WARREN_LOG_FORMAT=json` writes one JSON object per line: `ts`, `level`,
+  `logger`, `message`, any fields passed with `extra=`, and `error` with the
+  exception type and traceback.
+- `WARREN_LOG_CONFIG=/path/logging.yaml` applies a standard
+  `logging.config.dictConfig` file (JSON or YAML) instead, for a host that
+  brings its own formatter. `--debug` then has no effect, and
+  `disable_existing_loggers` defaults to false so warren's loggers keep writing.
+
 Keep secrets in environment variables. `from_yaml` expands `${VAR}` in string
 values, including lists, after parsing YAML. An unset variable raises an error
 naming it. Expansion is not recursive; values are not parsed as YAML again.

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, cast
 import logging
 import os
 from functools import partial
+from pathlib import Path
 
 from basics.logging import get_logger
 from basics.logging_utils import summarize_exception_chain
@@ -97,16 +98,23 @@ async def _resolve_cloud(
     return await resolver(cloud_location)
 
 
-def create_default_resolvers() -> dict[str, ResolveDocumentFunc]:
+def create_default_resolvers(
+    *, path_base_dir: Path | None = None
+) -> dict[str, ResolveDocumentFunc]:
     """Build the default document resolver registry.
 
-    ``path`` always; ``cloud`` (GCS, S3) and ``url`` when their optional
-    extras are installed. A module function so callers that are not a
-    runner instance can build a document fetcher too.
+    ``path`` only when ``path_base_dir`` is given, confined to it; ``cloud``
+    (GCS, S3) and ``url`` when their optional extras are installed. A module
+    function so callers that are not a runner instance can build a document
+    fetcher too.
 
+    :param path_base_dir: Directory local-file reads are confined to.
+        ``None`` leaves the ``path`` resolver unregistered.
     :return: Mapping of location type to resolver function.
     """
-    resolvers: dict[str, ResolveDocumentFunc] = {"path": resolve_path}
+    resolvers: dict[str, ResolveDocumentFunc] = {}
+    if path_base_dir is not None:
+        resolvers["path"] = partial(resolve_path, base_dir=path_base_dir)
 
     cloud_by_provider: dict[str, ResolveDocumentFunc] = {}
 
@@ -363,7 +371,9 @@ class DefaultWorkerRunner(WorkerRunnerBase):
 
         :return: Mapping of location type to resolver function.
         """
-        return create_default_resolvers()
+        return create_default_resolvers(
+            path_base_dir=self._config.documents.path_base_dir
+        )
 
     async def _create_default_results_stores(
         self,
@@ -396,7 +406,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
         return store
 
     def _create_default_document_fetcher(self) -> GetDocumentFunc:
-        """Create a CachedDocumentFetcher with path + GCS resolvers."""
+        """Create a CachedDocumentFetcher with the configured resolvers."""
         with self._exception_wrapping("Creation of resolvers"):
             resolvers = self._create_resolvers()
         return create_cached_document_fetcher(

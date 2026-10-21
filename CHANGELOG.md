@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- The `path` document resolver is confined to its base directory: absolute
+  paths, `..` traversal and symlinks resolving outside it are refused, and
+  `base_dir` is required. The runtime registers it only when
+  `documents.path_base_dir` is set, so a message can no longer make a worker
+  read arbitrary local files. Deployments that resolve `path` locations must
+  set `documents.path_base_dir`.
+
 ## [0.6.3] — 2026-10-19
 
 > Structured logging for the runtime scripts. Patch: additive and backward compatible.

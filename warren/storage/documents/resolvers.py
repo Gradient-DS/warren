@@ -34,23 +34,32 @@ from warren.storage.documents.location import (
 async def resolve_path(
     location: DocumentLocation,
     *,
-    base_dir: Path = Path(),
+    base_dir: Path,
 ) -> bytes:
-    """Read document bytes from the local filesystem.
+    """Read document bytes from a file confined to ``base_dir``.
 
     :param location: Must be a DocumentPathLocation.
-    :param base_dir: Base directory prepended to relative_path.
-        Defaults to current working directory.
+    :param base_dir: Directory every read is confined to. Absolute paths,
+        ``..`` traversal and symlinks resolving outside it are refused.
 
     :return: Raw document bytes.
 
-    :raises DocumentNotFoundError: If the resolved path does not exist.
+    :raises DocumentNotFoundError: If the path is missing or escapes ``base_dir``.
     """
     path_location = cast("DocumentPathLocation", location)
-    path = base_dir / path_location.relative_path
+    return await asyncio.to_thread(
+        _read_confined, base_dir, Path(path_location.relative_path)
+    )
 
+
+def _read_confined(base_dir: Path, relative: Path) -> bytes:
+    root = base_dir.resolve()
+    path = (root / relative).resolve()
+    if relative.is_absolute() or not path.is_relative_to(root):
+        msg = f"Document path escapes the base directory: {relative}"
+        raise DocumentNotFoundError(msg)
     try:
-        return await asyncio.to_thread(path.read_bytes)
+        return path.read_bytes()
     except FileNotFoundError as e:
         msg = f"Document not found at path: {path}"
         raise DocumentNotFoundError(msg) from e

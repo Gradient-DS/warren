@@ -50,7 +50,7 @@ A document registry provides the foundation for tracking document lifecycle: reg
 
 6. **Messages are trusted.** Workers use the location data from the message directly. The document registry exists for auditing and lifecycle tracking, not as a runtime lookup for workers.
 
-7. **`resolve_path` supports a configurable base directory.** Relative paths in `DocumentPathLocation` are resolved against a base directory, bound via `functools.partial` at wiring time.
+7. **`resolve_path` is confined to a base directory.** Relative paths in `DocumentPathLocation` are resolved against a required base directory, bound via `functools.partial` at wiring time; absolute paths, `..` traversal and symlink escapes are refused. The runtime registers the `path` resolver only when `documents.path_base_dir` is set.
 
 ## Design
 
@@ -235,14 +235,14 @@ Simple async functions, one per location type. Injected into the fetcher, not ha
 
 ```python
 # Path resolver — base_dir bound via functools.partial at wiring time
-async def resolve_path(location: DocumentLocation, *, base_dir: Path = Path()) -> bytes:
-    """Read document bytes from the local filesystem.
-
-    :param location: Must be a DocumentPathLocation.
-    :param base_dir: Base directory prepended to relative_path.
-    """
+async def resolve_path(location: DocumentLocation, *, base_dir: Path) -> bytes:
+    """Read document bytes from a file confined to ``base_dir``."""
     path_location = cast(DocumentPathLocation, location)
-    path = base_dir / path_location.relative_path
+    relative = Path(path_location.relative_path)
+    root = base_dir.resolve()
+    path = (root / relative).resolve()
+    if relative.is_absolute() or not path.is_relative_to(root):
+        raise DocumentNotFoundError(...)
     return await asyncio.to_thread(path.read_bytes)
 
 

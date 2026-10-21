@@ -103,6 +103,16 @@ class CacheConfig(BaseModel):
     cache_ttl_seconds: int = Field(default=3600, gt=0)
 
 
+class DocumentsConfig(CacheConfig):
+    """Fetched payload cache expiry and local-file resolution.
+
+    :param path_base_dir: Directory ``path`` document locations are read
+        from. Unset (the default) disables the ``path`` resolver.
+    """
+
+    path_base_dir: Path | None = None
+
+
 class RetentionConfig(BaseModel):
     """MongoDB job record expiry, in seconds."""
 
@@ -172,7 +182,7 @@ class RuntimeConfig(BaseModel):
     :param memory: In-process consumer settings.
     :param mongodb: MongoDB connection settings.
     :param redis: Redis connection settings.
-    :param documents: Fetched payload cache expiry.
+    :param documents: Fetched payload cache expiry and ``path`` base directory.
     :param results: Processing result cache expiry.
     :param retention: MongoDB job record expiry.
     :param retry: Retry worker toggle and collection name.
@@ -188,7 +198,7 @@ class RuntimeConfig(BaseModel):
     memory: MemoryConsumerConfig = MemoryConsumerConfig()
     mongodb: MongoDBConfig = MongoDBConfig()
     redis: RedisConfig = RedisConfig()
-    documents: CacheConfig = CacheConfig(cache_ttl_seconds=86400)
+    documents: DocumentsConfig = DocumentsConfig(cache_ttl_seconds=86400)
     results: CacheConfig = CacheConfig()
     retention: RetentionConfig = RetentionConfig()
     retry: RuntimeRetryConfig = RuntimeRetryConfig()

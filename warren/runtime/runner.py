@@ -70,7 +70,7 @@ if TYPE_CHECKING:
     from warren.storage.documents.location import DocumentCloudLocation
 
 
-module_logger: logging.Logger = get_logger(__name__)
+_module_logger: logging.Logger = get_logger(__name__)
 
 
 async def _resolve_cloud(
@@ -132,12 +132,12 @@ def create_default_resolvers(
         # run fine without it, so we degrade gracefully rather than
         # raise. Selecting a 'cloud' document location without the
         # resolver later fails with UnknownLocationTypeError.
-        module_logger.debug(
+        _module_logger.debug(
             "google-cloud-storage not installed — GCS cloud resolver "
             'disabled; install with: pip install "warren[gcs]"'
         )
     except Exception as exc:
-        module_logger.warning(
+        _module_logger.warning(
             "Could not initialise GCS client — GCS cloud resolver "
             f"disabled: {summarize_exception_chain(exc)}"
         )
@@ -157,12 +157,12 @@ def create_default_resolvers(
         # Optional 'S3' extra. Degrade gracefully — pipelines without S3
         # documents run fine. Selecting an S3 location without the resolver
         # later fails with UnknownLocationTypeError.
-        module_logger.debug(
+        _module_logger.debug(
             "boto3 not installed — S3 cloud resolver "
             'disabled; install with: pip install "warren[s3]"'
         )
     except Exception as exc:
-        module_logger.warning(
+        _module_logger.warning(
             "Could not initialise S3 client — S3 cloud resolver "
             f"disabled: {summarize_exception_chain(exc)}"
         )
@@ -189,12 +189,12 @@ def create_default_resolvers(
         # run fine without it, so we degrade gracefully rather than
         # raise. Selecting a 'url' document location without the
         # resolver later fails with UnknownLocationTypeError.
-        module_logger.debug(
+        _module_logger.debug(
             "httpx not installed — HTTP(S) URL resolver "
             'disabled; install with: pip install "warren[http]"'
         )
     except Exception as exc:
-        module_logger.warning(
+        _module_logger.warning(
             "Could not initialise HTTP(S) URL resolver — "
             f"disabled: {summarize_exception_chain(exc)}"
         )

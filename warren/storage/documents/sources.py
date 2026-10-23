@@ -17,7 +17,7 @@ from warren.exceptions import (
 )
 
 
-module_logger: logging.Logger = get_logger(__name__)
+_module_logger: logging.Logger = get_logger(__name__)
 
 
 def discover_local_pdfs(pdf_dir: Path, max_docs: int = 0) -> Sequence[Path]:
@@ -41,7 +41,7 @@ def discover_local_pdfs(pdf_dir: Path, max_docs: int = 0) -> Sequence[Path]:
     if max_docs > 0:
         pdfs = pdfs[:max_docs]
 
-    module_logger.info("Discovered %d PDFs in %s", len(pdfs), pdf_dir)
+    _module_logger.info("Discovered %d PDFs in %s", len(pdfs), pdf_dir)
     return pdfs
 
 
@@ -80,7 +80,7 @@ def discover_gcs_pdfs(
     if max_docs > 0:
         keys = keys[:max_docs]
 
-    module_logger.info(
+    _module_logger.info(
         "Discovered %d PDFs in gs://%s/%s", len(keys), bucket_name, prefix
     )
     return keys

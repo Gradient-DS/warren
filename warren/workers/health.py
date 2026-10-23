@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from warren.pubsub.common import ConsumerHealth
 
 
-module_logger: logging.Logger = get_logger(__name__)
+_module_logger: logging.Logger = get_logger(__name__)
 
 
 class HealthConfig(BaseModel):
@@ -95,12 +95,12 @@ class HealthServer:
                 self._handle, self._host, self._port
             )
         except OSError as e:
-            module_logger.error(
+            _module_logger.error(
                 f"Health endpoint not started on {self._host}:{self._port}: {e}; "
                 f"the worker keeps consuming without it"
             )
             return False
-        module_logger.info(f"Health endpoint serving on {self._host}:{self.port}")
+        _module_logger.info(f"Health endpoint serving on {self._host}:{self.port}")
         return True
 
     async def stop(self) -> None:

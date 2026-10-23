@@ -9,8 +9,6 @@ Permanent errors (``OperationFailure``, ``DuplicateKeyError``, …) are not
 translated; they propagate unchanged so they fail loud immediately.
 """
 
-from typing import ParamSpec, TypeVar
-
 import functools
 import inspect
 from collections.abc import Awaitable, Callable
@@ -28,9 +26,6 @@ from warren.storage.exceptions import (
 # ``retryReads`` (default on) already absorb a single such blip; this
 # widens the window to multi-attempt failovers for callers that retry.
 _TRANSIENT_MONGO_ERRORS = (ConnectionFailure,)
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 
 def classify_transient[**P, R](

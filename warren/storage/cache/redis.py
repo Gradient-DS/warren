@@ -1,5 +1,3 @@
-from typing import TypeVar
-
 import json
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -15,10 +13,7 @@ from warren.storage.cache.interface import (
 from warren.storage.scoping import scoped_cache_key
 
 
-T = TypeVar("T")
-
-
-class RedisCacheBase(Base, ABC, CacheInterface[T]):
+class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
     """
     Abstract base class for async Redis-backed cache implementations.
 

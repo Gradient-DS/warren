@@ -8,14 +8,10 @@ The worker (orchestration layer) handles: reading from stores, dispatching to
 the correct processor, storing results, and publishing downstream messages.
 """
 
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol
 
 
-TInput = TypeVar("TInput", contravariant=True)
-TOutput = TypeVar("TOutput", covariant=True)
-
-
-class Processor(Protocol[TInput, TOutput]):
+class Processor[TInput, TOutput](Protocol):
     """Generic protocol for a processing strategy.
 
     Processors are synchronous callables that transform TInput to TOutput.

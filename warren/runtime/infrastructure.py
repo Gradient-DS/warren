@@ -27,7 +27,7 @@ from warren.runtime import backends
 from warren.runtime.config import MongoDBConfig, RedisConfig, RuntimeConfig
 
 
-module_logger: logging.Logger = get_logger(__name__)
+_module_logger: logging.Logger = get_logger(__name__)
 
 
 def _create_mongo_client(config: MongoDBConfig) -> AsyncMongoClient:
@@ -93,7 +93,7 @@ async def create_runtime_infrastructure(
     :return: Initialized connections ready for use.
     """
     if config.backend == "memory":
-        module_logger.warning(
+        _module_logger.warning(
             "backend 'memory': everything runs inside this process and nothing "
             "is persisted. For local runs and tests only."
         )
@@ -119,7 +119,7 @@ async def create_runtime_infrastructure(
             )
             if isinstance(e, asyncio.CancelledError):
                 raise
-            module_logger.warning(
+            _module_logger.warning(
                 f"Startup connection attempt {attempt}/{config.startup.attempts} "
                 f"failed: {_startup_error_summary(e, config)}"
             )
@@ -177,13 +177,13 @@ async def _close_connection(
     so it cannot prevent the others from being closed, and so cleanup is
     never silently swallowed.
     """
-    module_logger.debug(f"Closing {what} ...")
+    _module_logger.debug(f"Closing {what} ...")
     try:
         await close()
     except Exception as e:
-        module_logger.warning(f"Error closing {what}: {summarize_exception_chain(e)}")
+        _module_logger.warning(f"Error closing {what}: {summarize_exception_chain(e)}")
     else:
-        module_logger.debug(f"Closed {what}")
+        _module_logger.debug(f"Closed {what}")
 
 
 def require_injected(config: RuntimeConfig, **components: object) -> None:

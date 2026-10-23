@@ -1,11 +1,8 @@
-from typing import Protocol, TypeVar
+from typing import Protocol
 
 from collections.abc import Awaitable, Callable
 
 from warren.exceptions import WarrenError
-
-
-T = TypeVar("T")
 
 
 class CacheOperationError(WarrenError):
@@ -36,7 +33,7 @@ class CacheOperationError(WarrenError):
         super().__init__(full_message)
 
 
-class CacheInterface(Protocol[T]):
+class CacheInterface[T](Protocol):
     """
     Generic async cache interface for storing typed values.
 

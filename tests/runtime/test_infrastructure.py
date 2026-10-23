@@ -127,7 +127,7 @@ def test_secrets_are_hidden_in_representations_and_logs(
         for value in (config, mongo, redis, mongo_client, redis_client):
             assert sensitive_value not in repr(value)
             assert sensitive_value not in str(value)
-            infrastructure.module_logger.info("Configuration: %s; %r", value, value)
+            infrastructure._module_logger.info("Configuration: %s; %r", value, value)
     assert sensitive_value not in caplog.text
 
     async def close() -> None:

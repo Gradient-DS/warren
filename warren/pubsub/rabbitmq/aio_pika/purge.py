@@ -18,7 +18,7 @@ from warren.pubsub.rabbitmq.aio_pika.connection import (
 )
 
 
-module_logger: logging.Logger = get_logger(__name__)
+_module_logger: logging.Logger = get_logger(__name__)
 
 
 async def purge_queues(
@@ -69,7 +69,7 @@ async def _delete_entity(
     try:
         channel = await connection_manager.create_channel()
     except Exception as e:
-        module_logger.warning(
+        _module_logger.warning(
             "Could not open a channel to delete %s '%s': %s",
             kind,
             name,
@@ -79,11 +79,11 @@ async def _delete_entity(
 
     try:
         await delete(channel)
-        module_logger.info("Deleted %s: %s", kind, name)
+        _module_logger.info("Deleted %s: %s", kind, name)
     except ChannelNotFoundEntity:
-        module_logger.info("%s does not exist, skipping: %s", kind, name)
+        _module_logger.info("%s does not exist, skipping: %s", kind, name)
     except Exception as e:
-        module_logger.warning(
+        _module_logger.warning(
             "Failed to delete %s '%s': %s",
             kind,
             name,
@@ -93,7 +93,7 @@ async def _delete_entity(
         try:
             await channel.close()
         except Exception as e:
-            module_logger.debug(
+            _module_logger.debug(
                 "Error closing purge channel for %s '%s': %s",
                 kind,
                 name,

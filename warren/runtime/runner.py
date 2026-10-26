@@ -203,7 +203,7 @@ def create_default_resolvers(
 
 
 class DefaultWorkerRunner(WorkerRunnerBase):
-    """Concrete runner that wires RMQ + MongoDB + Redis for a worker.
+    """Concrete runner that wires the pubsub backend and the stores for one worker.
 
     All worker-specific decisions are driven by the ``WorkerSpec`` —
     no branching on worker type name.
@@ -220,7 +220,8 @@ class DefaultWorkerRunner(WorkerRunnerBase):
     :param exchange: the pipeline's exchange (from ``PipelineSpec.exchange``)
         this worker consumes from and publishes to.
     :param document_fetcher: optional override for the document fetcher.
-        Default: ``CachedDocumentFetcher`` with path + GCS resolvers
+        Default: ``CachedDocumentFetcher`` with the resolvers of
+        ``create_default_resolvers(path_base_dir=config.documents.path_base_dir)``
         (created when ``worker_spec.needs_document_fetcher`` is True).
     :param document_store: optional override for the document store.
         Default: ``MongoDBDocumentStore`` on the ``documents``
@@ -264,13 +265,21 @@ class DefaultWorkerRunner(WorkerRunnerBase):
     async def setup(self) -> None:
         """Wire connections, stores, worker, publishers, and consumer.
 
-        1. Set up infrastructure (MongoDB, Redis, RabbitMQ)
+        1. Set up infrastructure (pubsub connection, MongoDB, Redis)
         2. Build default stores/fetcher for any not injected
         3. Create worker via spec's factory (async)
         4. Wrap worker (subclass hook, e.g. for failure injection)
         5. Run worker-level setup (start owned async resources)
         6. Create publishers for downstream routing
         7. Create and set up the consumer manager
+
+        On ``backend: memory``, inject ``results_stores``, and also
+        ``document_fetcher`` or ``document_store`` when the spec needs
+        them: the memory backend has no MongoDB or Redis to build them.
+
+        :raises WarrenError: If a phase fails. The error names the phase
+            and chains the original exception. On ``backend: memory``,
+            also if a store that the spec needs is not injected.
         """
         if self._infra is None:
             with self._exception_wrapping(

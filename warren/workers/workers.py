@@ -29,25 +29,30 @@ class AsyncProcessingWorkerBase(Base, AsyncMessageConsumerInterface, metaclass=A
     receive plain dictionaries and return optional dictionaries — they
     never interact with RabbitMQ or any other message transport directly.
 
-    Heartbeat Safety
-    ----------------
-    This worker runs on the main event loop alongside the RabbitMQ
-    connection. Every ``await`` yields control so heartbeats can be
-    processed.
+    Heartbeat safety: this worker runs on the main event loop alongside
+    the RabbitMQ connection. Every ``await`` yields control so heartbeats
+    can be processed.
 
     - Pure async I/O (HTTP clients, DB queries) is safe.
     - CPU-bound work MUST be offloaded via
-      ``asyncio.get_event_loop().run_in_executor()``.
+      ``asyncio.get_running_loop().run_in_executor()``.
     - If your worker is primarily CPU-bound or uses sync libraries,
       use ``SyncProcessingWorkerBase`` instead — the framework handles
       threading automatically.
 
-    When to Use
-    -----------
-    - Worker needs async I/O with shared connection pools (aiohttp,
-      async DB clients).
+    Use this base class when:
+
+    - Worker needs async I/O with shared connection pools (async HTTP
+      clients, async DB clients).
     - Worker combines async I/O with some CPU work (offload CPU parts
       via ``run_in_executor``).
+
+    :param worker_name: Unique instance identifier. It is the ``name`` of
+        the worker and ``origin.name`` on its failure envelopes.
+    :param worker_type: Defaults to the class name in snake_case. It is
+        ``origin.type`` on failure envelopes. Set it as ``origin.type`` on
+        results too: ``RoutingPlanRouter`` reads it as the plan node id.
+        Pass ``WorkerFactoryContext.worker_type``.
     """
 
     def __init__(
@@ -76,7 +81,7 @@ class AsyncProcessingWorkerBase(Base, AsyncMessageConsumerInterface, metaclass=A
 
         Called by the runner after the worker is constructed and before
         the consumer begins delivering messages. Override to start
-        long-lived async resources (browser subprocesses, HTTP client
+        long-lived async resources (subprocesses, HTTP client
         pools, connection warm-ups) that cannot be safely initialised
         in ``__init__`` because they need the running event loop.
 
@@ -90,8 +95,8 @@ class AsyncProcessingWorkerBase(Base, AsyncMessageConsumerInterface, metaclass=A
         Called by the runner after the consumer has stopped delivering
         messages and before infrastructure (MongoDB, Redis, RMQ) is torn
         down. Override to close resources that require an explicit async
-        moment — httpx/AsyncOpenAI pools (cannot close from ``__del__``)
-        and browser subprocesses (GC does not reap them).
+        moment — async HTTP client pools (cannot close from ``__del__``)
+        and subprocesses (GC does not reap them).
 
         Default: no-op. Implementations should be best-effort: log and
         continue rather than raise, so one resource's failure does not
@@ -110,9 +115,10 @@ class AsyncProcessingWorkerBase(Base, AsyncMessageConsumerInterface, metaclass=A
             downstream message is needed.
 
         :raises SoftFailureException: When failure is retryable. Message
-            will be routed to retry queue with back-off.
+            is retried with back-off (see ``SoftFailureException``).
         :raises HardFailureException: When failure is permanent. Message
-            will be dropped.
+            will be dropped. Any other exception counts as a hard
+            failure (see ``HardFailureException``).
         """
         ...
 
@@ -126,9 +132,7 @@ class SyncProcessingWorkerBase(Base, SyncMessageConsumerInterface, metaclass=ABC
     ``run_in_executor()``, keeping the main event loop free for
     RabbitMQ heartbeats.
 
-    Threading Behavior
-    ------------------
-    Each invocation runs in a thread from the default
+    Threading behavior: each invocation runs in a thread from the default
     ``ThreadPoolExecutor`` (sized ``min(32, os.cpu_count() + 4)``).
     The worker may spawn its own ``ProcessPoolExecutor`` or
     ``multiprocessing.Pool`` internally for CPU parallelism across
@@ -139,15 +143,20 @@ class SyncProcessingWorkerBase(Base, SyncMessageConsumerInterface, metaclass=ABC
     - Do NOT use ``asyncio.run()`` or ``asyncio.get_event_loop()`` —
       async objects from the main loop cannot be used from a different
       thread due to event loop affinity.
-    - If you need async I/O (aiohttp, async DB clients), use
+    - If you need async I/O (async HTTP clients, async DB clients), use
       ``AsyncProcessingWorkerBase`` instead.
 
-    When to Use
-    -----------
+    Use this base class when:
+
     - Worker does CPU-bound work (parsing, extraction, computation).
     - Worker uses sync libraries (``requests``, file I/O, sync DB
       drivers).
     - Worker manages its own multiprocessing internally.
+
+    :param worker_name: Unique instance identifier. See
+        ``AsyncProcessingWorkerBase``.
+    :param worker_type: Defaults to the class name in snake_case. See
+        ``AsyncProcessingWorkerBase``.
     """
 
     def __init__(
@@ -199,9 +208,10 @@ class SyncProcessingWorkerBase(Base, SyncMessageConsumerInterface, metaclass=ABC
             downstream message is needed.
 
         :raises SoftFailureException: When failure is retryable. Message
-            will be routed to retry queue with back-off.
+            is retried with back-off (see ``SoftFailureException``).
         :raises HardFailureException: When failure is permanent. Message
-            will be dropped.
+            will be dropped. Any other exception counts as a hard
+            failure (see ``HardFailureException``).
         """
         ...
 
@@ -219,6 +229,11 @@ class FilteringWorkerBase(AsyncProcessingWorkerBase):
     Subclasses implement should_process() to decide whether a message
     is relevant, and process() for the actual work. When should_process()
     returns False, the message is ACKed with no downstream publish.
+
+    :param worker_name: Unique instance identifier. See
+        ``AsyncProcessingWorkerBase``.
+    :param worker_type: Defaults to the class name in snake_case. See
+        ``AsyncProcessingWorkerBase``.
     """
 
     def __init__(
@@ -272,8 +287,12 @@ class CapabilityWorkerBase(AsyncProcessingWorkerBase):
     via ``WorkerFactoryContext`` (single source of truth, also used by
     routing-plan validation).
 
+    :param worker_name: Unique instance identifier. See
+        ``AsyncProcessingWorkerBase``.
     :param accepts: Input ``data_type``s this worker handles.
     :param produces: Output ``data_type`` (informational; None if none).
+    :param worker_type: Defaults to the class name in snake_case. See
+        ``AsyncProcessingWorkerBase``.
     """
 
     def __init__(

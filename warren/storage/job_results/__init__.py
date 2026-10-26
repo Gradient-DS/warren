@@ -1,3 +1,5 @@
+"""Job results: one status record for each document and stage of a job."""
+
 from warren.storage.job_results.interface import (
     JobResultsStoreInterface,
 )

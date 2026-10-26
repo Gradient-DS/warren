@@ -41,9 +41,9 @@ from warren.workers.health import HealthConfig
 class RuntimeRMQConfig(BaseModel):
     """RabbitMQ connection + consumer settings (environment-specific).
 
-    Exchange *definitions* (topology) live on the ``PipelineSpec``, not here —
-    see tasks/routing-design.md D3. Config holds only what varies per
-    deployment: where the broker is and how to consume.
+    Exchange *definitions* (topology) live on the ``PipelineSpec``, not here.
+    Config holds only what varies per deployment: where the broker is and
+    how to consume.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -56,7 +56,9 @@ class RuntimeKafkaConfig(BaseModel):
     """Kafka settings composed from framework config models.
 
     The default topic is ``jobs`` — the Kafka counterpart of the RMQ
-    ``jobs`` fanout exchange.
+    ``jobs`` fanout exchange. ``topic.create_if_missing`` defaults to
+    False, so setup fails when the topic does not exist. Create the topic
+    out-of-band, or set ``topic.create_if_missing``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -114,7 +116,17 @@ class DocumentsConfig(CacheConfig):
 
 
 class RetentionConfig(BaseModel):
-    """MongoDB job record expiry, in seconds."""
+    """MongoDB job record expiry, in seconds.
+
+    :param job_records_ttl_seconds: Delete a job record this many seconds
+        after the job completes, and a job results record this many
+        seconds after its last write. ``JobStatusWorkerRunner`` passes it
+        to its default stores. Pass it to the stores that you build. None
+        means no expiry.
+    :param job_records_max_age_seconds: Delete a job record this many
+        seconds after it is created, also when the job does not complete.
+        Must be at least ``job_records_ttl_seconds``. None means no expiry.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -134,8 +146,14 @@ class RetentionConfig(BaseModel):
 class RuntimeRetryConfig(BaseModel):
     """Retry worker toggle plus the retry policy every consumer manager applies.
 
-    :param enabled: Whether the retry worker runs.
+    :param enabled: In-process runs only (``create_in_process_runners``):
+        add a retry runner. A multi-process deployment ignores this flag.
+        Start a retry worker (``start_retry_worker``) to retry soft
+        failures there.
     :param collection_name: MongoDB collection for messages awaiting retry.
+    :param lease_ttl_seconds: Lifetime in seconds of the retry lease. One
+        retry worker instance at a time holds the lease and schedules the
+        retries.
     :param policy: Defaults and caps for soft-failure retries. Passed to
         every consumer manager the runner builds, so ``max_delay_cap`` and
         friends are deployment settings rather than library constants.
@@ -150,7 +168,14 @@ class RuntimeRetryConfig(BaseModel):
 
 
 class StartupConfig(BaseModel):
-    """Connection attempts and bounded exponential backoff at startup."""
+    """Connection attempts and bounded exponential backoff at startup.
+
+    :param attempts: Number of connection attempts. After the last failed
+        attempt, the connection error is raised.
+    :param initial_delay_seconds: Delay before the second attempt.
+    :param max_delay_seconds: The delay doubles after each attempt, up to
+        this value.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -160,7 +185,16 @@ class StartupConfig(BaseModel):
 
 
 class ScopingConfig(BaseModel):
-    """Content namespace settings."""
+    """Content namespace settings (see ``warren/docs/scoping.md``).
+
+    :param enabled: Store content in a namespace for each message
+        ``scope``.
+    :param required: A message without ``scope`` is a hard failure when
+        it uses scoped storage. If False, a message without ``scope`` uses
+        the default database and cache keys without a prefix.
+    :param database_prefix: Prefix of the MongoDB database for each scope:
+        content goes to ``<database_prefix><scope>``.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -177,7 +211,8 @@ class RuntimeConfig(BaseModel):
         YAML stays valid, and only the matching backend section is used.
         ``"memory"`` runs everything in one process with no infrastructure
         and needs no external connection settings (see ``warren/docs/memory.md``).
-    :param rabbitmq: RabbitMQ connection, exchange, and consumer settings.
+    :param rabbitmq: RabbitMQ connection and consumer settings. The
+        exchange is on ``PipelineSpec.exchange``.
     :param kafka: Kafka connection, topic, and consumer settings.
     :param memory: In-process consumer settings.
     :param mongodb: MongoDB connection settings.
@@ -188,6 +223,7 @@ class RuntimeConfig(BaseModel):
     :param retry: Retry worker toggle and collection name.
     :param health: Watchdog and readiness endpoint settings.
     :param startup: Connection attempts and backoff settings.
+    :param scoping: Content namespace settings.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -210,9 +246,14 @@ class RuntimeConfig(BaseModel):
     def from_yaml(cls, path: Path) -> "RuntimeConfig":
         """Load configuration from a YAML file.
 
+        String values can use ``${NAME}``. The value comes from the
+        environment.
+
         :param path: Path to the YAML config file.
         :return: Populated RuntimeConfig instance.
         :raises FileNotFoundError: If the config file doesn't exist.
+        :raises ValueError: If an environment variable ``NAME`` is not set.
+        :raises pydantic.ValidationError: For an unknown key or a bad value.
         """
         with Path(path).open() as f:
             data = yaml.safe_load(f)

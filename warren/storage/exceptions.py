@@ -25,13 +25,15 @@ class TransientStoreError(WarrenError):
     """A store operation failed for a transient, retryable reason.
 
     Signals a temporary backend condition (connection blip, failover,
-    server-selection timeout) rather than a permanent fault. It is part
-    of the store interface contract: implementations translate their
-    backend-specific transient errors into this type, so callers that
+    server-selection timeout) rather than a permanent fault. Callers that
     cannot tolerate a dropped operation (e.g. the JobStatusWorker
     observer, where a lost write strands a job) can retry on it without
-    depending on the concrete backend. The absence of this type means
-    the failure is permanent and must not be retried.
+    depending on the concrete backend.
+
+    The job store and the job-results store raise this type for transient
+    failures, and other errors from these two stores are permanent. The
+    document, results and publishing stores raise the backend error
+    unchanged.
     """
 
     pass

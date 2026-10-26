@@ -1,3 +1,8 @@
+"""Job publication: a worker that turns a ``job`` message into one message for
+each document, and the base class for the publisher that loads and registers
+each document.
+"""
+
 from warren.jobs.publishing.job_documents_publisher import (
     JobDocumentsPublisher,
 )

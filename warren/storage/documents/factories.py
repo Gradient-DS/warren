@@ -34,7 +34,12 @@ def create_cached_document_fetcher(
     :param redis_client: Async Redis client instance.
     :param resolvers: Mapping of location_type to resolver function.
     :param cache_base_key: Redis key namespace for document cache.
-    :param default_ttl_seconds: Default TTL for cached document bytes.
+    :param default_ttl_seconds: Default TTL for cached document bytes. Must be
+        positive, or ValueError.
+    :param scoping_enabled: Prefix each cache key with the scope of the current
+        handler: ``s:{scope}:{base_key}:{key}``.
+    :param scope_required: With scoping on, raise HardFailureException when the
+        handler has no scope. False: use the key without a prefix.
 
     :return: Configured CachedDocumentFetcher instance.
     """

@@ -1,8 +1,50 @@
 """Documents: document locations, resolvers, the cached fetcher and source discovery.
 
-`resolve_gcs` needs the `warren[gcs]` extra, and the HTTP names need the
-`warren[http]` extra. The package imports them only when you use them, so
-the package imports without these extras.
+`resolve_gcs` needs the `warren[gcs]` extra, `resolve_s3` needs the
+`warren[s3]` extra, and the HTTP names need the `warren[http]` extra. The
+package imports them only when you use them, so the package imports without
+these extras.
+
+## Fetch documents
+
+- `GetDocumentFunc`
+- `CachedDocumentFetcher`
+- `create_cached_document_fetcher`
+- `build_document_cache_key`
+- `DEFAULT_TTL_SECONDS`
+
+## Locations
+
+- `DocumentLocation`
+- `DocumentPathLocation`
+- `DocumentURLLocation`
+- `DocumentCloudLocation`
+- `AnyDocumentLocation`
+
+## Resolvers
+
+- `ResolveDocumentFunc`
+- `resolve_path`
+- `resolve_s3`
+- `resolve_gcs`
+- `resolve_http`
+- `build_client`
+- `parse_retry_after`
+- `DEFAULT_FOLLOW_REDIRECTS`
+- `DEFAULT_MAX_REDIRECTS`
+- `DEFAULT_TIMEOUT_S`
+
+## Errors
+
+- `DocumentResolutionError`
+- `DocumentNotFoundError`
+- `UnknownLocationTypeError`
+- `DocumentThrottledError`
+
+## Source discovery
+
+- `discover_local_pdfs`
+- `discover_gcs_pdfs`
 """
 
 from typing import TYPE_CHECKING, Any

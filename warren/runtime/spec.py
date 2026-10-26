@@ -2,7 +2,7 @@
 Specification dataclasses for processing-worker runners.
 
 These dataclasses are application-agnostic: they describe a worker type
-in terms it can be wired by a runner (RabbitMQ, MongoDB, Redis), without
+in terms it can be wired by a runner (pubsub backend and stores), without
 knowing what the worker does. Concrete deployments (production or test)
 declare a ``PipelineSpec`` whose ``workers`` dict maps a type name to a
 ``WorkerSpec``; the runner consumes that to build infrastructure.
@@ -37,11 +37,10 @@ from warren.storage.scoping import ScopedDatabase, get_current_scope
 class WorkerFactoryContext:
     """Bundle of resources the runner hands to each worker factory.
 
-    Grew organically as worker kinds diversified (parser needs a
-    document fetcher; web-fetch / field-extract need direct storage;
-    EZ-style workers need raw Mongo/Redis clients to construct
-    additional stores like ``BinaryResultsStore``). A single context
-    keeps factory signatures stable as more concerns get added.
+    Workers need different resources: some need a document fetcher,
+    some need direct document storage, and a factory can build more
+    stores (like ``BinaryResultsStore``) from the raw clients. A single
+    context keeps factory signatures stable as more concerns get added.
 
     :param worker_name: Runner-assigned unique name for this worker.
     :param worker_type: The worker type (its key in ``PipelineSpec.workers``).
@@ -135,8 +134,10 @@ class WorkerSpec:
         DocumentStoreInterface for direct reads/writes against the
         "documents" collection (distinct from the GetDocumentFunc path,
         which fetches bytes via location resolvers). Used by workers
-        that register or update entries by ``doc_id`` (e.g. WebFetch
-        writes HTML bytes; FieldExtract reads them back).
+        that read or write document records by ``doc_id``.
+
+    :raises ValueError: If both ``binding_key`` and ``binding_keys`` are
+        set.
     """
 
     collections: dict[str, str]
@@ -168,15 +169,15 @@ class PipelineSpec:
 
     :param workers: Maps worker type name to its WorkerSpec.
     :param exchange: The exchange all workers consume from and publish to.
-    :param result_collections: All MongoDB collection names to report
-        in summaries (e.g., ["parsed_documents", "chunks", "embeddings"]).
-    :param reference_collection: Collection whose count defines "expected"
-        (e.g., "chunks").
-    :param completion_collection: Collection to compare against reference
-        (e.g., "embeddings"). Done when counts match and both > 0.
-    :param final_data_type: The data_type that marks a document as fully
-        processed (e.g., "embedded_document"). Used by the job store for
-        completion detection.
+    :param result_collections: MongoDB collection names of the pipeline
+        results, for application use. Warren does not read this field.
+    :param reference_collection: A collection name for application use.
+        Warren does not read this field.
+    :param completion_collection: A collection name for application use.
+        Warren does not read this field.
+    :param final_data_type: The data_type that marks a document as done.
+        Pass it to the job store when you create a job: ``JobStatusWorker``
+        reads the copy in the job record, not this field.
     :param publication: Optional routing for the publication worker's document
         messages. Set ``route_func``; static ``route`` is not supported.
         ``None`` preserves exchange-based default routing.

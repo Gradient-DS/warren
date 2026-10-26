@@ -27,9 +27,6 @@ from warren.workers.messages import (
 )
 
 
-_DEFAULT_SHUTDOWN_TIMEOUT_SECONDS: float = 30.0
-
-
 class MemoryConsumerManager(ConsumerManagerBase):
     """Consumer manager for the in-process backend.
 
@@ -67,7 +64,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
         publish_hard_failures: bool = True,
         handler_timeout_seconds: float | None = None,
         concurrency: int | None = None,
-        on_shutdown_timeout: float = _DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
+        on_shutdown_timeout: float = 30.0,
     ) -> None:
         # Same three publishing paths as the other backends (see
         # warren/docs/routing.md): data, control, observer. The base

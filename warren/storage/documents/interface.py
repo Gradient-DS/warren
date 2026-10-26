@@ -8,10 +8,14 @@ storage backends.
 
 Exception hierarchy for error handling in workers::
 
-    DocumentResolutionError          # base — soft failure (transient/unknown)
-    ├── DocumentNotFoundError        # hard failure (document doesn't exist)
-    ├── UnknownLocationTypeError     # hard failure (no resolver registered)
-    └── DocumentThrottledError       # soft failure; the source asked for a delay
+    DocumentResolutionError          # base (transient or unknown failure)
+    ├── DocumentNotFoundError        # the document does not exist
+    ├── UnknownLocationTypeError     # no resolver registered
+    └── DocumentThrottledError       # the source asked for a delay
+
+None of these errors is a ``SoftFailureException``, so the consumer treats
+each of them as a hard failure. To retry, catch the error in the handler and
+raise ``SoftFailureException``.
 """
 
 from typing import Protocol
@@ -27,8 +31,9 @@ from warren.storage.documents.location import (
 class DocumentResolutionError(WarrenError):
     """Base exception for document resolution failures.
 
-    Treated as a soft failure (retryable) by workers unless a more
-    specific subclass indicates otherwise.
+    Not retried by itself: the consumer treats any exception other than
+    ``SoftFailureException`` as a hard failure. To retry, catch this error
+    in the handler and raise ``SoftFailureException``.
 
     :param message: Error description.
     :param doc_id: Document identifier, if known.
@@ -47,25 +52,28 @@ class DocumentResolutionError(WarrenError):
 class DocumentNotFoundError(DocumentResolutionError):
     """Document does not exist at the specified location.
 
-    Treated as a hard failure (non-retryable) by workers — the
-    document won't appear on retry.
+    Do not retry it: the document will not appear on retry.
+
+    Raised by resolvers and the fetcher. Document stores raise a different
+    class, ``warren.storage.document_store.DocumentNotFoundError``. A handler
+    that catches one class does not catch the other.
     """
 
 
 class UnknownLocationTypeError(DocumentResolutionError):
     """No resolver registered for the given location type.
 
-    Treated as a hard failure (non-retryable) by workers — a missing
-    resolver is a configuration error, not a transient issue.
+    Do not retry it: a missing resolver is a configuration error, not a
+    transient issue.
     """
 
 
 class DocumentThrottledError(DocumentResolutionError):
     """The source asked us to slow down: HTTP 429, or 503 with ``Retry-After``.
 
-    Soft failure. Workers that defer the document instead of spending a
-    retry slot read ``retry_after`` — see ``warren/docs/retry_design.md``,
-    "Deferring on throttling".
+    Not retried by itself, as for ``DocumentResolutionError``. To retry
+    after the delay that the source asked for, catch this error in the
+    handler and raise ``SoftFailureException`` with ``retry_after``.
 
     :param message: Error description.
     :param retry_after: Server-requested delay in seconds, or None when the
@@ -122,8 +130,9 @@ class GetDocumentFunc(Protocol):
 
         :return: Raw document bytes.
 
-        :raises DocumentNotFoundError: If the document doesn't exist (hard failure).
-        :raises UnknownLocationTypeError: If no resolver for the location type (hard failure).
-        :raises DocumentResolutionError: For transient resolution failures (soft failure).
+        :raises DocumentNotFoundError: If the document does not exist.
+        :raises UnknownLocationTypeError: If no resolver for the location type.
+        :raises DocumentResolutionError: For transient resolution failures. The
+            consumer does not retry it: raise ``SoftFailureException`` to retry.
         """
         ...

@@ -15,8 +15,8 @@ class JobResultsStoreInterface(Protocol):
     """Storage protocol for per-document processing results.
 
     **Transient-error contract:** transient backend failures (connection
-    blips, failover) are raised as ``TransientStoreError`` (see
-    ``storage/exceptions.py``); permanent failures propagate as other
+    blips, failover) are raised as ``warren.storage.TransientStoreError``;
+    permanent failures propagate as other
     exceptions. Callers that cannot tolerate a dropped operation — notably
     the ``JobStatusWorker`` observer, where a lost write strands a job —
     should retry on ``TransientStoreError``.
@@ -39,8 +39,14 @@ class JobResultsStoreInterface(Protocol):
         """Record a successful processing result.
 
         Upserts the ``(job_id, data_type, doc_id)`` record. If the
-        record previously held a soft-failure, it is overwritten with
-        success and failure-specific fields are cleared.
+        record previously held a failure (soft or hard), it is overwritten
+        with success and failure-specific fields are cleared.
+
+        :param job_id: Job ID. Part of the record key.
+        :param data_type: The pipeline stage. Part of the record key.
+        :param doc_id: Document ID. Part of the record key.
+        :param origin_type: Who produced the message.
+        :param origin_name: Name of the producer.
         """
         ...
 
@@ -62,8 +68,16 @@ class JobResultsStoreInterface(Protocol):
         ``error_reason`` to the ``soft_failures`` list so the full
         retry history is preserved.
 
+        :param job_id: Job ID. Part of the record key.
+        :param data_type: The pipeline stage. Part of the record key.
+        :param doc_id: Document ID. Part of the record key.
         :param origin_type: Who produced the message that failed.
+        :param origin_name: Name of the producer.
         :param consumer_type: Who failed to consume it.
+        :param consumer_name: Name of the consumer.
+        :param retry_count: Number of retries so far. Replaces the stored
+            value.
+        :param error_reason: Reason for this failure.
         """
         ...
 
@@ -83,8 +97,14 @@ class JobResultsStoreInterface(Protocol):
         Upserts the ``(job_id, data_type, doc_id)`` record. This
         document will not be retried.
 
+        :param job_id: Job ID. Part of the record key.
+        :param data_type: The pipeline stage. Part of the record key.
+        :param doc_id: Document ID. Part of the record key.
         :param origin_type: Who produced the message that failed.
+        :param origin_name: Name of the producer.
         :param consumer_type: Who failed to consume it.
+        :param consumer_name: Name of the consumer.
+        :param error: Error text, stored as the hard failure of the record.
         """
         ...
 
@@ -149,10 +169,13 @@ class JobResultsStoreInterface(Protocol):
         job_id: str,
         data_type: str | None = None,
     ) -> list[dict]:
-        """Get deduplicated error messages with occurrence counts.
+        """Group the failed records of a job by their current error.
 
-        Groups identical errors so operators see aggregated counts
-        rather than thousands of identical records.
+        The current error of a record is its hard failure, or else its last
+        soft-failure reason. Earlier soft-failure reasons are not counted.
+        ``count`` is the number of records (document and stage) in each
+        group. ``first_seen`` and ``last_seen`` are the earliest and latest
+        update time of those records.
 
         :param data_type: If provided, only return errors for this
             stage.

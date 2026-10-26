@@ -1,3 +1,5 @@
+"""Jobs: the job store, which holds what a job is and its completion status."""
+
 from warren.storage.jobs.interface import (
     JobCreationFailedError,
     JobNotFoundError,

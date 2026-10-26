@@ -31,19 +31,32 @@ from warren.workers.workers import (
 
 
 class JobStatusWorker(FilteringWorkerBase):
-    """Observes messages on the fanout exchange and records results.
+    """Observes messages on the observer exchange and records results.
 
-    Sits alongside processing workers on the same exchange. Classifies
+    Sits alongside processing workers. Classifies
     each message (success, soft-failure, hard-failure) and records the
     outcome via ``JobResultsStoreInterface``. After each update, checks
     whether the job is complete and returns a ``"job-completed"``
     message if so.
+
+    A message without ``data.doc_id`` is skipped: it does not count
+    toward completion. A job is complete when the successes at the
+    ``final_data_type`` of the job record, plus the hard failures, reach
+    ``num_documents``. While ``num_documents`` is not set, the job does
+    not complete. The ``job-completed`` message has ``completed_count``,
+    ``hard_failed_count`` and ``with_failures`` in ``data``, and the
+    parameters of the job in ``job_parameters``.
 
     :param worker_name: Unique instance identifier.
     :param job_store: Store for job definitions and completion status.
     :param job_results_store: Store for per-document processing results.
     :param worker_type: Optional override for the worker type
         (default: ``"job_status_worker"``).
+    :param store_retry_attempts: Number of attempts for each store call
+        that raises ``TransientStoreError``. After the last attempt, the
+        observation is dropped.
+    :param store_retry_base_delay: Delay in seconds before the first
+        retry of a store call. The delay grows with each attempt.
     """
 
     def __init__(
@@ -255,10 +268,8 @@ class JobStatusWorker(FilteringWorkerBase):
             f"{hard_failed_count} failed"
         )
 
-        # Forward job parameters so downstream consumers (e.g. the
-        # vector-DB lifecycle worker, which filters on
-        # job_parameters.vector_db.create) can opt in via should_process
-        # without round-tripping back to the JobStore.
+        # Forward job parameters so downstream consumers can filter on
+        # them in should_process without a read of the JobStore.
         job_parameters = job.get("parameters") or {}
 
         return {

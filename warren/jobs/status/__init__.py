@@ -1,3 +1,7 @@
+"""Job status: an observer that records each document outcome and publishes
+``job-completed``.
+"""
+
 from warren.jobs.status.job_status_worker import (
     JobStatusWorker,
 )

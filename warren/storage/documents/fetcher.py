@@ -29,11 +29,10 @@ from warren.storage.documents.location import (
 def build_document_cache_key(doc_id: str, job_id: str | None = None) -> str:
     """Compute the cache key a document's bytes live under.
 
-    Exposed at module level so upstream writers (e.g. ``WebFetchWorker``
-    via ``BinaryResultsStore``) can pre-populate the cache with the same
-    key the downstream ``CachedDocumentFetcher`` reads from — avoiding a
-    resolver call for bytes that have already been fetched by an earlier
-    worker.
+    An upstream worker (for example through ``BinaryResultsStore``) can
+    write bytes to the cache under this key. The downstream
+    ``CachedDocumentFetcher`` reads the same key, so it does not call a
+    resolver for bytes that an earlier worker already fetched.
 
     When ``job_id`` is given the key is job-scoped
     (``doc:{doc_id}:{job_id}``): retries of the same job still hit the
@@ -94,6 +93,10 @@ class CachedDocumentFetcher(Base):
         :raises UnknownLocationTypeError: If no resolver for the location type.
         :raises DocumentNotFoundError: If the document doesn't exist at the location.
         :raises DocumentResolutionError: For transient resolution failures.
+        :raises CacheOperationError: If the cache read or write fails (not
+            wrapped).
+        :raises HardFailureException: If the cache is scoped and the current
+            handler has no valid scope.
         """
         cache_key = self._build_cache_key(doc_id, job_id)
         return await get_or_set(

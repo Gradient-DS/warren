@@ -41,19 +41,19 @@ class CacheInterface[T](Protocol):
     (e.g., redis.asyncio) to avoid blocking the event loop.
 
     Implementations should be specialized for specific value types
-    (e.g., Dict for document metadata, bytes for PDFs).
+    (e.g., dict values or binary values).
 
-    Implementations are expected to be configured with a base_key
-    (similar to collection_name in document stores) that namespaces
-    all keys.
+    A cache is one namespace: the Redis caches prefix each key with a
+    ``base_key``. Each ``MemoryCache`` instance is its own namespace.
 
-    Key Hierarchy Convention:
-        Keys can be hierarchical using ":" as separator (e.g., "doc123:0",
-        "doc123:1" for chunks of document doc123). When using prefix-based
-        operations (get_by_key_prefix, delete_by_key_prefix), include the
-        trailing separator to match only sub-keys:
-        - "doc123" matches: doc123, doc123:0, doc1234:0 (may be too broad)
-        - "doc123:" matches: doc123:0, doc123:1 only (sub-keys only)
+    Key hierarchy convention: keys can be hierarchical, with ":" as the
+    separator (e.g., "doc123:0" and "doc123:1" for the parts of document
+    doc123). For the prefix operations (get_by_key_prefix,
+    delete_by_key_prefix), include the trailing separator to match only
+    sub-keys:
+
+    - "doc123" matches: doc123, doc123:0, doc1234:0 (can be too broad)
+    - "doc123:" matches: doc123:0, doc123:1 only (sub-keys only)
     """
 
     async def get(self, key: str) -> T | None:
@@ -153,21 +153,29 @@ async def get_or_set[T](
     return the cached value. Otherwise, call factory() to compute the value,
     store it in cache, and return it.
 
+    Example with ``functools.partial``:
+
+    ```python
+    import asyncio
+    from functools import partial
+    from warren.storage.cache import MemoryCache, get_or_set
+
+    async def load(key: str) -> dict:
+        return {"key": key}
+
+    async def main() -> None:
+        cached = partial(get_or_set, MemoryCache[dict]())
+        print(await cached("doc-1", lambda: load("doc-1")))
+
+    asyncio.run(main())
+    ```
+
     :param cache: Cache instance to use.
     :param key: Cache key.
     :param factory: Async callable that produces the value if not cached.
     :param ttl_seconds: Time-to-live in seconds. None uses cache default.
 
     :return: Cached or newly computed value.
-
-    Example usage with functools.partial:
-        from functools import partial
-
-        my_cache: CacheInterface[Dict] = ...
-        get_or_set_cached = partial(get_or_set, my_cache)
-
-        # Later:
-        value = await get_or_set_cached("doc123", lambda: load_document("doc123"))
     """
     value = await cache.get(key)
     if value is not None:

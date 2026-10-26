@@ -18,7 +18,10 @@ from warren.storage.scoping import current_scope
 
 
 class BasePublisher(Base, PublisherInterface, metaclass=ABCMeta):
-    """Base class for publishers. Each publisher owns its own routing logic."""
+    """Base class for publishers. Each publisher owns its own routing logic.
+
+    :raises ValueError: If both ``route`` and ``route_func`` are set.
+    """
 
     def __init__(
         self,

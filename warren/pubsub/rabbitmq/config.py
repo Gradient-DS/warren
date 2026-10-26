@@ -62,7 +62,7 @@ class RMQConnectionConfig(BaseModel):
 class RMQExchangeConfig(BaseModel):
     name: str
     # "headers" is intentionally unsupported (routes on binding arguments,
-    # a different code path from routing keys). See tasks/routing-design.md D1.
+    # a different code path from routing keys).
     type: Literal["fanout", "direct", "topic"] = "topic"
     durable: bool = True
 
@@ -88,7 +88,13 @@ class RMQQueueConfig(BaseModel):
 class RMQConsumerConfig(BaseModel):
     """Consumer-side settings, one set per worker process.
 
+    :param concurrency: Maximum number of handlers that run at the same
+        time. None means ``prefetch_count`` handlers. The channel prefetch
+        is raised to ``concurrency`` when ``concurrency`` is larger.
     :param prefetch_count: Unacked deliveries the broker pushes at once.
+    :param handler_timeout_seconds: Time limit for one handler call. A
+        handler that times out is a soft failure. ``/live`` fails when a
+        handler runs for twice this value. None means no limit.
     :param on_shutdown_timeout: Seconds to wait for in-flight work on stop.
     :param max_deliveries: Dead-letter a message after this many broker
         deliveries (the first counts as 1). Every requeue costs one — a

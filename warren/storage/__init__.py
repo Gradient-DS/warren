@@ -2,6 +2,36 @@
 
 Each store type is in its own subpackage, such as `warren.storage.jobs` and
 `warren.storage.results`.
+
+## Errors
+
+- `ResourceNotFoundError`
+- `ResourceAlreadyExistsError`
+- `TransientStoreError`
+
+## Retry on transient errors
+
+- `run_with_transient_retry`
+- `classify_transient`
+- `classify_transient_methods`
+
+## Scopes
+
+- `current_scope`
+- `get_current_scope`
+- `require_scope`
+- `valid_scope`
+- `scope_fields`
+- `scoped_cache_key`
+- `ScopedDatabase`
+- `ScopeClients`
+- `erase_scope`
+
+## Shared stores and helpers
+
+- `CachedDocumentStore`
+- `MemoryStoreRegistry`
+- `configure_ttl_index`
 """
 
 from warren.storage.cached_document_store import CachedDocumentStore

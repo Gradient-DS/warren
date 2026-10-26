@@ -1,3 +1,5 @@
+"""Publishing tracker: what happened when each document of a job was submitted."""
+
 from warren.storage.publishing_tracker.interface import (
     PublishingTrackerInterface,
 )

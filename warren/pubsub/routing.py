@@ -57,6 +57,10 @@ class MessageFieldRouter:
         Defaults to ``"data_type"``.
     :param prefix_field: Optional field prepended to the key with a dot.
     :param default_prefix: Fallback when the prefix field is missing or empty.
+
+    :raises ValueError: On a call, if the message has no value for
+        ``field``, or no value for ``prefix_field`` and no
+        ``default_prefix``.
     """
 
     def __init__(
@@ -127,11 +131,14 @@ class RoutingPlanRouter:
 
     This router and :class:`RoutingPlan` are two halves of one mechanism: wire
     this as a publisher's ``route_func`` for the plan to take effect. Without a
-    plan in the message it raises (below); with a plan but no router the plan is
-    silently ignored. The coupling cannot be checked at deploy time because a
+    plan in the message it raises ValueError; with a plan but no router the plan
+    is silently ignored. The coupling cannot be checked at deploy time because a
     ``route_func`` is opaque to the framework.
 
     :param plan_key: Key under ``job_parameters`` holding the plan.
+
+    :raises ValueError: On a call, if the message has no plan at
+        ``job_parameters[plan_key]``.
     """
 
     def __init__(self, plan_key: str = ROUTING_PLAN_KEY) -> None:

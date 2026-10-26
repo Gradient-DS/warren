@@ -88,9 +88,17 @@ async def create_runtime_infrastructure(
     The caller is responsible for closing via
     ``close_runtime_infrastructure``.
 
+    The function tries ``config.startup.attempts`` times to connect to the
+    pubsub backend, MongoDB and Redis. After a failed attempt, it closes
+    the connections of that attempt and waits (see ``StartupConfig``). On
+    ``backend: memory``, it creates only the in-process connection manager
+    and returns ``RuntimeInfra(None, None, manager)``.
+
     :param config: Runtime infrastructure configuration.
     :param sleep: Delay between startup attempts.
     :return: Initialized connections ready for use.
+    :raises Exception: The connection error of the last attempt, re-raised
+        unchanged.
     """
     if config.backend == "memory":
         _module_logger.warning(

@@ -6,9 +6,11 @@ handles only raw dicts — ``ProcessingMessage`` is instantiated from
 incoming dicts at the worker level and converted back to dicts for
 publishing.
 
-The framework is application-agnostic: message fields like ``data``,
-``job_parameters``, and ``job_metadata`` are opaque dictionaries whose
-structure is defined by the application, not the framework.
+The framework is application-agnostic: message fields like
+``job_parameters`` and ``job_metadata`` are opaque dictionaries whose
+structure is defined by the application, not the framework. In ``data``,
+the framework reads two keys: ``doc_id`` and ``part_idx``. All other keys
+of ``data`` are opaque to the framework.
 
 Routing convention: preprocessing_required / preprocessing_completed
 --------------------------------------------------------------------
@@ -115,8 +117,11 @@ class ProcessingMessage:
 
     :param data_type: Semantic type of the payload
         (e.g., "pdf_document", "markdown_document", "text_chunks").
-    :param data: Payload or reference to payload in storage. Structure
-        is determined by ``data_type`` and is opaque to the framework.
+    :param data: Payload, or a reference to the payload in storage. The
+        framework reads two keys: ``doc_id`` (required for job status: a
+        message without it is not counted) and ``part_idx`` (default 0).
+        Together with ``job_id``, they identify a message for retries and
+        logs. All other keys are opaque to the framework.
     :param job_id: Identifier grouping related messages into a single job.
     :param origin: Source that produced this message.
     :param job_metadata: Optional metadata about the job. Structure is
@@ -128,8 +133,17 @@ class ProcessingMessage:
         before the main processing can proceed.
     :param preprocessing_completed: Preprocessing steps already done.
     :param retry: Retry state, populated on soft failure.
+    :param scope: Optional storage scope. The consumer manager sets it as
+        the current scope while the handler runs, and copies it to the
+        result.
     :param lane: Optional application-defined routing lane.
     :param priority: Optional AMQP priority, an integer from 0 through 255.
+        Only the RabbitMQ publisher sends it, and the queue needs an
+        ``x-max-priority`` argument (``RMQConsumerConfig.queue_arguments``).
+        The memory and Kafka backends ignore it.
+
+    :raises ValueError: If ``priority`` is a bool, or an int outside
+        0 through 255.
     """
 
     data_type: str
@@ -293,6 +307,10 @@ def build_message_key_prefix(
     job_id: str | None,
 ) -> str:
     """Build a key prefix for matching all parts of a document.
+
+    Warning: ``doc_id`` is the first parameter, but ``build_message_key``
+    takes ``job_id`` first. Pass the arguments by keyword, or the prefix
+    matches no key.
 
     Use with ``CacheInterface.get_by_key_prefix()`` to retrieve all
     parts of a document within a job. Includes trailing separator

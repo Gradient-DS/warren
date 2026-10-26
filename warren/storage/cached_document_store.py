@@ -31,8 +31,9 @@ class CachedDocumentStore(Base):
     fast reads. All writes go to both store and cache (write-through).
     Reads check cache first, falling back to store on miss (read-through).
 
-    Cache failures are logged as warnings but never propagate — the
-    underlying store is the source of truth.
+    Cache failures are logged as warnings and do not propagate, except
+    ``HardFailureException`` (a missing or malformed scope on a scoped
+    cache). The underlying store is the source of truth.
 
     :param store: Persistent document store.
     :param cache: Cache for fast reads.

@@ -96,7 +96,7 @@ class ResultsStoreInterface(Protocol):
         :param job_id: The job ID (None if not using job grouping).
 
         :returns: The result document.
-        :raises: ResultNotFound if result does not exist.
+        :raises ResultNotFound: If no result exists for the given keys.
         """
         ...
 
@@ -114,7 +114,7 @@ class ResultsStoreInterface(Protocol):
         :param try_cache: Deprecated and ignored; retained for compatibility.
 
         :returns: Async generator yielding result documents.
-        :raises: DocumentProcessingResultsNotFound if no results exist for the given
-            document ID and job ID.
+        :raises DocumentProcessingResultsNotFound: If no results exist for the
+            document and job.
         """
         ...

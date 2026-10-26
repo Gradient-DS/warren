@@ -36,8 +36,9 @@ raises [`OptionalDependencyError`](py:warren.OptionalDependencyError).
   pipeline on RabbitMQ, MongoDB and Redis.
 - [`warren.runtime`](py:warren.runtime): compose a pipeline with [`PipelineSpec`](py:warren.runtime.PipelineSpec)
   and [`WorkerSpec`](py:warren.runtime.WorkerSpec), and load the settings with
-  [`RuntimeConfig`](py:warren.runtime.RuntimeConfig). For a local run without infrastructure, use
-  [`run_in_process`](py:warren.runtime.run_in_process) with `backend: memory`.
+  [`RuntimeConfig`](py:warren.runtime.RuntimeConfig). For a local run without infrastructure, set
+  `backend: memory` in the `RuntimeConfig`, and run the runners in one process with
+  [`run_in_process`](py:warren.runtime.run_in_process).
 - [`warren.workers`](py:warren.workers): the worker base classes, such as
   [`AsyncProcessingWorkerBase`](py:warren.workers.AsyncProcessingWorkerBase), and the message that a worker
   receives, [`ProcessingMessage`](py:warren.workers.ProcessingMessage).

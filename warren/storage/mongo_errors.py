@@ -1,7 +1,7 @@
 """Translate transient MongoDB errors into the storage exception taxonomy.
 
 pymongo raises backend-specific exceptions; the storage interfaces speak
-the generic ``TransientStoreError`` (see ``storage/exceptions.py``) so
+the generic ``warren.storage.TransientStoreError`` so
 callers — e.g. the ``JobStatusWorker`` observer, which must not drop an
 observation — can retry transient failures without depending on pymongo.
 
@@ -50,6 +50,9 @@ def classify_transient[**P, R](
 
 def classify_transient_methods(cls: type) -> type:
     """Class decorator: apply ``classify_transient`` to every public async method.
+
+    It wraps only the methods that the class itself defines, not inherited
+    methods.
 
     Applies the transient-error contract store-wide, so the whole
     implementation honours "transient backend failures are raised as

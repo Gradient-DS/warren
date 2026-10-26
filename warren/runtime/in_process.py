@@ -44,6 +44,8 @@ async def create_in_process_runners(
     :param stores: Shared store registry.
     :param instances: Instance count per worker type; unspecified types get one.
     :return: Runners, not yet set up.
+    :raises ValueError: If ``instances`` names a worker type that is not in
+        the pipeline, or gives a count that is not an integer of 1 or more.
     """
     # imported here: these runners import ``warren.runtime`` (see the module docstring)
     from warren.jobs.status.job_status_worker_runner import JobStatusWorkerRunner
@@ -152,8 +154,9 @@ async def run_in_process(
     The handlers in place before the run are restored afterwards.
 
     :param runners: Runners to co-host. Not yet set up.
-    :param until: Called once every runner is consuming. Publish work and
-        wait for it here. A callable, not a coroutine object, so nothing is
+    :param until: Called after every runner is set up, so every queue is
+        bound. Runners can still be starting their consumers. Publish work
+        and wait for it here. A callable, not a coroutine object, so nothing is
         left un-awaited if setup fails.
     """
     previous_handlers = {

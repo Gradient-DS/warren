@@ -62,12 +62,24 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
 
     Provides the generic lifecycle: signal handling, consume loop, and
     graceful shutdown. Subclasses implement ``setup()`` to wire their
-    specific components (connections, stores, worker, consumer manager)
-    and must set ``self._consumer_manager`` before ``setup()`` returns.
+    specific components (connections, stores, worker, consumer manager).
 
-    Override ``_on_teardown()`` for subclass-specific cleanup (e.g.,
-    closing connections, cancelling timers). It runs after the consumer
-    is stopped but before state is reset.
+    A subclass uses these protected names:
+
+    - ``self._consumer_manager``: set it in ``setup()``. ``run()`` and
+      ``teardown()`` use it.
+    - ``self._mark_setup_succeeded()``: call it at the end of
+      ``setup()``. Without it, ``run()`` raises RuntimeError.
+    - ``_on_teardown()``: override it for subclass-specific cleanup
+      (e.g., closing connections, cancelling timers). It runs after the
+      consumer is stopped but before state is reset.
+    - ``self._exception_wrapping(description)``: a context manager for a
+      setup phase. It re-raises a failure as ``WarrenError`` with the
+      phase and the worker name.
+
+    :param name: Logger name of the runner.
+    :param health: Health endpoint and watchdog settings. Defaults to
+        ``HealthConfig()``.
 
     Usage::
 
@@ -102,6 +114,7 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
     async def run(self) -> None:
         """Start consuming and wait for shutdown signal (SIGINT/SIGTERM).
 
+        :raises RuntimeError: If ``setup()`` did not succeed before.
         :raises WarrenError: If the watchdog declared the consumer lost.
         """
         if not self._setup_succeeded:

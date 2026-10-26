@@ -2,16 +2,66 @@
 Runtime layer for the distributed processing framework.
 
 Provides the concrete wiring that turns a ``PipelineSpec`` into running
-worker processes. This runtime is built on **RabbitMQ** (via aio_pika),
-**MongoDB**, and **Redis**.
+worker processes. The runtime runs a pipeline on RabbitMQ (aio-pika) or
+Kafka (aiokafka), with MongoDB and Redis for storage. ``backend: memory``
+runs all workers in one process, with no infrastructure.
 
-Key components:
+## Pipeline spec
 
-- ``RuntimeConfig`` — load infrastructure settings from YAML.
-- ``RuntimeInfra`` — create / close MongoDB, Redis, and RMQ connections.
-- ``DefaultWorkerRunner`` — concrete runner that wires everything for a
-  single worker type.
-- ``PipelineSpec`` / ``WorkerSpec`` — declarative pipeline composition.
+Declarative pipeline composition: the exchange, the worker types and how
+each worker type is built.
+
+- `PipelineSpec`
+- `WorkerSpec`
+- `PublishSpec`
+- `WorkerFactory`
+- `WorkerFactoryContext`
+
+## Run
+
+``DefaultWorkerRunner`` runs one worker. ``create_in_process_runners`` and
+``run_in_process`` run a whole pipeline in one process on ``backend: memory``.
+
+- `DefaultWorkerRunner`
+- `create_in_process_runners`
+- `run_in_process`
+
+## Configuration
+
+``RuntimeConfig`` loads the settings of a deployment from YAML. The other
+models are its sections.
+
+- `RuntimeConfig`
+- `RuntimeRMQConfig`
+- `RuntimeKafkaConfig`
+- `MongoDBConfig`
+- `RedisConfig`
+- `CacheConfig`
+- `DocumentsConfig`
+- `RetentionConfig`
+- `RuntimeRetryConfig`
+- `StartupConfig`
+- `ScopingConfig`
+
+## Infrastructure and backends
+
+- `RuntimeInfra`
+- `create_runtime_infrastructure`
+- `close_runtime_infrastructure`
+- `require_injected`
+- `create_connection_manager`
+- `create_publisher`
+- `create_consumer_manager`
+- `create_default_resolvers`
+
+## Validation
+
+- `validate_pipeline`
+- `validate_routing_plan`
+- `build_capability_registry`
+- `CapabilityRegistry`
+- `PipelineValidationError`
+- `RoutingPlanValidationError`
 """
 
 from warren.runtime.backends import (

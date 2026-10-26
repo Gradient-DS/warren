@@ -22,6 +22,9 @@ Quickstart has the docker commands and worker invocations.
 - `warren/` — the framework: worker base classes, pubsub abstractions, storage
   interfaces. `warren/runtime/` holds the concrete wiring (RabbitMQ/Kafka +
   MongoDB + Redis) behind `RuntimeConfig`.
+- `docs/public/` — the user docs that the docs site publishes, in plain
+  Markdown. Link public names as `` [`Name`](py:warren.package.Name) ``. The
+  rules are in CONTRIBUTING.md, "Documentation".
 - `warren/docs/` — design docs per subsystem (routing, workers, retry design,
   RabbitMQ, Kafka, stores).
 - `runtime_scripts/` — worker entry points (`start_worker`,

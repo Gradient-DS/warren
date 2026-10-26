@@ -1,3 +1,5 @@
+"""Document store: the document store interface and its MongoDB and in-memory implementations."""
+
 from warren.storage.document_store.interface import (
     DocumentAlreadyExistsError,
     DocumentNotFoundError,

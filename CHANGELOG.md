@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Each package `__init__.py` re-exports the public names of its modules and
+  lists them in `__all__`, for example `from warren.workers import
+  ProcessingMessage` and `from warren import HardFailureException`. The
+  module paths keep working.
+- In `warren.storage.documents`, `resolve_gcs` and the `resolve_http` names
+  load when you first use them, so the package imports without the `gcs` and
+  `http` extras.
+
+### Changed
+
+- `warren.storage` no longer re-exports `ResultsStoreInterface`. Import it
+  from `warren.storage.results`, its only package home.
+
 ### Security
 
 - The `path` document resolver is confined to its base directory: absolute

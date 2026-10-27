@@ -109,7 +109,8 @@ class RetryConfig(BaseModel):
 
     Transport-agnostic: provides defaults when the worker's
     ``SoftFailureException`` does not specify values, and caps to enforce
-    system-level limits. Used by all pubsub backends (RabbitMQ, Kafka).
+    system-level limits. Used by all pubsub backends (RabbitMQ, Kafka,
+    memory) and by ``RuntimeRetryConfig.policy``.
 
     :param initial_delay: Initial delay in seconds before first retry
         when worker does not specify.

@@ -1,7 +1,7 @@
 """
 Framework worker that consumes job messages and publishes their documents.
 
-Listens on the fanout exchange for ``data_type == "job"`` messages,
+Listens on the observer exchange for ``data_type == "job"`` messages,
 extracts document sources from the message data, and delegates to a
 ``JobDocumentsPublisher`` for the load -> register -> publish flow.
 """
@@ -49,7 +49,7 @@ def _default_source_generator(data: dict) -> AsyncIterable:
 class JobPublicationWorker(FilteringWorkerBase):
     """Consumes job messages and publishes their documents.
 
-    Filters for ``data_type == "job"`` on the fanout exchange. For each
+    Filters for ``data_type == "job"`` on the observer exchange. For each
     matching message, calls ``create_source_generator`` to extract an
     async iterable of document sources from the message data, then
     delegates to ``JobDocumentsPublisher.publish_job()`` for the actual
@@ -86,10 +86,9 @@ class JobPublicationWorker(FilteringWorkerBase):
 
         Like the per-document workers, this consumer accepts a message
         only when its ``preprocessing_required`` list is empty. Job-level
-        preprocessing steps (e.g. ``vectordb_provisioning``) are advertised
-        by Pipeline API on the publication-request and removed by the
-        relevant lifecycle worker before it is re-emitted, gating
-        document fan-out until the preprocessing step is done.
+        preprocessing steps gate document fan-out: a step's worker removes
+        its name from ``preprocessing_required`` and emits the job message
+        again.
         """
         return message.get("data_type") == "job" and not message.get(
             "preprocessing_required"

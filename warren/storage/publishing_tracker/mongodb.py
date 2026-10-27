@@ -28,6 +28,12 @@ class MongoDBPublishingTracker(Base, PublishingTrackerInterface):
 
     Requires calling ``await setup()`` after construction to create
     indexes.
+
+    :param job_records_ttl_seconds: TTL on ``time``: a record is deleted
+        this many seconds after its last write. Must be positive. None: the
+        index stays as it is (no TTL by default).
+    :param scoping_enabled: Store the scope of the current handler on each
+        record in a ``scope`` field, and index that field.
     """
 
     def __init__(

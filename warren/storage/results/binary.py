@@ -1,35 +1,20 @@
 """Binary-payload results store.
 
-Closes the 04-03-2026 architectural loop: ``DefaultResultsStore``'s
-cache is dict-only (``RedisDictCache`` + ``json.dumps``), which forced
-byte-producing stages (originally: PDFs registered via publish, more
-recently: HTML bytes produced by ``WebFetchWorker``) onto a separate
-``DocumentStore`` + ``CachedDocumentFetcher`` track. That parallel
-track was a workaround — the 04-03-2026 dev note called out
-"RedisBinaryCache exists but cannot be used (type mismatch)."
+``BinaryResultsStore`` has the persistence and cache shape of
+``DefaultResultsStore``, but it stores ``bytes`` payloads. The
+``DefaultResultsStore`` cache holds dict values only.
 
-``BinaryResultsStore`` is the fix: it mirrors ``DefaultResultsStore``'s
-persistence + cache shape, but uses ``RedisBinaryCache`` so byte
-payloads can live in the ResultsStore track natively. Worker-produced
-byte results now share the same storage semantics as worker-produced
-dict results.
+Persistence: a document store keyed on ``(doc_id, job_id, part_idx)``.
+BSON stores ``bytes`` as BSON Binary.
 
-Persistence: MongoDB document store keyed on ``(doc_id, job_id,
-part_idx)``. BSON handles ``bytes`` natively as BSON Binary.
-
-Cache: ``RedisBinaryCache`` under the ``"documents"`` base key, using
-the job-scoped key ``doc:<doc_id>:<job_id>`` — identical to what
-``CachedDocumentFetcher`` reads from when callers pass ``job_id``.
-This lets ``ParserWorker`` (which reads via ``GetDocumentFunc``)
-transparently hit the cache populated by an upstream byte-producing
-stage within the same job.
-
-Job scoping closed the v1 trade-off (doc-id-scoped cache vs
-(doc_id, job_id, part_idx)-scoped persistence): re-submitting the same
-``doc_id`` with updated content (a new job) no longer serves the
-previous job's cached bytes, and concurrent jobs on the same ``doc_id``
-are cache-isolated. When ``job_id`` is ``None`` the legacy shared
-``doc:<doc_id>`` key is used.
+Cache: a ``CacheInterface[bytes]``, for example ``RedisBinaryCache``
+under the ``"documents"`` base key. The cache key is
+``doc:<doc_id>:<job_id>``, the key that ``CachedDocumentFetcher`` reads
+when the caller gives ``job_id``. So a worker that reads through
+``GetDocumentFunc`` gets the bytes that an upstream worker stored in
+the same job. A new job for the same ``doc_id`` does not read the bytes
+of an earlier job. When ``job_id`` is ``None``, the key is
+``doc:<doc_id>``.
 """
 
 from typing import Any
@@ -71,8 +56,9 @@ class BinaryResultsStore(Base):
         ``(doc_id, job_id, part_idx)`` (validated in ``setup()``).
     :param cache: Optional ``CacheInterface[bytes]`` for fast reads.
         When absent, every read hits MongoDB.
-    :param result_type: Type identifier; defaults to the document
-        store's collection name.
+    :param result_type: Not used. Give each results store its own
+        cache ``base_key``. Two stores that share one cache instance
+        overwrite each other's entries.
     :param name: Optional logger name.
     :param cache_ttl_seconds: Expiry for cached payloads.
     """
@@ -120,12 +106,23 @@ class BinaryResultsStore(Base):
     ) -> str:
         """Persist ``payload`` and populate the cache.
 
-        The cache write uses the job-scoped document cache key
-        (``doc:<doc_id>:<job_id>``) so downstream consumers using
-        ``GetDocumentFunc`` with the same ``job_id`` hit it
-        transparently. See module docstring for the key semantics.
+        The cache key is ``doc:<doc_id>:<job_id>``, or ``doc:<doc_id>``
+        when ``job_id`` is ``None``. This is the key that
+        ``CachedDocumentFetcher`` reads.
 
+        :param payload: The bytes to store.
+        :param doc_id: Document ID.
+        :param part_idx: Part index. ``0`` for a single-part payload.
+        :param job_id: Job ID, or ``None`` if you do not group by job.
+        :param metadata: Optional metadata, stored in the field
+            ``metadata`` (``DefaultResultsStore`` uses
+            ``result_metadata``).
+        :param do_cache: Whether to write the payload to the cache.
+        :param overwrite_existing: Whether to replace a stored record
+            with the same ``(doc_id, job_id, part_idx)``.
         :return: Result ID from the document store.
+        :raises DocumentAlreadyExistsError: If ``overwrite_existing`` is
+            False and a record for these keys exists.
         """
         doc: dict[str, Any] = {
             "doc_id": doc_id,
@@ -183,10 +180,9 @@ class BinaryResultsStore(Base):
         doc_id: str,
         job_id: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        """Yield stored records (without the payload bytes).
+        """Yield the stored records of a document and job, without their payload.
 
-        Useful for auditing / listing what's been scraped for a given
-        doc/job without pulling HTML bodies back through the wire.
+        Use it to list records without the transfer of the payload bytes.
         """
         async for doc in self._document_store.query(
             {"doc_id": doc_id, "job_id": job_id}

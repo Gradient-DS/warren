@@ -65,14 +65,21 @@ class RetryWorkerRunner(WorkerRunnerBase):
 
     :param config: runtime infrastructure configuration.
     :param worker_name: unique identifier for this retry worker.
+    :param exchange: The observer exchange
+        (``observer_exchange(pipeline.exchange)``).
+    :param republish_exchange: The data exchange (``pipeline.exchange``).
+        Defaults to ``exchange``, which is correct for fanout and topic
+        only.
     :param retry_store: optional override for the retry envelope store.
         Default: ``CachedDocumentStore`` wrapping MongoDB + Redis.
     :param republish_publisher: optional override for the exchange
-        publisher. Default: ``RMQPublisher`` targeting the processing
-        exchange.
+        publisher. Default: a publisher of ``config.backend`` (from
+        ``create_publisher``) on ``republish_exchange``, with
+        ``ReplayRouter``.
     :param consumer_manager_factory: optional override for the consumer
-        manager factory. Default: factory creating ``RMQConsumerManager``
-        on the retry queue.
+        manager factory. Default: the consumer manager of
+        ``config.backend`` (from ``create_consumer_manager``) on the queue
+        of the retry worker, bound to ``exchange``.
     :param message_key_func: optional function to extract a composite
         key from a message dict. Passed to ``RetryWorker``.
     :param infra: optional shared infrastructure. When given, the runner
@@ -113,7 +120,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
     async def setup(self) -> None:
         """Create infrastructure, build defaults, wire the worker.
 
-        1. Create infrastructure (MongoDB, Redis, RabbitMQ)
+        1. Create infrastructure (MongoDB, Redis, pubsub connection)
         2. Build default retry store, publisher, consumer factory
            for any components not injected
         3. Set up the republish publisher

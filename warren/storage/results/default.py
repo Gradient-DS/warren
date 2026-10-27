@@ -34,8 +34,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
     to ensure uniqueness and enable efficient queries. The ``setup()`` method validates
     this requirement and raises ValueError if the index is missing.
 
-    Requires calling ``await setup()`` after construction. The factory function
-    handles this automatically.
+    Call ``await setup()`` after construction. ``create_default_results_store``
+    calls it for you.
     """
 
     def __init__(
@@ -53,8 +53,9 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         :param document_store: Storage backend for persistence. Must have a unique
             composite index on (doc_id, job_id, part_idx).
         :param cache: Optional cache for read-through/write-through caching.
-        :param result_type: Type identifier for cache keys. If None, uses
-            document_store.get_document_type().
+        :param result_type: Not used. Give each results store its own cache
+            ``base_key``. Two stores that share one cache instance overwrite
+            each other's entries.
         :param name: Optional name for logging purposes.
         :param cache_ttl_seconds: Expiry for cached results.
         """
@@ -74,8 +75,8 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         """
         Validate that the document store has the required unique index.
 
-        Must be called after construction before using the store.
-        The factory function handles this automatically.
+        Call it after construction, before you use the store.
+        ``create_default_results_store`` calls it for you.
 
         :raises ValueError: If document store lacks required unique index.
         """
@@ -111,6 +112,9 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         :param overwrite_existing: Whether to overwrite existing result.
 
         :return: Document ID from the document store.
+
+        :raises DocumentAlreadyExistsError: If overwrite_existing is False and a
+            result for these keys exists.
         """
         doc = self._build_row(
             ResultItem(result, doc_id, part_idx, job_id, result_metadata)

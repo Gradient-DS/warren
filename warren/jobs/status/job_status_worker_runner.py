@@ -2,7 +2,7 @@
 Runner for the job status worker.
 
 Manages the JobStatusWorker lifecycle: creates infrastructure, builds
-stores and consumer, observes all messages on the fanout exchange and
+stores and consumer, observes all messages on the observer exchange and
 records per-document processing results.
 
 Accepts ``RuntimeConfig`` and manages its own infrastructure. Custom
@@ -64,13 +64,18 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
 
     :param config: runtime infrastructure configuration.
     :param worker_name: unique identifier for this worker instance.
+    :param exchange: The observer exchange
+        (``observer_exchange(pipeline.exchange)``). On a direct pipeline,
+        the data exchange does not carry every message, so the worker
+        sees no messages there.
     :param job_store: optional override for the job definitions store.
         Default: ``MongoDBJobStore``.
     :param job_results_store: optional override for the per-document
         results store. Default: ``MongoDBJobResultsStore``.
     :param consumer_manager_factory: optional override for the consumer
-        manager factory. Default: factory creating ``RMQConsumerManager``
-        on the job status queue with a publisher for the
+        manager factory. Default: the consumer manager of
+        ``config.backend`` (from ``create_consumer_manager``) on the job
+        status queue, with a publisher of ``config.backend`` for the
         ``job-completed`` signal.
     :param infra: optional shared infrastructure. When given, the runner
         uses it and does not close it; the caller owns its lifetime. Needed
@@ -102,7 +107,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
     async def setup(self) -> None:
         """Create infrastructure, build defaults, wire the worker.
 
-        1. Create infrastructure (MongoDB, Redis, RabbitMQ)
+        1. Create infrastructure (MongoDB, Redis, pubsub connection)
         2. Build default stores and consumer factory for any not injected
         3. Create the JobStatusWorker
         4. Create and set up the consumer manager

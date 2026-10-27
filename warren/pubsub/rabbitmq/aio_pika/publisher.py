@@ -36,12 +36,18 @@ class RMQPublisher(BasePublisher):
     """
     RabbitMQ publisher that owns its own routing decisions.
 
-    Supports three modes:
-    - Static exchange (+ optional routing key): publishes directly to the given exchange.
-    - Router function: calls route_func(message) per message to resolve destinations dynamically.
-    - Neither: raises ValueError at init time.
+    Publishes to ``exchange_config``. A static ``route`` gives one routing
+    key for every message. A ``route_func`` computes the routes for each
+    message.
 
-    Passing both a route_func and an explicit exchange/key is not allowed.
+    - Fanout: pass neither ``route`` nor ``route_func``, or pass a
+      ``route_func``. A static ``route`` raises ValueError.
+    - Topic and direct: pass exactly one of ``route`` and ``route_func``.
+      Neither raises ValueError.
+    - Both ``route`` and ``route_func`` always raise ValueError.
+
+    :raises ValueError: For a combination of ``route``, ``route_func`` and
+        exchange type that the rules above do not allow.
     """
 
     def __init__(

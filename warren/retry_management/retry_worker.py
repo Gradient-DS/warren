@@ -1,7 +1,7 @@
 """
 Retry worker -- persists messages and schedules delayed republishing.
 
-Consumes ``data_type: "soft-failure"`` messages from the processing
+Consumes ``data_type: "soft-failure"`` messages from the observer
 exchange, unwraps the failed message, stores it durably, and uses
 ``asyncio.call_later`` to trigger republishing after the configured
 delay. On startup, ``schedule_pending`` loads persisted messages and
@@ -39,7 +39,9 @@ from warren.workers.workers import (
 class RetryWorker(AsyncProcessingWorkerBase):
     """Worker that manages retry scheduling for soft-failed messages.
 
-    Consumes messages from the retry queue. For each message:
+    Observes the observer exchange and acts only on ``soft-failure``
+    envelopes. It ignores all other messages. For each envelope:
+
     1. Persists to store (durability).
     2. Schedules ``asyncio.call_later`` for delayed republishing.
     3. On timer: fetches message, republishes, deletes from store.
@@ -57,9 +59,17 @@ class RetryWorker(AsyncProcessingWorkerBase):
     :param message_key_func: Function to extract a composite key from
         a message dict. Defaults to building key from
         job_id/doc_id/part_idx using ``build_message_key``.
+    :param scoping_enabled: Prefix the retry key with the scope of the
+        message (``s:<scope>:``) when the message has a valid scope.
+    :param lease: Lease that lets one instance schedule and republish at a
+        time. None means single-process use: this instance always
+        schedules.
+    :param lease_ttl_seconds: Lifetime in seconds of the lease.
+    :param clock: Current time in seconds. Replace it in tests.
+    :param sleep: Delay function for the lease loop. Replace it in tests.
 
     :raises ValueError: If retry_store's ``doc_id_field`` is not
-        ``"retry_key"``.
+        ``"retry_key"``, or if ``lease_ttl_seconds`` is 0 or less.
     """
 
     REQUIRED_DOC_ID_FIELD: str = "retry_key"

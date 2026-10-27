@@ -30,7 +30,17 @@ To exercise changes against a real pipeline, run the fake example pipeline from 
 2. Fork the repo and branch from `main`.
 3. Keep PRs small and focused — one logical change per PR.
 4. Add or update tests for behavior changes.
-5. Update docs when behavior changes: README, [`warren/runtime/USAGE.md`](warren/runtime/USAGE.md), or [`warren/docs/`](warren/docs/).
+5. Update docs when behavior changes: README, [`docs/public/`](docs/public/), [`warren/runtime/USAGE.md`](warren/runtime/USAGE.md), or [`warren/docs/`](warren/docs/).
+
+## Documentation
+
+`docs/public/` is the documentation for users, and a docs site publishes it whole. The site also generates the API reference from the docstrings. Write the pages of `docs/public/` in plain Markdown:
+
+- Frontmatter with `title` and `description`.
+- Relative links to other pages, such as `./index.md`. No HTML tags outside code.
+- Link a public name or module to the reference with its import path after `py:`, such as `` [`PipelineSpec`](py:warren.runtime.PipelineSpec) ``, not with a site URL. Link the first mention on a page.
+
+The site gives each `py:` link its URL, and its build fails on a path that the reference does not have. A public name has its reference entry at the package whose `__all__` lists it, so link that path: `warren.runtime.PipelineSpec`, not `warren.runtime.spec.PipelineSpec`. `tests/test_public_api.py` checks that each public name is in the `__all__` of exactly one package.
 
 ## Releasing
 

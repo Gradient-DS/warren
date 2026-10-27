@@ -19,7 +19,9 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
 
     Takes the same ``doc_id_field`` / ``unique_indexes`` keywords as
     ``MongoDBDocumentStore`` so either can sit under ``DefaultResultsStore``
-    and ``RetryWorker``.
+    and ``RetryWorker``. The default ``doc_id_field`` is ``"doc_id"``, not
+    ``"_id"``. Pass it explicitly when the two stores must be
+    interchangeable.
 
     Documents are deep-copied on the way in and on the way out. A database
     gives callers that isolation for free; a dict does not, and a worker

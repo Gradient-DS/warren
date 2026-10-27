@@ -13,10 +13,12 @@ class MemoryStoreRegistry:
 
     A database shares state by name: two workers that open the collection
     ``"chunks"`` see the same documents. In one process that role is played
-    by this registry: every method is get-or-create on a name, so the
-    worker that writes ``"chunks"`` and the worker that reads it get the
-    same store. Build one per process (or one per test, for a fresh world)
-    and pass it to whatever constructs the runners.
+    by this registry. Document stores, results stores and caches are
+    get-or-create on a name, so the worker that writes ``"chunks"`` and the
+    worker that reads it get the same store. The job store and the
+    job-results store are one per registry. Build one per process (or one
+    per test, for a fresh world) and pass it to whatever constructs the
+    runners.
 
     The first call for a name fixes that store's configuration; later calls
     return the existing store and ignore their keyword arguments.

@@ -29,16 +29,23 @@ from warren.storage.scoping import current_scope
 class JobDocumentsPublisher(Base, metaclass=ABCMeta):
     """Abstract publisher harness with automatic outcome tracking.
 
-    The publishing flow for each document:
+    A subclass implements four abstract methods:
 
-    1. ``_load_document(source)`` — retrieve document bytes/data
-    2. ``_register_document(job_id, doc_data)`` — store in document DB,
-       get ``doc_id``
-    3. ``_create_message(job_id, doc_id, doc_data)`` — build the
-       exchange message
+    - ``async _load_document(self, source: Any) -> Any`` — retrieve
+      document bytes/data
+    - ``async _register_document(self, job_id: str, doc_data: Any) -> str``
+      — store in document DB, get ``doc_id``
+    - ``_create_message(self, job_id: str, doc_id: str, doc_data: Any,
+      job_parameters: dict[str, Any]) -> dict`` — build the exchange
+      message. The message must set ``origin.type`` to
+      ``PUBLISHER_ORIGIN_TYPE`` (``"publisher"``).
+    - ``_get_source_id(self, source: Any) -> str`` — a readable
+      identifier of the source, for logs and failure records
 
-    If any step fails, the failure is recorded with the specific stage
-    that failed, and processing continues with the next document.
+    The publishing flow for each document is load, register, then create
+    and publish the message. If a step raises, the failure is recorded
+    with its stage and the next document continues.
+    ``HardFailureException`` is the exception: it stops the job.
 
     :param publisher: Publisher for sending messages to the exchange.
     :param tracker: Tracks publishing outcomes per document.
@@ -77,11 +84,12 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
             ``job_store``).
         :param sources: Async iterable of document sources (type is
             application-defined).
-        :param job_parameters: Job-level configuration (extraction
-            settings, HTML backend choice, etc.) passed through to
+        :param job_parameters: Job-level configuration passed through to
             ``_create_message`` so concrete publishers can fold job
             settings into the per-document message. ``None`` is
             normalised to an empty dict.
+        :param scope: Storage scope for the job. Each published message
+            gets it as ``scope``. None keeps the current scope.
         :return: Summary dict with ``published``, ``failed``, and
             ``total`` counts.
         """
@@ -273,7 +281,7 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
             ``publish_job``. Concrete publishers may fold these into the
             message's ``job_parameters`` field or use them to decide
             per-document routing (e.g. set ``preprocessing_required``
-            based on ``job_parameters["extraction"]["enabled"]``).
+            from a job parameter).
         :return: Message dict for the exchange.
         """
         ...

@@ -1,5 +1,3 @@
-from typing import TypeVar
-
 import json
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -15,10 +13,7 @@ from warren.storage.cache.interface import (
 from warren.storage.scoping import scoped_cache_key
 
 
-T = TypeVar("T")
-
-
-class RedisCacheBase(Base, ABC, CacheInterface[T]):
+class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
     """
     Abstract base class for async Redis-backed cache implementations.
 
@@ -44,10 +39,16 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
         :param client: Async Redis client instance (injected, not created internally).
         :param base_key: Namespace prefix for all keys in this cache.
         :param default_ttl_seconds: Default expiry in seconds. None uses 3600.
+            Must be positive, or ValueError.
         :param key_separator: Separator between base_key and key.
             Defaults to ":" (Redis convention). Colon is preferred over dot
             because dots commonly appear in data (filenames, versions).
         :param name: optional name for logging purposes
+        :param scoping_enabled: Prefix each key with the scope of the current
+            handler: ``s:{scope}:{base_key}:{key}``.
+        :param scope_required: With scoping on, raise HardFailureException
+            (not CacheOperationError) when the handler has no scope. False:
+            use the key without a prefix.
         """
         super().__init__(pybase_logger_name=name)
 
@@ -88,6 +89,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
         :param key: Cache key.
         :param value: Value to cache.
         :param ttl_seconds: Time-to-live in seconds. None uses default TTL.
+            Must be positive, or CacheOperationError.
 
         :raises CacheOperationError: If Redis operation fails.
         """
@@ -171,6 +173,7 @@ class RedisCacheBase(Base, ABC, CacheInterface[T]):
 
         :param items: Dictionary of key-value pairs to cache.
         :param ttl_seconds: Time-to-live in seconds. None uses default TTL.
+            Must be positive, or CacheOperationError.
 
         :raises CacheOperationError: If Redis operation fails.
         """
@@ -326,7 +329,7 @@ class RedisBinaryCache(RedisCacheBase[bytes]):
     """
     Async Redis cache for binary data (pass-through, no serialization).
 
-    Suitable for caching PDFs, images, and other binary files.
+    Suitable for binary values.
     """
 
     def _serialize(self, value: bytes) -> bytes:

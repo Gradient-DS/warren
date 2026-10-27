@@ -3,7 +3,7 @@ Shared contracts for the distributed processing system.
 
 Defines the message consumer protocols and failure exceptions that form
 the contract between pubsub (consumer managers) and workers. These live
-at the distributed/ level because both packages depend on them.
+in the top-level package because both packages depend on them.
 
 Protocol hierarchy:
 
@@ -31,8 +31,20 @@ class SoftFailureException(WarrenError):
     """Retryable failure — message is retried with back-off.
 
     Workers raise this to signal a transient failure. The consumer manager
-    catches it and routes the message to retry infrastructure with
-    exponential backoff.
+    catches it, publishes a ``soft-failure`` envelope on the observer
+    exchange, and acks the original message.
+
+    - A running ``RetryWorker`` is required: it stores the envelope and
+      republishes the message after the delay. Without a retry worker,
+      the message is not retried.
+    - Without a control publisher, the consumer manager requeues the
+      message after ``RetryConfig.fallback_requeue_delay``.
+    - After ``retry_max`` attempts, the message is a hard failure.
+    - A value of 0 for ``retry_after``, ``retry_max`` or
+      ``backoff_base`` means "not set": the default of the consumer
+      manager applies.
+    - ``RetryConfig.max_delay_cap`` and ``RetryConfig.max_retries_cap``
+      limit the resolved delay and the resolved maximum.
 
     :param reason: Human-readable description of the failure.
     :param retry_after: Suggested initial delay in seconds before retry.
@@ -53,8 +65,8 @@ class SoftFailureException(WarrenError):
         the consumer manager redelivers after the delay without
         incrementing the counter or enforcing the max — used when the
         worker is using the retry mechanism as generic delayed
-        redelivery (e.g. polling a long-running external operation
-        like a Weaviate backup) rather than recovering from a failure.
+        redelivery (e.g. polling a long-running external operation)
+        rather than recovering from a failure.
         Workers must guarantee progress by their own means in that
         case (e.g. eventually succeeding or raising HardFailure).
     """
@@ -83,6 +95,11 @@ class SoftFailureException(WarrenError):
 
 class HardFailureException(WarrenError):
     """Permanent failure — message is dropped. No retry.
+
+    Any other exception from a worker, except ``SoftFailureException``
+    and ``PublishFailureException``, also counts as a hard failure. A
+    hard failure publishes a ``hard-failure`` envelope and rejects the
+    message without requeue.
 
     :param reason: Human-readable description of the failure.
     :param cause: Optional exception that caused this failure.
@@ -125,9 +142,8 @@ class AsyncMessageConsumerInterface(MessageConsumerIdentity, Protocol):
     """
     Async consumer with identity — runs on the main event loop.
 
-    Heartbeat Safety Contract
-    -------------------------
-    This consumer runs on the same event loop as the RabbitMQ connection.
+    Heartbeat safety: this consumer runs on the same event loop as the
+    RabbitMQ connection.
     The event loop must not be blocked, or heartbeats will fail and the
     connection will be dropped.
 
@@ -135,7 +151,7 @@ class AsyncMessageConsumerInterface(MessageConsumerIdentity, Protocol):
     - Pure async I/O (HTTP clients, DB queries) is safe — every
       ``await`` yields control for heartbeats.
     - CPU-bound or blocking I/O work MUST be offloaded to a thread or
-      process pool using ``asyncio.get_event_loop().run_in_executor()``.
+      process pool using ``asyncio.get_running_loop().run_in_executor()``.
     - If your consumer is primarily CPU-bound or uses sync libraries, use
       ``SyncMessageConsumerInterface`` instead — the framework handles
       threading automatically.
@@ -147,25 +163,42 @@ class AsyncMessageConsumerInterface(MessageConsumerIdentity, Protocol):
 
         Example — async consumer with CPU offloading::
 
-            async def __call__(self, message: Dict) -> Optional[Dict]:
-                async with aiohttp.ClientSession() as session:
-                    resp = await session.get("https://api.example.com/data")
-                    data = await resp.json()
+            import asyncio
 
-                loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(None, cpu_heavy_parse, data)
-                return {"parsed": result}
+            import httpx
 
+
+            def cpu_heavy_parse(data: dict) -> dict:
+                return data  # placeholder for CPU-bound work
+
+
+            class FetchAndParse:
+                name = "fetch-and-parse-1"
+                type = "fetch_and_parse"
+
+                async def __call__(self, message: dict) -> dict | None:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get("https://api.example.com/data")
+                        data = resp.json()
+
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(None, cpu_heavy_parse, data)
+                    return {"parsed": result}
 
         :param message: Message body as a dictionary.
 
         :return: Optional result to publish downstream, or None if no
-            downstream message is needed.
+            downstream message is needed. The result gets the ``scope``
+            of the input message.
 
         :raises SoftFailureException: When failure is retryable. Message
-            will be routed to retry queue with back-off.
+            is retried with back-off (see ``SoftFailureException``).
         :raises HardFailureException: When failure is permanent. Message
-            will be dropped.
+            will be dropped. Any other exception counts as a hard
+            failure. A hard failure publishes a ``hard-failure`` envelope
+            and rejects the message without requeue. Do not raise
+            ``PublishFailureException`` from a consumer: the message is
+            then requeued without limit.
         """
         ...
 
@@ -196,23 +229,38 @@ class SyncMessageConsumerInterface(MessageConsumerIdentity, Protocol):
 
         Example — sync consumer with HTTP calls::
 
-            def __call__(self, message: Dict) -> Optional[Dict]:
-                parsed = heavy_parse(message["payload"])
+            import httpx
 
-                resp = requests.post("https://api.example.com", json=parsed)
-                resp.raise_for_status()
-                return resp.json()
+
+            def heavy_parse(payload: dict) -> dict:
+                return payload  # placeholder for CPU-bound work
+
+
+            class ParseAndPost:
+                name = "parse-and-post-1"
+                type = "parse_and_post"
+
+                def __call__(self, message: dict) -> dict | None:
+                    parsed = heavy_parse(message["data"])
+
+                    resp = httpx.post("https://api.example.com", json=parsed)
+                    resp.raise_for_status()
+                    return resp.json()
 
         :param message: Message body as a dictionary.
 
         :return: Optional result to publish downstream, or None if no
-            downstream message is needed.
+            downstream message is needed. The result gets the ``scope``
+            of the input message.
 
         :raises SoftFailureException: When failure is retryable. Message
-            will be routed to retry queue with back-off.
+            is retried with back-off (see ``SoftFailureException``).
         :raises HardFailureException: When failure is permanent. Message
-            will be dropped.
-
+            will be dropped. Any other exception counts as a hard
+            failure. A hard failure publishes a ``hard-failure`` envelope
+            and rejects the message without requeue. Do not raise
+            ``PublishFailureException`` from a consumer: the message is
+            then requeued without limit.
         """
         ...
 

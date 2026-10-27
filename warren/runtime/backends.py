@@ -131,11 +131,13 @@ def create_publisher(
     :param connection_manager: Connection manager from
         ``create_connection_manager`` (must match the backend).
     :param exchange: The pipeline exchange to publish to (from the
-        ``PipelineSpec``, or a framework-derived observer exchange).
+        ``PipelineSpec``, or a framework-derived observer exchange). On
+        Kafka, only the type is used (it must be fanout). The topic comes
+        from ``config.kafka.topic``.
     :param route: Static routing key (RabbitMQ topic/direct only).
     :param route_func: Per-message routing function (RabbitMQ
-        topic/direct; a no-op on fanout, dropped on Kafka — see module
-        docstring).
+        topic/direct; a no-op on fanout). Kafka ignores ``route`` and
+        ``route_func``: the pipeline is fanout.
     :param name: Optional publisher name for logging.
     :return: An unset-up ``RMQPublisher``, ``KafkaPublisher`` or
         ``MemoryPublisher`` implementing ``PublisherInterface``.
@@ -199,6 +201,7 @@ def create_consumer_manager(
 
     - RabbitMQ: queue ``f"{exchange.name}.{worker_type}"``, bound with
       ``binding_keys``.
+    - Memory: queue ``f"{exchange.name}.{worker_type}"``, same as RabbitMQ.
     - Kafka: consumer group ``config.kafka.consumer.group_id or
       f"{topic.name}.{worker_type}"`` (pre-resolved here); binding keys
       are ignored on fanout.
@@ -211,7 +214,9 @@ def create_consumer_manager(
         backend.
     :param connection_manager: Connection manager from
         ``create_connection_manager`` (must match the backend).
-    :param exchange: The exchange this worker consumes from.
+    :param exchange: The exchange this worker consumes from. On Kafka,
+        only the type is used (it must be fanout). The topic comes from
+        ``config.kafka.topic``.
     :param worker_type: Worker type name — the queue suffix (RMQ) or the
         group suffix (Kafka).
     :param consumer: The worker that processes each message.
@@ -230,6 +235,7 @@ def create_consumer_manager(
         envelope on terminal failure.
     :return: An unset-up ``RMQConsumerManager``, ``KafkaConsumerManager`` or
         ``MemoryConsumerManager`` implementing ``ConsumerManagerInterface``.
+    :raises ValueError: if both ``binding_key`` and ``binding_keys`` are set.
     :raises WarrenError: if ``exchange`` is not fanout on Kafka.
     :raises OptionalDependencyError: if the selected backend's transport
         extra is not installed.

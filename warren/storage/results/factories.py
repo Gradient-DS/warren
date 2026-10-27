@@ -38,13 +38,18 @@ async def create_default_results_store(
     Returns a fully initialized store (setup() already called on both
     the document store and the results store).
 
-    :param collection_name: MongoDB collection and result_type identifier.
+    :param collection_name: MongoDB collection name.
     :param mongo_client: Injected async MongoClient instance.
     :param redis_client: Injected async Redis instance. If None, no caching.
     :param database_name: MongoDB database name.
     :param doc_id_field: Field name for document IDs.
-    :param cache_base_key_prefix: Prefix for Redis cache keys.
+    :param cache_base_key_prefix: Prefix for Redis cache keys. The cache
+        ``base_key`` is ``<cache_base_key_prefix>:<collection_name>``.
     :param cache_ttl_seconds: Default TTL for cached results.
+    :param scoped_database: Resolve the database from the scope of the current
+        handler (``database_name`` is then not used), and scope the cache keys.
+        The indexes of a scope database are created when the scope is first
+        used.
     """
     doc_store = MongoDBDocumentStore(
         client=mongo_client,
@@ -90,16 +95,20 @@ async def create_binary_results_store(
 ) -> BinaryResultsStore:
     """Create a ``BinaryResultsStore`` wired with MongoDB + RedisBinaryCache.
 
-    :param collection_name: MongoDB collection + result_type identifier.
+    :param collection_name: MongoDB collection name.
     :param mongo_client: Async MongoDB client.
     :param redis_client: Async Redis client. ``None`` disables caching.
     :param database_name: MongoDB database name.
     :param doc_id_field: Field name for the per-result primary key.
-    :param cache_base_key: Redis namespace. Defaults to ``"documents"``
-        so the bytes land under the same cache namespace
-        ``CachedDocumentFetcher`` reads from; downstream workers that
-        use ``GetDocumentFunc`` hit these bytes transparently.
+    :param cache_base_key: Redis namespace. The default ``"documents"`` is
+        the namespace that ``CachedDocumentFetcher`` reads. So a downstream
+        worker that reads through ``GetDocumentFunc`` gets these bytes from
+        the cache.
     :param cache_ttl_seconds: Expiry for cached payloads in seconds (default 3600).
+    :param scoped_database: Resolve the database from the scope of the current
+        handler (``database_name`` is then not used), and scope the cache keys.
+        The indexes of a scope database are created when the scope is first
+        used.
     """
     doc_store = MongoDBDocumentStore(
         client=mongo_client,

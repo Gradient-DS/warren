@@ -1,15 +1,13 @@
 """Translate transient MongoDB errors into the storage exception taxonomy.
 
 pymongo raises backend-specific exceptions; the storage interfaces speak
-the generic ``TransientStoreError`` (see ``storage/exceptions.py``) so
+the generic ``warren.storage.TransientStoreError`` so
 callers — e.g. the ``JobStatusWorker`` observer, which must not drop an
 observation — can retry transient failures without depending on pymongo.
 
 Permanent errors (``OperationFailure``, ``DuplicateKeyError``, …) are not
 translated; they propagate unchanged so they fail loud immediately.
 """
-
-from typing import ParamSpec, TypeVar
 
 import functools
 import inspect
@@ -28,9 +26,6 @@ from warren.storage.exceptions import (
 # ``retryReads`` (default on) already absorb a single such blip; this
 # widens the window to multi-attempt failovers for callers that retry.
 _TRANSIENT_MONGO_ERRORS = (ConnectionFailure,)
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 
 def classify_transient[**P, R](
@@ -55,6 +50,9 @@ def classify_transient[**P, R](
 
 def classify_transient_methods(cls: type) -> type:
     """Class decorator: apply ``classify_transient`` to every public async method.
+
+    It wraps only the methods that the class itself defines, not inherited
+    methods.
 
     Applies the transient-error contract store-wide, so the whole
     implementation honours "transient backend failures are raised as

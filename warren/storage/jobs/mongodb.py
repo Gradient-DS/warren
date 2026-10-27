@@ -34,6 +34,15 @@ class MongoDBJobStore(Base, JobStoreInterface):
 
     Requires calling ``await setup()`` after construction to create
     indexes.
+
+    :param job_records_ttl_seconds: TTL on ``status.completed_at``: a job
+        record is deleted this many seconds after completion. Must be
+        positive. None: the index stays as it is (no TTL by default).
+    :param job_records_max_age_seconds: TTL on ``created_at``: a job record
+        is deleted this many seconds after creation. Must be positive.
+        None: the index stays as it is (no TTL by default).
+    :param scoping_enabled: Store the scope on each job in a ``scope``
+        field, and index that field.
     """
 
     def __init__(

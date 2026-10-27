@@ -28,8 +28,8 @@ class JobStoreInterface(Protocol):
     """Storage protocol for job definitions and job-level status.
 
     **Transient-error contract:** transient backend failures (connection
-    blips, failover) are raised as ``TransientStoreError`` (see
-    ``storage/exceptions.py``); permanent failures propagate as other
+    blips, failover) are raised as ``warren.storage.TransientStoreError``;
+    permanent failures propagate as other
     exceptions. Callers that cannot tolerate a dropped operation — notably
     the ``JobStatusWorker`` observer, where a lost completion update
     strands a job — should retry on ``TransientStoreError``.
@@ -50,13 +50,17 @@ class JobStoreInterface(Protocol):
         """Create a new job entry with a store-generated ID.
 
         :param final_data_type: The data_type that marks a document as
-            fully processed (e.g., ``"embedded_document"``).
+            fully processed (e.g., ``"final_stage"``).
         :param parameters: Processing parameters for workers.
         :param num_documents: Total document count, if known upfront.
             Can be set later via ``update_num_documents``.
         :param metadata: Optional application-defined metadata.
+        :param scope: Scope to store on the job; None uses the current
+            handler scope. Ignored when scoping is off or the scope is not
+            valid.
 
         :return: The generated job ID.
+        :raises JobCreationFailedError: If the store cannot create the job.
         """
         ...
 
@@ -126,14 +130,14 @@ class JobStoreInterface(Protocol):
     ) -> None:
         """Partially update the job's ``vector_db`` sub-document.
 
-        Used by the ``VectorDBProvisioningWorker`` to record state
-        transitions for the per-job vector-DB lifecycle (creation,
-        backup, teardown). Idempotent — repeated calls with the same
+        A worker that tracks per-job external state uses it to record
+        state transitions. Idempotent — repeated calls with the same
         fields are safe.
 
         :param job_id: Job to update.
-        :param fields: Mapping of ``vector_db.<key>`` values to set.
-            E.g. ``{"creation_status": "ready", "url": "..."}``.
+        :param fields: Keys inside the ``vector_db`` sub-document, without a
+            prefix, and their values. E.g. ``{"status": "ready"}``. An empty
+            mapping does nothing.
 
         :raises JobNotFoundError: If job_id does not exist.
         """

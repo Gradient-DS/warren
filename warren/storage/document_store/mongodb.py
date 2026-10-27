@@ -31,7 +31,8 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
     and automatic index creation.
 
     Requires calling ``await setup()`` after construction to create indexes.
-    The factory function handles this automatically.
+    ``create_default_results_store`` and ``create_binary_results_store`` call
+    it for the store that they create.
     """
 
     def __init__(
@@ -59,6 +60,10 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         :param unique_indexes: List of index specifications that should be unique.
             Each can be a single field name (str) or a tuple of field names.
         :param name: Optional name for logging purposes.
+        :param scoped_database: Resolve the database from the scope of the
+            current handler (database_name is then not used). The indexes of
+            each scope database are created when the scope is first used, and
+            ``setup()`` does nothing.
         """
         super().__init__(pybase_logger_name=name)
 
@@ -79,7 +84,8 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         Create indexes on configured fields.
 
         Must be called after construction before using the store.
-        The factory function handles this automatically.
+        ``create_default_results_store`` and ``create_binary_results_store``
+        call it for the store that they create.
         """
         if self._scoped_database is None:
             await self._create_indexes(self._collection)
@@ -100,7 +106,10 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         :return: Document ID of the inserted document.
 
         :raises DocumentAlreadyExistsError: If overwrite_existing is False
-            and a document with the same ID already exists.
+            and the document has the same ID or the same values for a unique
+            index as a stored document.
+        :raises ValueError: If the ID is empty, or is not a valid ObjectId
+            when doc_id_field is "_id".
         """
         collection = await self._get_collection()
         doc_copy = doc.copy()

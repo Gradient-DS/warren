@@ -18,6 +18,7 @@ from warren.common import HardFailureException
 
 
 current_scope: ContextVar[str | None] = ContextVar("warren_scope", default=None)
+"""The scope of the current handler, set by the consumer for each message."""
 
 
 def get_current_scope() -> str | None:
@@ -26,7 +27,11 @@ def get_current_scope() -> str | None:
 
 
 def valid_scope(scope: object) -> TypeGuard[str]:
-    """Whether a raw scope is a valid namespace."""
+    """Whether a raw scope is a valid namespace.
+
+    A valid scope is a string of 1 to 40 characters that matches
+    ``[a-z0-9][a-z0-9-]{0,39}``.
+    """
     return (
         isinstance(scope, str)
         and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,39}", scope) is not None
@@ -55,7 +60,21 @@ def scoped_cache_key(key: str, *, required: bool = True) -> str:
 
 
 class ScopedDatabase:
-    """Resolve content collections and prepare indexes once per namespace."""
+    """Resolve content collections and prepare indexes once per namespace.
+
+    Calling the instance returns the database ``prefix + scope`` for the
+    scope of the current handler.
+
+    :param client: Async MongoDB client.
+    :param prefix: Prefix of each scope database name.
+    :param required: Raise HardFailureException when the handler has no
+        scope. False: use ``default_database``.
+    :param default_database: Database to use when the handler has no scope
+        and ``required`` is False. If it is None, a missing scope raises
+        HardFailureException.
+    :raises HardFailureException: On call, if the scope is malformed, or
+        missing with no fallback database.
+    """
 
     _instances: ClassVar[WeakSet["ScopedDatabase"]] = WeakSet()
 
@@ -113,7 +132,28 @@ async def erase_scope(
     control_database: str,
     prefix: str,
 ) -> dict[str, int]:
-    """Erase scoped content, cache keys and control rows after traffic is stopped."""
+    """Erase scoped content, cache keys and control rows after traffic is stopped.
+
+    It deletes three things:
+
+    - the scope database ``prefix + scope`` (or each of its collections, if
+      the user cannot drop the database)
+    - the Redis keys that match ``s:{scope}:*``
+    - the rows with ``{"scope": scope}`` in each collection of
+      ``control_database``
+
+    :param infra_or_clients: An object with ``mongo_client`` and
+        ``redis_client``, or a ``(mongo_client, redis_client)`` tuple.
+    :param scope: The scope to erase.
+    :param control_database: Database of the control rows. It must differ
+        from the scope database.
+    :param prefix: Prefix of the scope database name, as in
+        ``ScopedDatabase``.
+    :returns: Counts: ``{"collections", "redis_keys", "control_rows"}``.
+    :raises HardFailureException: If the scope is malformed.
+    :raises ValueError: If the scope database equals ``control_database``,
+        or a MongoDB or Redis client is missing.
+    """
     if not valid_scope(scope):
         reason = "malformed scope"
         raise HardFailureException(reason)

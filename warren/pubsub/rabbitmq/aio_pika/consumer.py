@@ -182,7 +182,6 @@ class RMQConsumerManager(ConsumerManagerBase):
         """
         Begin consuming messages from the configured queue.
 
-        Messages are delivered to _on_message() as they arrive.
         Each delivery spawns a task; handler concurrency is bounded separately
         from the channel prefetch.
         """

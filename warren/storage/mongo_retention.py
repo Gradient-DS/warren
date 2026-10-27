@@ -12,7 +12,13 @@ if TYPE_CHECKING:
 async def configure_ttl_index(
     collection: "AsyncCollection", field: str, seconds: int | None
 ) -> None:
-    """Configure a positive TTL; leave indexes untouched when unset."""
+    """Configure a positive TTL; leave indexes untouched when unset.
+
+    Drops an existing single-field index on ``field`` with other options,
+    then creates the TTL index.
+
+    :raises ValueError: If seconds is not positive.
+    """
     if seconds is None:
         return
     if seconds <= 0:

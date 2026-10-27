@@ -68,6 +68,8 @@ class KafkaTopicConfig(BaseModel):
 class KafkaConsumerConfig(BaseModel):
     """Consumer-group parameters for a single consumer manager.
 
+    :param concurrency: Must be None or 1, so that offsets are committed in
+        order. One handler runs at a time.
     :param group_id: Consumer group name. When None, the consumer
         manager derives ``"<topic>.<worker_type>"`` — one group per
         worker type on the topic (fanout parity). Set explicitly on
@@ -79,6 +81,9 @@ class KafkaConsumerConfig(BaseModel):
     :param max_poll_interval_ms: Max time between polls before the
         broker evicts the consumer from the group.
     :param session_timeout_ms: Heartbeat session timeout.
+    :param handler_timeout_seconds: Time limit for one handler call. A
+        handler that times out is a soft failure. ``/live`` fails when a
+        handler runs for twice this value. None means no limit.
     :param on_shutdown_timeout: Seconds to wait for the in-flight
         message during shutdown (mirrors ``RMQConsumerConfig``).
     """

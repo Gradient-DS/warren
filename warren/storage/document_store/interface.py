@@ -13,7 +13,12 @@ IndexSpec = Union[str, tuple[str, ...]]  # noqa: UP007  # runtime type alias
 
 
 class DocumentNotFoundError(ResourceNotFoundError):
-    pass
+    """No document with the given ID exists in the document store.
+
+    Raised by document stores. Resolvers and the fetcher raise a different
+    class, ``warren.storage.documents.DocumentNotFoundError``. A handler that
+    catches one class does not catch the other.
+    """
 
 
 class DocumentAlreadyExistsError(ResourceAlreadyExistsError):
@@ -41,7 +46,10 @@ class DocumentStoreInterface(Protocol):
         :return: Document ID.
 
         :raises DocumentAlreadyExistsError: If overwrite_existing is False and
-            a document with the same ID already exists.
+            the document has the same ID or the same values for a unique index
+            as a stored document.
+        :raises ValueError: If the ID is empty, or is not a valid ObjectId
+            when doc_id_field is "_id".
         """
         ...
 
@@ -54,7 +62,9 @@ class DocumentStoreInterface(Protocol):
         Update document with document id with given updates.
 
         :param doc_id: Document ID.
-        :param updates: Dictionary with updates.
+        :param updates: Fields to set. Fields that are not named stay as they
+            are. Use top-level keys only: a dotted key is a nested path on
+            MongoDB and a literal key in memory.
 
         :raises DocumentNotFoundError: if document id does not exist.
         """

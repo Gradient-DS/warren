@@ -4,20 +4,16 @@ Normally each warren worker is its own process and they meet at the broker
 and the database. Here they share one event loop, one ``RuntimeInfra``
 (which carries the in-process broker) and one ``MemoryStoreRegistry``.
 
-Deliberately not re-exported from ``warren.runtime``: this module imports
-the status and retry runners, which import ``warren.runtime.infrastructure``,
-so re-exporting it from the package ``__init__`` would create an import
-cycle. Import it as ``warren.runtime.in_process``.
+The status and retry runners import ``warren.runtime``, and the package
+``warren.runtime`` re-exports this module. So this module imports those
+runners inside ``create_in_process_runners``, not at the top of the file.
 """
 
 import asyncio
 import signal
 from collections.abc import Awaitable, Callable, Sequence
 
-from warren.jobs.status.job_status_worker_runner import JobStatusWorkerRunner
 from warren.pubsub.routing import observer_exchange
-from warren.retry_management.retry_worker import RetryWorker
-from warren.retry_management.retry_worker_runner import RetryWorkerRunner
 from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import RuntimeInfra
 from warren.runtime.runner import DefaultWorkerRunner, create_default_resolvers
@@ -48,7 +44,14 @@ async def create_in_process_runners(
     :param stores: Shared store registry.
     :param instances: Instance count per worker type; unspecified types get one.
     :return: Runners, not yet set up.
+    :raises ValueError: If ``instances`` names a worker type that is not in
+        the pipeline, or gives a count that is not an integer of 1 or more.
     """
+    # imported here: these runners import ``warren.runtime`` (see the module docstring)
+    from warren.jobs.status.job_status_worker_runner import JobStatusWorkerRunner
+    from warren.retry_management.retry_worker import RetryWorker
+    from warren.retry_management.retry_worker_runner import RetryWorkerRunner
+
     instances = instances or {}
     for worker_type, count in instances.items():
         if worker_type not in pipeline.workers:
@@ -151,8 +154,9 @@ async def run_in_process(
     The handlers in place before the run are restored afterwards.
 
     :param runners: Runners to co-host. Not yet set up.
-    :param until: Called once every runner is consuming. Publish work and
-        wait for it here. A callable, not a coroutine object, so nothing is
+    :param until: Called after every runner is set up, so every queue is
+        bound. Runners can still be starting their consumers. Publish work
+        and wait for it here. A callable, not a coroutine object, so nothing is
         left un-awaited if setup fails.
     """
     previous_handlers = {

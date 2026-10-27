@@ -4,9 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   test:
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -28,6 +30,7 @@ jobs:
         run: python -m pytest tests -q
 
   bare-install:
+    if: github.event.pull_request.draft != true
     # Locks the no-extras import surface: a bare `pip install .` must keep
     # the package and its config/pubsub sub-packages importable without any
     # transport library present.

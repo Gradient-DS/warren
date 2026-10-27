@@ -4,12 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
   schedule:
     - cron: '0 6 * * 1'
 
 jobs:
   source:
+    if: github.event.pull_request.draft != true
     uses: Gradient-DS/security-ci/.github/workflows/security-source.yml@33d2ef167da03d3edfd6732684c17347cc957c82 # v5
     secrets: inherit
     permissions:
@@ -21,7 +23,7 @@ jobs:
 
   gate:
     needs: [source]
-    if: always()
+    if: ${{ always() && github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
     steps:
       - name: Fail unless every security job succeeded

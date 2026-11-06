@@ -1,5 +1,4 @@
-"""
-Storage protocol for job definitions and job-level status.
+"""Storage protocol for job definitions and job-level status.
 
 The ``jobs`` collection stores what a job *is* and its high-level state
 (completed, with_failures). Per-document processing results are tracked

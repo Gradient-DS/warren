@@ -1,6 +1,4 @@
-"""
-Factory functions for creating ResultsStore instances.
-"""
+"""Factory functions for creating ResultsStore instances."""
 
 from pymongo import AsyncMongoClient
 from redis.asyncio import Redis
@@ -32,8 +30,7 @@ async def create_default_results_store(
     cache_ttl_seconds: int = 3600,
     scoped_database: ScopedDatabase | None = None,
 ) -> DefaultResultsStore:
-    """
-    Create a DefaultResultsStore with MongoDB persistence and optional Redis cache.
+    """Create a DefaultResultsStore with MongoDB persistence and optional Redis cache.
 
     Returns a fully initialized store (setup() already called on both
     the document store and the results store).

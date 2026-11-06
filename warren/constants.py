@@ -1,6 +1,4 @@
-"""
-Framework-level constants for the worker system.
-"""
+"""Framework-level constants for the worker system."""
 
 PUBLISHER_ORIGIN_TYPE: str = "publisher"
 """Value for ``origin.type`` on messages that a publisher puts into the pipeline.

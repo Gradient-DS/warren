@@ -1,11 +1,11 @@
-"""
-Resolver functions for document location types.
+"""Resolver functions for document location types.
 
 Each resolver fetches bytes from a specific location type. Resolvers
 are standalone async functions — bind configuration (e.g., base_dir)
 via ``functools.partial`` at wiring time::
 
     from functools import partial
+
     resolvers = {"path": partial(resolve_path, base_dir=Path("/data"))}
 
 Resolvers raise ``DocumentNotFoundError`` for permanent issues (file
@@ -47,9 +47,7 @@ async def resolve_path(
     :raises DocumentNotFoundError: If the path is missing or escapes ``base_dir``.
     """
     path_location = cast("DocumentPathLocation", location)
-    return await asyncio.to_thread(
-        _read_confined, base_dir, Path(path_location.relative_path)
-    )
+    return await asyncio.to_thread(_read_confined, base_dir, Path(path_location.relative_path))
 
 
 def _read_confined(base_dir: Path, relative: Path) -> bytes:

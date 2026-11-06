@@ -103,9 +103,7 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
             partialFilterExpression={"hard_failure": {"$exists": True}},
         )
 
-        await configure_ttl_index(
-            self._collection, "time", self._job_records_ttl_seconds
-        )
+        await configure_ttl_index(self._collection, "time", self._job_records_ttl_seconds)
 
     # --- Recording results ---
 

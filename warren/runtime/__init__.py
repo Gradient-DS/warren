@@ -1,5 +1,4 @@
-"""
-Runtime layer for the distributed processing framework.
+"""Runtime layer for the distributed processing framework.
 
 Provides the concrete wiring that turns a ``PipelineSpec`` into running
 worker processes. The runtime runs a pipeline on RabbitMQ (aio-pika) or

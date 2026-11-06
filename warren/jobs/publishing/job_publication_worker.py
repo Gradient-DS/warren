@@ -1,5 +1,4 @@
-"""
-Framework worker that consumes job messages and publishes their documents.
+"""Framework worker that consumes job messages and publishes their documents.
 
 Listens on the observer exchange for ``data_type == "job"`` messages,
 extracts document sources from the message data, and delegates to a
@@ -77,9 +76,7 @@ class JobPublicationWorker(FilteringWorkerBase):
     ) -> None:
         super().__init__(worker_name, worker_type=worker_type)
         self._documents_publisher = documents_publisher
-        self._create_source_generator = (
-            create_source_generator or _default_source_generator
-        )
+        self._create_source_generator = create_source_generator or _default_source_generator
 
     def should_process(self, message: dict) -> bool:
         """Only process job messages whose preprocessing is complete.
@@ -90,9 +87,7 @@ class JobPublicationWorker(FilteringWorkerBase):
         its name from ``preprocessing_required`` and emits the job message
         again.
         """
-        return message.get("data_type") == "job" and not message.get(
-            "preprocessing_required"
-        )
+        return message.get("data_type") == "job" and not message.get("preprocessing_required")
 
     async def process(self, message: dict) -> dict | None:
         """Extract sources from the job message and publish them.
@@ -114,10 +109,7 @@ class JobPublicationWorker(FilteringWorkerBase):
             sources = self._create_source_generator(data)
         except Exception as e:
             data_repr = str(data)[:_MAX_DATA_REPR_LENGTH]
-            msg = (
-                f"Job {job_id}: failed to create source generator. "
-                f"Data: {data_repr} ..."
-            )
+            msg = f"Job {job_id}: failed to create source generator. Data: {data_repr} ..."
             raise HardFailureException(msg) from e
 
         job_parameters: dict = message.get("job_parameters") or {}

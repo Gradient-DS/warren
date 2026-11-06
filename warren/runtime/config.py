@@ -1,5 +1,4 @@
-"""
-Runtime configuration for the distributed processing framework.
+"""Runtime configuration for the distributed processing framework.
 
 ``RuntimeConfig`` composes the framework's own RabbitMQ and Kafka config
 models with MongoDB, Redis, and retry settings. It is the single config

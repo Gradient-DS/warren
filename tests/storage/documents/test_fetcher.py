@@ -137,16 +137,15 @@ def test_binary_results_store_prepopulates_job_scoped_key() -> None:
 
 def test_throttled_error_passes_through_unwrapped() -> None:
     """The fetcher wraps unknown exceptions; a DocumentThrottledError must
-    reach the worker as the same object, retry_after intact."""
+    reach the worker as the same object, retry_after intact.
+    """
     error = DocumentThrottledError("slow down", retry_after=30, status_code=429)
 
     class _Throttling:
         async def __call__(self, location) -> bytes:
             raise error
 
-    fetcher = CachedDocumentFetcher(
-        cache=_FakeBytesCache(), resolvers={"path": _Throttling()}
-    )
+    fetcher = CachedDocumentFetcher(cache=_FakeBytesCache(), resolvers={"path": _Throttling()})
 
     with pytest.raises(DocumentThrottledError) as excinfo:
         asyncio.run(fetcher("doc-1", _LOCATION, job_id="job-a"))

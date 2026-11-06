@@ -59,9 +59,7 @@ class _ScanningRedis:
     def __init__(self) -> None:
         self.calls: list[tuple[int, str, int]] = []
 
-    async def scan(
-        self, *, cursor: int, match: str, count: int
-    ) -> tuple[int, list[bytes]]:
+    async def scan(self, *, cursor: int, match: str, count: int) -> tuple[int, list[bytes]]:
         self.calls.append((cursor, match, count))
         return (1, [b"results:a:0"]) if cursor == 0 else (0, [b"results:a:1"])
 

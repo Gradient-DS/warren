@@ -21,10 +21,7 @@ def _writes_without_ttl(source: str) -> list[int]:
         if method == "set" and not node.args and not node.keywords:
             continue
         # Scope context assignment is not a cache write.
-        if (
-            isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "current_scope"
-        ):
+        if isinstance(node.func.value, ast.Name) and node.func.value.id == "current_scope":
             continue
         position = 2 if method == "set" else 1
         ttl = node.args[position] if len(node.args) > position else None

@@ -1,5 +1,4 @@
-"""
-RabbitMQ pubsub layer.
+"""RabbitMQ pubsub layer.
 
 The top-level module exposes only the **protocol-level configs** —
 pure-data Pydantic models that describe the RabbitMQ topology and

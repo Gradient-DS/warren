@@ -22,9 +22,7 @@ from warren.workers.workers import FilteringWorkerBase
 def test_invalid_scope_produces_one_failure_then_goes_quiet(scope_fields: dict) -> None:
     async def run() -> None:
         mongo = MongoClient()
-        results = await create_default_results_store(
-            "results", mongo, scoped_database=ScopedDatabase(mongo)
-        )
+        results = await create_default_results_store("results", mongo, scoped_database=ScopedDatabase(mongo))
 
         class StoringWorker(FilteringWorkerBase):
             def should_process(self, message: dict) -> bool:
@@ -97,15 +95,9 @@ def test_invalid_scope_produces_one_failure_then_goes_quiet(scope_fields: dict) 
             "job-completed",
         ]
         failure = observed[1]
-        assert (
-            "missing scope" in failure["error"]
-            if not scope_fields
-            else "malformed scope" in failure["error"]
-        )
+        assert "missing scope" in failure["error"] if not scope_fields else "malformed scope" in failure["error"]
         for message in observed:
-            assert (
-                {"scope": message["scope"]} if "scope" in message else {}
-            ) == scope_fields
+            assert ({"scope": message["scope"]} if "scope" in message else {}) == scope_fields
         assert await ledger.count_hard_failed_docs(job_id) == 1
         assert not retry._pending_timers
         assert "wr_" not in mongo.databases

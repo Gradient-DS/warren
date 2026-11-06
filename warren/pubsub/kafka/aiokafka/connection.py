@@ -1,5 +1,4 @@
-"""
-Kafka connection management.
+"""Kafka connection management.
 
 ``KafkaConnectionManager`` is the shared infrastructure object of the
 ``aiokafka`` implementation — the counterpart of ``RMQConnectionManager``
@@ -72,9 +71,7 @@ class KafkaConnectionManager(Base):
             try:
                 await self._admin.close()
             except Exception as e:
-                self._log.warning(
-                    f"Error closing admin client: {summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error closing admin client: {summarize_exception_chain(e)}")
             self._admin = None
 
     @property

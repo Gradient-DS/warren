@@ -1,5 +1,4 @@
-"""
-Default worker runner for the distributed processing framework.
+"""Default worker runner for the distributed processing framework.
 
 ``DefaultWorkerRunner`` wires the pubsub backend (RabbitMQ or Kafka,
 selected by ``config.backend`` via :mod:`warren.runtime.backends`),
@@ -98,9 +97,7 @@ async def _resolve_cloud(
     return await resolver(cloud_location)
 
 
-def create_default_resolvers(
-    *, path_base_dir: Path | None = None
-) -> dict[str, ResolveDocumentFunc]:
+def create_default_resolvers(*, path_base_dir: Path | None = None) -> dict[str, ResolveDocumentFunc]:
     """Build the default document resolver registry.
 
     ``path`` only when ``path_base_dir`` is given, confined to it; ``cloud``
@@ -133,13 +130,11 @@ def create_default_resolvers(
         # raise. Selecting a 'cloud' document location without the
         # resolver later fails with UnknownLocationTypeError.
         _module_logger.debug(
-            "google-cloud-storage not installed — GCS cloud resolver "
-            'disabled; install with: pip install "warren[gcs]"'
+            'google-cloud-storage not installed — GCS cloud resolver disabled; install with: pip install "warren[gcs]"'
         )
     except Exception as exc:
         _module_logger.warning(
-            "Could not initialise GCS client — GCS cloud resolver "
-            f"disabled: {summarize_exception_chain(exc)}"
+            f"Could not initialise GCS client — GCS cloud resolver disabled: {summarize_exception_chain(exc)}"
         )
 
     try:
@@ -157,14 +152,10 @@ def create_default_resolvers(
         # Optional 'S3' extra. Degrade gracefully — pipelines without S3
         # documents run fine. Selecting an S3 location without the resolver
         # later fails with UnknownLocationTypeError.
-        _module_logger.debug(
-            "boto3 not installed — S3 cloud resolver "
-            'disabled; install with: pip install "warren[s3]"'
-        )
+        _module_logger.debug('boto3 not installed — S3 cloud resolver disabled; install with: pip install "warren[s3]"')
     except Exception as exc:
         _module_logger.warning(
-            "Could not initialise S3 client — S3 cloud resolver "
-            f"disabled: {summarize_exception_chain(exc)}"
+            f"Could not initialise S3 client — S3 cloud resolver disabled: {summarize_exception_chain(exc)}"
         )
 
     if cloud_by_provider:
@@ -190,13 +181,11 @@ def create_default_resolvers(
         # raise. Selecting a 'url' document location without the
         # resolver later fails with UnknownLocationTypeError.
         _module_logger.debug(
-            "httpx not installed — HTTP(S) URL resolver "
-            'disabled; install with: pip install "warren[http]"'
+            'httpx not installed — HTTP(S) URL resolver disabled; install with: pip install "warren[http]"'
         )
     except Exception as exc:
         _module_logger.warning(
-            "Could not initialise HTTP(S) URL resolver — "
-            f"disabled: {summarize_exception_chain(exc)}"
+            f"Could not initialise HTTP(S) URL resolver — disabled: {summarize_exception_chain(exc)}"
         )
 
     return resolvers
@@ -282,9 +271,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             also if a store that the spec needs is not injected.
         """
         if self._infra is None:
-            with self._exception_wrapping(
-                "Infrastructure setup (RabbitMQ/MongoDB/Redis)"
-            ):
+            with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
                 self._infra = await create_runtime_infrastructure(self._config)
 
         if self._config.scoping.enabled and self._infra.mongo_client is not None:
@@ -343,17 +330,13 @@ class DefaultWorkerRunner(WorkerRunnerBase):
             try:
                 await self._worker.teardown()
             except Exception as exc:
-                self._log.warning(
-                    f"Worker teardown failed: {summarize_exception_chain(exc)}"
-                )
+                self._log.warning(f"Worker teardown failed: {summarize_exception_chain(exc)}")
 
         if self._infra is not None and self._owns_infra:
             try:
                 await close_runtime_infrastructure(self._infra)
             except Exception as exc:
-                self._log.warning(
-                    f"Infrastructure teardown failed: {summarize_exception_chain(exc)}"
-                )
+                self._log.warning(f"Infrastructure teardown failed: {summarize_exception_chain(exc)}")
 
     def _wrap_worker(
         self,
@@ -380,9 +363,7 @@ class DefaultWorkerRunner(WorkerRunnerBase):
 
         :return: Mapping of location type to resolver function.
         """
-        return create_default_resolvers(
-            path_base_dir=self._config.documents.path_base_dir
-        )
+        return create_default_resolvers(path_base_dir=self._config.documents.path_base_dir)
 
     async def _create_default_results_stores(
         self,

@@ -38,9 +38,7 @@ def test_json_lines_carry_extra_fields_and_the_error(monkeypatch, capsys):
     assert lines[1]["error"]["type"] == "RuntimeError"
 
 
-def test_a_host_dictconfig_replaces_the_setup_and_keeps_existing_loggers(
-    monkeypatch, tmp_path, capsys
-):
+def test_a_host_dictconfig_replaces_the_setup_and_keeps_existing_loggers(monkeypatch, tmp_path, capsys):
     existing = logging.getLogger("warren.existing")
     config = tmp_path / "logging.yaml"
     config.write_text(

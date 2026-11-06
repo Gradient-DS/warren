@@ -1,5 +1,4 @@
-"""
-Cached document fetcher implementation.
+"""Cached document fetcher implementation.
 
 Warren's take on the **claim-check pattern**: messages stay small and carry
 only a payload *location*; workers resolve the actual bytes on demand
@@ -131,10 +130,7 @@ class CachedDocumentFetcher(Base):
         except DocumentResolutionError:
             raise
         except Exception as e:
-            msg = (
-                f"Failed to resolve document '{doc_id}' "
-                f"from {location_type} location: {e}"
-            )
+            msg = f"Failed to resolve document '{doc_id}' from {location_type} location: {e}"
             raise DocumentResolutionError(
                 msg,
                 doc_id=doc_id,

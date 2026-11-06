@@ -194,9 +194,7 @@ def test_consumer_manager_forwards_publish_hard_failures() -> None:
 
 def test_consumer_manager_rabbitmq_forwards_queue_arguments() -> None:
     config = RuntimeConfig(
-        rabbitmq=RuntimeRMQConfig(
-            consumer=RMQConsumerConfig(queue_arguments={"x-queue-type": "quorum"})
-        )
+        rabbitmq=RuntimeRMQConfig(consumer=RMQConsumerConfig(queue_arguments={"x-queue-type": "quorum"}))
     )
     manager = backends.create_consumer_manager(
         config,
@@ -217,9 +215,7 @@ def test_consumer_manager_rabbitmq_forwards_queue_arguments() -> None:
 def test_connection_manager_memory() -> None:
     config = RuntimeConfig(backend="memory")
 
-    assert isinstance(
-        backends.create_connection_manager(config), MemoryConnectionManager
-    )
+    assert isinstance(backends.create_connection_manager(config), MemoryConnectionManager)
 
 
 @pytest.mark.parametrize("exchange", [FANOUT, TOPIC, DIRECT])

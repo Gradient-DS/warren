@@ -1,6 +1,4 @@
-"""
-Common CLI argument helpers for launcher scripts.
-"""
+"""Common CLI argument helpers for launcher scripts."""
 
 import argparse
 from pathlib import Path

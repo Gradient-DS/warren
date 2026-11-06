@@ -1,5 +1,4 @@
-"""
-Specification dataclasses for processing-worker runners.
+"""Specification dataclasses for processing-worker runners.
 
 These dataclasses are application-agnostic: they describe a worker type
 in terms it can be wired by a runner (pubsub backend and stores), without

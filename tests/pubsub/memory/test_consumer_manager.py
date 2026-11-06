@@ -150,9 +150,7 @@ def test_success_publishes_result_and_acks() -> None:
     worker = _FakeWorker(result={"data_type": "y"})
     data, observer = _FakePublisher(), _FakePublisher()
 
-    depth = _process(
-        worker, _delivery(), data_publisher=data, observer_publisher=observer
-    )
+    depth = _process(worker, _delivery(), data_publisher=data, observer_publisher=observer)
 
     assert worker.calls == [_BODY]
     assert data.published == [{"data_type": "y"}]
@@ -193,11 +191,7 @@ def test_lane_and_priority_survive_republication(path: str) -> None:
         body = {**_BODY, "lane": "interactive", "priority": 2}
         delivery = _delivery(body, routing_key="interactive.raw_document")
         publisher = _FakePublisher()
-        worker = (
-            _FakeWorker(result=body)
-            if path == "observer"
-            else _FakeWorker(error=SoftFailureException("later"))
-        )
+        worker = _FakeWorker(result=body) if path == "observer" else _FakeWorker(error=SoftFailureException("later"))
         kwargs = {"control_publisher": publisher} if path == "retry" else {}
         manager = await _manager(worker, observer_publisher=publisher, **kwargs)
         await manager._process_message(delivery)
@@ -325,9 +319,7 @@ def test_soft_failure_envelope_publish_failure_requeues() -> None:
 def test_result_publish_failure_requeues() -> None:
     data = _FakePublisher(error=PublishFailureException("down"))
 
-    depth = _process(
-        _FakeWorker(result={"data_type": "y"}), _delivery(), data_publisher=data
-    )
+    depth = _process(_FakeWorker(result={"data_type": "y"}), _delivery(), data_publisher=data)
 
     assert depth == 1
 
@@ -356,9 +348,7 @@ def test_hard_failure_publishes_envelope_and_drops_the_message() -> None:
 def test_unexpected_exception_is_a_hard_failure() -> None:
     control = _FakePublisher()
 
-    _process(
-        _FakeWorker(error=KeyError("boom")), _delivery(), control_publisher=control
-    )
+    _process(_FakeWorker(error=KeyError("boom")), _delivery(), control_publisher=control)
 
     assert control.published[0]["data_type"] == "hard-failure"
 
@@ -424,9 +414,7 @@ def test_consume_loop_processes_one_message_at_a_time() -> None:
         worker = _SlowWorker()
         manager = await _manager(worker)
         for _ in range(3):
-            manager._connection_manager.broker.publish(
-                EXCHANGE, "", json.dumps(_BODY).encode()
-            )
+            manager._connection_manager.broker.publish(EXCHANGE, "", json.dumps(_BODY).encode())
         await manager.start_consuming()
         await _eventually(lambda: len(worker.calls) == 3)
         await manager.stop_consuming()
@@ -462,9 +450,7 @@ def test_shutdown_drains_the_in_flight_message_and_tears_down_publishers() -> No
 
         worker = _GatedWorker()
         manager = await _manager(worker, data_publisher=data)
-        manager._connection_manager.broker.publish(
-            EXCHANGE, "", json.dumps(_BODY).encode()
-        )
+        manager._connection_manager.broker.publish(EXCHANGE, "", json.dumps(_BODY).encode())
         await manager.start_consuming()
         await _eventually(lambda: bool(manager._in_flight_tasks))
         stopping = asyncio.create_task(manager.stop_consuming())

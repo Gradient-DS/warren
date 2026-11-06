@@ -41,27 +41,21 @@ class GatedWorker(FakeWorker):
 
 @pytest.mark.parametrize("backend", ["rabbitmq", "memory"])
 @pytest.mark.parametrize("concurrency", [None, 1, 3])
-def test_handlers_are_bounded_and_counted(
-    backend: str, concurrency: int | None
-) -> None:
+def test_handlers_are_bounded_and_counted(backend: str, concurrency: int | None) -> None:
     async def run() -> None:
         limit = concurrency or (4 if backend == "rabbitmq" else 1)
         worker, publisher = GatedWorker(limit), FakePublisher()
         if backend == "rabbitmq":
             manager = make_manager(
                 worker,
-                consumer_config=RMQConsumerConfig(
-                    concurrency=concurrency, prefetch_count=4
-                ),
+                consumer_config=RMQConsumerConfig(concurrency=concurrency, prefetch_count=4),
                 data_publisher=publisher,
                 connection_manager=FakeConnectionManager(None),
             )
             for i in range(6):
                 await manager._on_message(FakeIncomingMessage({"item": i}))
         else:
-            manager = await _manager(
-                worker, concurrency=concurrency, data_publisher=publisher
-            )
+            manager = await _manager(worker, concurrency=concurrency, data_publisher=publisher)
             for _ in range(6):
                 manager._connection_manager.broker.publish(manager._exchange, "", b"{}")
             await manager.start_consuming()
@@ -109,16 +103,12 @@ def test_memory_shutdown_drains_all_handlers() -> None:
     ("prefetch", "concurrency", "expected"),
     [(1, 3, 3), (8, 2, 8), (4, None, 4), (0, None, 0), (0, 2, 2)],
 )
-def test_rabbitmq_prefetch_is_at_least_concurrency(
-    prefetch: int, concurrency: int | None, expected: int
-) -> None:
+def test_rabbitmq_prefetch_is_at_least_concurrency(prefetch: int, concurrency: int | None, expected: int) -> None:
     class Channel(_FakeChannel):
         async def set_qos(self, *, prefetch_count: int) -> None:
             self.prefetch_count = prefetch_count
 
-        async def declare_exchange(
-            self, name: str, exchange_type: str, *, durable: bool
-        ) -> _FakeExchange:
+        async def declare_exchange(self, name: str, exchange_type: str, *, durable: bool) -> _FakeExchange:
             return _FakeExchange()
 
     class Connection:
@@ -128,18 +118,14 @@ def test_rabbitmq_prefetch_is_at_least_concurrency(
     channel = Channel()
     manager = make_manager(
         FakeWorker(),
-        consumer_config=RMQConsumerConfig(
-            concurrency=concurrency, prefetch_count=prefetch
-        ),
+        consumer_config=RMQConsumerConfig(concurrency=concurrency, prefetch_count=prefetch),
         connection_manager=Connection(),
     )
     asyncio.run(manager.setup())
     assert channel.prefetch_count == expected
 
 
-@pytest.mark.parametrize(
-    "config_type", [RMQConsumerConfig, KafkaConsumerConfig, MemoryConsumerConfig]
-)
+@pytest.mark.parametrize("config_type", [RMQConsumerConfig, KafkaConsumerConfig, MemoryConsumerConfig])
 def test_concurrency_defaults_to_unset_and_rejects_zero(config_type: type) -> None:
     assert config_type().concurrency is None
     assert config_type(concurrency=None).concurrency is None

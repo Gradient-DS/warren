@@ -18,9 +18,7 @@ _ITEMS = [
 ]
 
 
-def make_store(
-    client: MongoClient, redis: RedisClient, id_field: str = "result_id"
-) -> DefaultResultsStore:
+def make_store(client: MongoClient, redis: RedisClient, id_field: str = "result_id") -> DefaultResultsStore:
     return DefaultResultsStore(
         MongoDBDocumentStore(
             client,
@@ -60,9 +58,7 @@ def test_batch_matches_single_writes_and_uses_one_round_trip() -> None:
         assert batch.bulk_calls == 2
         assert batch.single_calls == batch.query_calls == 0
         for item in _ITEMS:
-            result = await batch_store.get_result(
-                item.doc_id, item.part_idx, item.job_id
-            )
+            result = await batch_store.get_result(item.doc_id, item.part_idx, item.job_id)
             assert result.result == item.result
             assert result.result_id
         assert batch.query_calls == 0

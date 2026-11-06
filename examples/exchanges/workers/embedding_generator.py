@@ -1,5 +1,4 @@
-"""
-Fake embedding generator worker for E2E testing.
+"""Fake embedding generator worker for E2E testing.
 
 Receives text_chunks messages, reads stored chunks, generates fake
 embedding vectors, and stores them. Publishes an ``embedded_document``

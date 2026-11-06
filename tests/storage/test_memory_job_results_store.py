@@ -18,9 +18,7 @@ async def _seed(store) -> None:
     await store.record_success("j", "text", "d1", *_ORIGIN)
     await store.record_success("j", "chunks", "d1", *_ORIGIN)
     await store.record_soft_failure("j", "text", "d2", *_ORIGIN, *_CONSUMER, 1, "boom")
-    await store.record_soft_failure(
-        "j", "text", "d2", *_ORIGIN, *_CONSUMER, 2, "boom again"
-    )
+    await store.record_soft_failure("j", "text", "d2", *_ORIGIN, *_CONSUMER, 2, "boom again")
     await store.record_hard_failure("j", "text", "d3", *_ORIGIN, *_CONSUMER, "dead")
     await store.record_hard_failure("j", "chunks", "d3", *_ORIGIN, *_CONSUMER, "dead")
     await store.record_success("other", "text", "d1", *_ORIGIN)
@@ -70,9 +68,7 @@ def test_stage_counts_separate_soft_from_hard(make) -> None:
 def test_success_clears_earlier_failures(make) -> None:
     async def scenario() -> list[dict]:
         store = make()
-        await store.record_soft_failure(
-            "j", "text", "d1", *_ORIGIN, *_CONSUMER, 1, "boom"
-        )
+        await store.record_soft_failure("j", "text", "d1", *_ORIGIN, *_CONSUMER, 1, "boom")
         await store.record_success("j", "text", "d1", *_ORIGIN)
         return await store.get_doc_status("j", "d1")
 
@@ -88,9 +84,7 @@ def test_success_clears_earlier_failures(make) -> None:
 def test_hard_failure_clears_soft_failure_fields(make) -> None:
     async def scenario() -> list[dict]:
         store = make()
-        await store.record_soft_failure(
-            "j", "text", "d1", *_ORIGIN, *_CONSUMER, 1, "boom"
-        )
+        await store.record_soft_failure("j", "text", "d1", *_ORIGIN, *_CONSUMER, 1, "boom")
         await store.record_hard_failure("j", "text", "d1", *_ORIGIN, *_CONSUMER, "dead")
         return await store.get_doc_status("j", "d1")
 
@@ -105,9 +99,7 @@ def test_get_failures_filters_by_stage(make) -> None:
     async def scenario() -> tuple[int, int]:
         store = make()
         await _seed(store)
-        return len(await store.get_failures("j")), len(
-            await store.get_failures("j", "chunks")
-        )
+        return len(await store.get_failures("j")), len(await store.get_failures("j", "chunks"))
 
     assert asyncio.run(scenario()) == (3, 1)
 
@@ -130,9 +122,7 @@ def test_unique_errors_are_sorted_by_count_descending(make) -> None:
     async def scenario() -> list[tuple[str, int]]:
         store = make()
         for doc in ("a", "b", "c"):
-            await store.record_hard_failure(
-                "j", "text", doc, *_ORIGIN, *_CONSUMER, "common"
-            )
+            await store.record_hard_failure("j", "text", doc, *_ORIGIN, *_CONSUMER, "common")
         await store.record_hard_failure("j", "text", "z", *_ORIGIN, *_CONSUMER, "rare")
         return [(e["error"], e["count"]) for e in await store.get_unique_errors("j")]
 

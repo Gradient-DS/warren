@@ -212,9 +212,7 @@ def test_failures_at_multiple_stages_count_as_one_item() -> None:
                 )
                 is None
             )
-        signal = await worker.process(
-            {"job_id": job_id, "data_type": "final", "data": {"doc_id": "b"}}
-        )
+        signal = await worker.process({"job_id": job_id, "data_type": "final", "data": {"doc_id": "b"}})
         assert signal is not None
         assert signal["data"] == {
             "completed_count": 1,

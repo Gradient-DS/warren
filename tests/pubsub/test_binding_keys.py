@@ -32,9 +32,7 @@ def test_runtime_bindings_match_rabbitmq_topology(exchange_type: str) -> None:
         )
         connection = MemoryConnectionManager()
         await connection.setup()
-        memory = create_consumer_manager(
-            RuntimeConfig(backend="memory"), connection, **kwargs
-        )
+        memory = create_consumer_manager(RuntimeConfig(backend="memory"), connection, **kwargs)
         await memory.setup()
         actual_keys = tuple(key for _, key in queue.bound)
         assert actual_keys == (("",) if exchange_type == "fanout" else keys)

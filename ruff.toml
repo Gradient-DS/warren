@@ -5,7 +5,7 @@
 # `document_processing/distributed/**/*.py` there now covers this whole repo.
 
 target-version = "py312"
-line-length = 88
+line-length = 120
 
 # ---------------------------------------------------------------------------
 # Lint
@@ -63,6 +63,9 @@ select = [
 
     # --- Ruff-specific ---
     "RUF",     # various antipatterns, mutable class defaults, etc.
+
+    # --- Docstrings ---
+    "D",       # pydocstyle, Google convention (see [lint.pydocstyle])
 ]
 
 ignore = [
@@ -82,6 +85,13 @@ ignore = [
 
     # --- Ruff ---
     "RUF012",  # mutable class variable annotation: conflicts with dataclass patterns
+
+    # --- Docstrings ---
+    "D100",    # module docstring
+    "D104",    # package docstring
+    "D105",    # magic methods: Python defines what they do
+    "D107",    # __init__: document constructor arguments on the class
+    "D417",    # list only the args whose name and type do not say enough
 ]
 
 # --- Auto-fix policy ---
@@ -129,6 +139,9 @@ section-order = [
 # ---------------------------------------------------------------------------
 # Plugin configuration
 # ---------------------------------------------------------------------------
+[lint.pydocstyle]
+convention = "google"
+
 [lint.flake8-annotations]
 allow-star-arg-any = false
 suppress-none-returning = true
@@ -151,7 +164,7 @@ extend-immutable-calls = [
 # ---------------------------------------------------------------------------
 [lint.per-file-ignores]
 # Tests: relax annotations, unused fixture args, assertions, boolean traps
-"tests/**/*.py" = ["ANN", "ARG", "S101", "FBT"]
+"tests/**/*.py" = ["ANN", "ARG", "S101", "FBT", "D1"]
 # Config files may have values that look like hardcoded secrets
 "**/config*.py" = ["S105", "S106"]
 "**/settings*.py" = ["S105", "S106"]
@@ -174,8 +187,78 @@ extend-immutable-calls = [
     "B004",    # consumer.py uses getattr(x, "__call__") to fetch the bound method for
                # an iscoroutinefunction check (async __call__ detection); callable() is
                # not an equivalent substitution here.
-    "E501",    # usage-example docstrings exceed 88 cols; wrapping is noisy.
 ]
+
+
+# Lint debt (2026-11-06 baseline). Remove entries as files are fixed; never add new ones.
+"examples/exchanges/capability_workers.py" = ["D102"]
+"examples/exchanges/direct/publish.py" = ["D103"]
+"examples/exchanges/publish.py" = ["D103"]
+"examples/exchanges/workers/document_parser.py" = ["D102"]
+"examples/exchanges/workers/embedding_generator.py" = ["D102"]
+"examples/exchanges/workers/text_chunker.py" = ["D102"]
+"examples/inspect_job.py" = ["D103"]
+"examples/rag/publish_jobs.py" = ["D103"]
+"examples/rag/run_local.py" = ["D103"]
+"examples/rag/workers/embedding_generator.py" = ["D102"]
+"examples/rag/workers/pdf_parser.py" = ["D102"]
+"examples/rag/workers/text_chunker.py" = ["D102"]
+"runtime_scripts/lib/logging_setup.py" = ["D102"]
+"runtime_scripts/purge_queues.py" = ["D103"]
+"runtime_scripts/start_job_publication_worker.py" = ["D103"]
+"runtime_scripts/start_job_status_worker.py" = ["D103"]
+"runtime_scripts/start_retry_worker.py" = ["D103"]
+"runtime_scripts/start_worker.py" = ["D103"]
+"tests/jobs/publishing/test_job_documents_publisher.py" = ["D205"]
+"tests/pubsub/kafka/test_consumer_manager.py" = ["D205"]
+"tests/pubsub/rabbitmq/test_consumer_health.py" = ["D205"]
+"tests/pubsub/rabbitmq/test_consumer_manager.py" = ["D205"]
+"tests/pubsub/test_topic_routing_integration.py" = ["D205"]
+"tests/runtime/test_backends_missing_extras.py" = ["D205"]
+"tests/storage/documents/test_fetcher.py" = ["D205"]
+"tests/storage/documents/test_package_missing_extras.py" = ["D205"]
+"tests/storage/documents/test_resolve_http.py" = ["D205"]
+"tests/storage/results/test_created_at_expires.py" = ["D205"]
+"tests/test_public_api.py" = ["D205"]
+"tests/workers/test_health_server.py" = ["D205"]
+"tests/workers/test_runner_watchdog.py" = ["D205"]
+"warren/jobs/publishing/__init__.py" = ["D205"]
+"warren/jobs/status/__init__.py" = ["D205"]
+"warren/jobs/status/job_status_worker.py" = ["D205"]
+"warren/pubsub/base.py" = ["D101"]
+"warren/pubsub/common.py" = ["D101", "D102", "D205"]
+"warren/pubsub/kafka/aiokafka/connection.py" = ["D101", "D102"]
+"warren/pubsub/kafka/aiokafka/publisher.py" = ["D102"]
+"warren/pubsub/kafka/config.py" = ["D102"]
+"warren/pubsub/memory/connection.py" = ["D102"]
+"warren/pubsub/memory/consumer.py" = ["D102"]
+"warren/pubsub/memory/publisher.py" = ["D102"]
+"warren/pubsub/rabbitmq/aio_pika/connection.py" = ["D101", "D102"]
+"warren/pubsub/rabbitmq/aio_pika/publisher.py" = ["D102", "E501"]
+"warren/pubsub/rabbitmq/config.py" = ["D101"]
+"warren/pubsub/routing.py" = ["D102"]
+"warren/retry_management/__init__.py" = ["D205"]
+"warren/retry_management/lease.py" = ["D101", "D102"]
+"warren/retry_management/retry_worker.py" = ["D205"]
+"warren/runtime/config.py" = ["D101", "D102"]
+"warren/runtime/infrastructure.py" = ["D205"]
+"warren/runtime/spec.py" = ["D102"]
+"warren/storage/cache/memory.py" = ["D102"]
+"warren/storage/cached_document_store.py" = ["D102"]
+"warren/storage/document_store/interface.py" = ["D101"]
+"warren/storage/document_store/memory.py" = ["D102"]
+"warren/storage/documents/interface.py" = ["D101"]
+"warren/storage/job_results/memory.py" = ["D102"]
+"warren/storage/job_results/mongodb.py" = ["D102"]
+"warren/storage/jobs/interface.py" = ["D101"]
+"warren/storage/jobs/memory.py" = ["D102"]
+"warren/storage/jobs/mongodb.py" = ["D102"]
+"warren/storage/memory_registry.py" = ["D102"]
+"warren/storage/publishing_tracker/mongodb.py" = ["D102"]
+"warren/storage/results/interface.py" = ["D101"]
+"warren/storage/scoping.py" = ["D101", "D102", "D103"]
+"warren/workers/health.py" = ["D102"]
+"warren/workers/workers.py" = ["D102"]
 
 # ---------------------------------------------------------------------------
 # Formatter
@@ -183,3 +266,4 @@ extend-immutable-calls = [
 [format]
 quote-style = "double"
 indent-style = "space"
+docstring-code-format = true

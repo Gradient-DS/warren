@@ -1,5 +1,4 @@
-"""
-Pure-data configuration models for the RabbitMQ pubsub layer.
+"""Pure-data configuration models for the RabbitMQ pubsub layer.
 
 These models are intentionally free of any ``aio_pika`` dependency: they
 describe *what* a connection, exchange, queue, consumer, or retry policy
@@ -111,9 +110,7 @@ class RMQConsumerConfig(BaseModel):
 
     concurrency: int | None = Field(default=None, ge=1)
     prefetch_count: int = 1
-    handler_timeout_seconds: float | None = Field(
-        default=None, gt=0, allow_inf_nan=False
-    )
+    handler_timeout_seconds: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     on_shutdown_timeout: float = 30.0
     max_deliveries: int | None = Field(default=None, ge=1)
     redelivery_delay: int = Field(default=5, ge=1)

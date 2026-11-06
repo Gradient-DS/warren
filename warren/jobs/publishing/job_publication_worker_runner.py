@@ -1,5 +1,4 @@
-"""
-Runner for the job publication worker.
+"""Runner for the job publication worker.
 
 Manages the JobPublicationWorker lifecycle: creates infrastructure,
 wires the consumer, and delegates document publishing to an
@@ -192,17 +191,13 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
             try:
                 await self._publisher.teardown()
             except Exception as exc:
-                self._log.warning(
-                    f"Publisher teardown failed: {summarize_exception_chain(exc)}"
-                )
+                self._log.warning(f"Publisher teardown failed: {summarize_exception_chain(exc)}")
 
         if self._infra is not None:
             try:
                 await close_runtime_infrastructure(self._infra)
             except Exception as exc:
-                self._log.warning(
-                    f"Infrastructure teardown failed: {summarize_exception_chain(exc)}"
-                )
+                self._log.warning(f"Infrastructure teardown failed: {summarize_exception_chain(exc)}")
 
     def _create_default_publisher(self) -> PublisherInterface:
         # Documents enter the pipeline on the data exchange.
@@ -211,9 +206,7 @@ class JobPublicationWorkerRunner(WorkerRunnerBase):
             self._infra.pubsub_connection_manager,
             exchange=self._publish_exchange,
             route_func=(
-                self._route_func
-                if self._route_func is not None
-                else observer_route_func(self._publish_exchange)
+                self._route_func if self._route_func is not None else observer_route_func(self._publish_exchange)
             ),
         )
 

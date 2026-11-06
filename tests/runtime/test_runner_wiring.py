@@ -52,16 +52,12 @@ def test_runner_passes_retry_policy_and_binding_keys_to_consumer_manager(
         return object()
 
     monkeypatch.setattr(backends, "create_consumer_manager", fake_create)
-    config = RuntimeConfig(
-        retry=RuntimeRetryConfig(policy=RetryConfig(max_delay_cap=900))
-    )
+    config = RuntimeConfig(retry=RuntimeRetryConfig(policy=RetryConfig(max_delay_cap=900)))
     runner = DefaultWorkerRunner(
         config,
         "worker-1",
         worker_type="test_worker",
-        worker_spec=WorkerSpec(
-            collections={}, factory=_factory, binding_keys=("input.*", "retry.#")
-        ),
+        worker_spec=WorkerSpec(collections={}, factory=_factory, binding_keys=("input.*", "retry.#")),
         exchange=RMQExchangeConfig(name="jobs", type="fanout"),
     )
     runner._infra = SimpleNamespace(pubsub_connection_manager=object())
@@ -95,9 +91,7 @@ def test_status_runner_passes_retention_to_stores() -> None:
         }
     )
     client = MongoClient()
-    runner = JobStatusWorkerRunner(
-        config, "status-1", exchange=RMQExchangeConfig(name="jobs", type="fanout")
-    )
+    runner = JobStatusWorkerRunner(config, "status-1", exchange=RMQExchangeConfig(name="jobs", type="fanout"))
     runner._infra = SimpleNamespace(mongo_client=client)
 
     async def scenario() -> None:

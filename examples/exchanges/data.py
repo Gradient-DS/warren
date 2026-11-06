@@ -1,5 +1,4 @@
-"""
-Fake document content for the E2E test.
+"""Fake document content for the E2E test.
 
 Each document maps to a fake markdown string that would be the output
 of a real document parser. Paragraphs are separated by double newlines

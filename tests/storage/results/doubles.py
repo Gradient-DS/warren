@@ -43,9 +43,7 @@ class MongoClient:
         self.rows.append(replacement)
         return copy.deepcopy(replacement), True
 
-    async def find_one_and_replace(
-        self, query: dict, row: dict, *, upsert: bool, return_document: bool
-    ) -> dict:
+    async def find_one_and_replace(self, query: dict, row: dict, *, upsert: bool, return_document: bool) -> dict:
         assert upsert
         self.single_calls += 1
         return self._replace(query, row)[0]
@@ -55,9 +53,7 @@ class MongoClient:
         self.single_calls += 1
         self._replace(query, row)
 
-    async def bulk_write(
-        self, operations: list[ReplaceOne], *, ordered: bool
-    ) -> BulkWriteResult:
+    async def bulk_write(self, operations: list[ReplaceOne], *, ordered: bool) -> BulkWriteResult:
         assert ordered is False
         self.bulk_calls += 1
         upserted = []
@@ -73,11 +69,7 @@ class MongoClient:
     def find(self, params: dict) -> "Cursor":
         self.query_calls += 1
         return Cursor(
-            [
-                copy.deepcopy(row)
-                for row in self.rows
-                if all(row.get(key) == value for key, value in params.items())
-            ]
+            [copy.deepcopy(row) for row in self.rows if all(row.get(key) == value for key, value in params.items())]
         )
 
 
@@ -114,9 +106,7 @@ class RedisClient:
     async def get(self, key: str) -> bytes | None:
         return self.entries.get(key)
 
-    async def scan(
-        self, *, cursor: int, match: str, count: int = 10
-    ) -> tuple[int, list[bytes]]:
+    async def scan(self, *, cursor: int, match: str, count: int = 10) -> tuple[int, list[bytes]]:
         self.scan_calls += 1
         return 0, [key.encode() for key in self.entries if fnmatchcase(key, match)]
 

@@ -167,9 +167,7 @@ def test_memory_backend_is_a_valid_choice() -> None:
     ],
 )
 @pytest.mark.parametrize("from_yaml", [False, True])
-def test_unknown_config_keys_are_rejected(
-    tmp_path: Path, section: tuple[str, ...], *, from_yaml: bool
-) -> None:
+def test_unknown_config_keys_are_rejected(tmp_path: Path, section: tuple[str, ...], *, from_yaml: bool) -> None:
     data = RuntimeConfig().model_dump(mode="json")
     target = data
     for key in section:
@@ -202,9 +200,7 @@ def test_repository_yaml_configs(path: Path) -> None:
     RuntimeConfig.from_yaml(path)
 
 
-def test_yaml_expands_environment_in_string_values(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_yaml_expands_environment_in_string_values(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("WARREN_TEST_HOST", "broker.example")
     monkeypatch.setenv("WARREN_TEST_PASSWORD", "value: # ${NOT_EXPANDED}")
     path = _write_yaml(
@@ -227,9 +223,7 @@ redis:
     assert config.redis.db == 2
 
 
-def test_yaml_rejects_unset_environment_variable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_yaml_rejects_unset_environment_variable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("WARREN_TEST_MISSING", raising=False)
     path = _write_yaml(tmp_path, "mongodb:\n  password: ${WARREN_TEST_MISSING}\n")
     with pytest.raises(ValueError, match=r"WARREN_TEST_MISSING.*not set"):
@@ -262,9 +256,7 @@ def test_retention_defaults_to_unmanaged() -> None:
     ("ttl", "max_age"),
     [(None, None), (None, 60), (1, 1), (60, None), (60, 60), (60, 90)],
 )
-def test_retention_from_yaml(
-    tmp_path: Path, ttl: int | None, max_age: int | None
-) -> None:
+def test_retention_from_yaml(tmp_path: Path, ttl: int | None, max_age: int | None) -> None:
     settings = {"job_records_ttl_seconds": ttl, "job_records_max_age_seconds": max_age}
     path = _write_yaml(tmp_path, yaml.safe_dump({"retention": settings}))
     assert RuntimeConfig.from_yaml(path).retention.model_dump() == settings

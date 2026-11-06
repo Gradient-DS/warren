@@ -1,5 +1,4 @@
-"""
-Pure-data configuration models for the Kafka pubsub layer.
+"""Pure-data configuration models for the Kafka pubsub layer.
 
 These models are intentionally free of any ``aiokafka`` dependency: they
 describe *what* a connection, topic, or consumer should look like, and
@@ -95,9 +94,7 @@ class KafkaConsumerConfig(BaseModel):
     auto_offset_reset: Literal["earliest", "latest"] = "earliest"
     max_poll_interval_ms: int = 600_000
     session_timeout_ms: int = 45_000
-    handler_timeout_seconds: float | None = Field(
-        default=None, gt=0, allow_inf_nan=False
-    )
+    handler_timeout_seconds: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     on_shutdown_timeout: float = 30.0
 
     @field_validator("concurrency")

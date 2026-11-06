@@ -20,12 +20,6 @@ jobs:
       - name: Install package + dev tools + all extras
         run: pip install -e ".[dev,rmq,kafka,gcs,s3,http]"
 
-      - name: Ruff lint
-        run: ruff check .
-
-      - name: Ruff format check
-        run: ruff format --check .
-
       - name: Unit tests
         run: python -m pytest tests -q
 

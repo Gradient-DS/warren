@@ -23,8 +23,7 @@ DocId = Union[ObjectId, str]  # noqa: UP007  # runtime type alias
 
 
 class MongoDBDocumentStore(Base, DocumentStoreInterface):
-    """
-    Async MongoDB implementation of DocumentStoreInterface.
+    """Async MongoDB implementation of DocumentStoreInterface.
 
     Uses pymongo's AsyncMongoClient for non-blocking I/O. Provides document
     storage using MongoDB as the backend. Supports custom document ID fields
@@ -47,8 +46,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         name: str | None = None,
         scoped_database: ScopedDatabase | None = None,
     ) -> None:
-        """
-        Initialize the MongoDB document store.
+        """Initialize the MongoDB document store.
 
         :param client: Async MongoDB client instance.
         :param database_name: Name of the database to use.
@@ -75,13 +73,10 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         self._fields_to_index = fields_to_index if fields_to_index is not None else []
         self._unique_indexes = unique_indexes if unique_indexes is not None else []
         # Collection reference is sync in pymongo async — no I/O, just a reference.
-        self._collection: AsyncCollection | None = (
-            self._ensure_collection() if scoped_database is None else None
-        )
+        self._collection: AsyncCollection | None = self._ensure_collection() if scoped_database is None else None
 
     async def setup(self) -> None:
-        """
-        Create indexes on configured fields.
+        """Create indexes on configured fields.
 
         Must be called after construction before using the store.
         ``create_default_results_store`` and ``create_binary_results_store``
@@ -95,8 +90,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         doc: dict,
         overwrite_existing: bool = False,
     ) -> str:
-        """
-        Insert a document into the document store.
+        """Insert a document into the document store.
 
         :param doc: Document to insert.
         :param overwrite_existing: If True, replace existing document with
@@ -125,10 +119,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
             try:
                 await collection.insert_one(doc_copy)
             except DuplicateKeyError as e:
-                msg = (
-                    f"Document with id '{self._normalize_doc_id(doc_copy[self._doc_id_field])}' "
-                    "already exists"
-                )
+                msg = f"Document with id '{self._normalize_doc_id(doc_copy[self._doc_id_field])}' already exists"
                 raise DocumentAlreadyExistsError(msg) from e
 
         return self._normalize_doc_id(doc_copy[self._doc_id_field])
@@ -160,8 +151,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         doc_id: str,
         updates: dict,
     ) -> None:
-        """
-        Update a document with the given updates.
+        """Update a document with the given updates.
 
         :param doc_id: ID of the document to update.
         :param updates: Dictionary of field updates to apply.
@@ -180,8 +170,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         self,
         doc_id: str,
     ) -> bool:
-        """
-        Check if a document exists in the store.
+        """Check if a document exists in the store.
 
         :param doc_id: ID of the document to check.
 
@@ -200,8 +189,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         *,
         expected: dict | None = None,
     ) -> bool:
-        """
-        Delete a document by its ID.
+        """Delete a document by its ID.
 
         :param doc_id: ID of the document to delete.
         :param expected: Additional field values required for deletion.
@@ -222,8 +210,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         self,
         doc_id: str,
     ) -> dict:
-        """
-        Retrieve a document by its ID.
+        """Retrieve a document by its ID.
 
         :param doc_id: ID of the document to retrieve.
 
@@ -246,8 +233,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         *,
         sort_by: str | None = None,
     ) -> AsyncGenerator[dict, None]:
-        """
-        Query documents matching the given parameters.
+        """Query documents matching the given parameters.
 
         :param params: MongoDB query parameters.
         :param sort_by: Optional field to sort by in ascending order.
@@ -262,24 +248,21 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
             yield self._prepare_doc_for_return(doc)
 
     def get_document_type(self) -> str:
-        """
-        Returns the document type identifier for this store.
+        """Returns the document type identifier for this store.
 
         :return: The collection name.
         """
         return self._collection_name
 
     def get_doc_id_field(self) -> str:
-        """
-        Returns the field name used for document IDs.
+        """Returns the field name used for document IDs.
 
         :return: The configured doc_id_field.
         """
         return self._doc_id_field
 
     async def has_unique_index(self, index_spec: IndexSpec) -> bool:
-        """
-        Check if a unique index exists on the given field(s).
+        """Check if a unique index exists on the given field(s).
 
         :param index_spec: Single field name or tuple of field names for composite index.
 
@@ -287,9 +270,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         """
         if self._scoped_database is not None:
             # Setup checks the index declaration; creation waits for a scope.
-            return (
-                index_spec in self._unique_indexes or index_spec == self._doc_id_field
-            )
+            return index_spec in self._unique_indexes or index_spec == self._doc_id_field
         target_fields = (index_spec,) if isinstance(index_spec, str) else index_spec
         collection = await self._get_collection()
         indexes = await collection.index_information()
@@ -306,9 +287,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
 
     async def _get_collection(self) -> AsyncCollection:
         if self._scoped_database is not None:
-            return await self._scoped_database.collection(
-                self._collection_name, self._create_indexes
-            )
+            return await self._scoped_database.collection(self._collection_name, self._create_indexes)
         return self._collection
 
     async def _create_indexes(self, collection: AsyncCollection) -> None:
@@ -333,8 +312,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         return [(field, 1) for field in index_spec]
 
     async def _upsert_by_unique_index(self, doc: dict) -> None:
-        """
-        Upsert a document using the first unique index as the query key.
+        """Upsert a document using the first unique index as the query key.
 
         Uses find_one_and_replace with upsert=True to atomically:
         - Replace existing document if found (preserving its _id)
@@ -378,8 +356,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         return str(uuid.uuid4())
 
     def _normalize_doc_id(self, doc_id: DocId) -> str:
-        """
-        Convert a document ID to its normalized string representation.
+        """Convert a document ID to its normalized string representation.
 
         :param doc_id: Document ID to normalize.
 
@@ -388,8 +365,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         return str(doc_id)
 
     def _denormalize_doc_id(self, doc_id: DocId) -> DocId:
-        """
-        Validate and convert an ID to its native MongoDB format.
+        """Validate and convert an ID to its native MongoDB format.
 
         :param doc_id: Document ID to denormalize (string or ObjectId).
 
@@ -410,8 +386,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         return doc_id
 
     def _ensure_doc_id(self, doc: dict) -> DocId:
-        """
-        Ensure document has an ID, generating one if needed.
+        """Ensure document has an ID, generating one if needed.
 
         Modifies doc in place if ID is generated.
 
@@ -427,8 +402,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         return doc_id
 
     def _prepare_doc_for_return(self, doc: dict) -> dict:
-        """
-        Prepare a document for return by cleaning up internal fields.
+        """Prepare a document for return by cleaning up internal fields.
 
         Note: This method mutates the input dict.
         """

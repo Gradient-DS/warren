@@ -1,5 +1,4 @@
-"""
-Base exception hierarchy for the distributed processing framework.
+"""Base exception hierarchy for the distributed processing framework.
 
 All framework-specific exceptions should derive from ``WarrenError`` so
 callers can catch the full tree with a single handler when needed.

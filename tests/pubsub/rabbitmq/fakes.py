@@ -87,9 +87,7 @@ class FakeIncomingMessage:
 class FakeWorker:
     """Async MessageConsumerInterface stand-in with scripted behaviour."""
 
-    def __init__(
-        self, *, result: dict | None = None, error: Exception | None = None
-    ) -> None:
+    def __init__(self, *, result: dict | None = None, error: Exception | None = None) -> None:
         self.calls: list[dict] = []
         self.result = result
         self.error = error
@@ -157,8 +155,7 @@ def make_manager(
         data_publisher=data_publisher,  # type: ignore[arg-type]
         control_publisher=control_publisher,  # type: ignore[arg-type]
         # jitter off for determinism; no real sleeps
-        retry_config=retry_config
-        or RetryConfig(jitter=False, fallback_requeue_delay=0.0),
+        retry_config=retry_config or RetryConfig(jitter=False, fallback_requeue_delay=0.0),
     )
 
 
@@ -181,9 +178,7 @@ class FakeTransport:
 class FakeConnection:
     """``AbstractRobustConnection`` stand-in for the fields health() reads."""
 
-    def __init__(
-        self, *, transport: FakeTransport | None = None, connected: bool = True
-    ) -> None:
+    def __init__(self, *, transport: FakeTransport | None = None, connected: bool = True) -> None:
         self.transport = transport if transport is not None else FakeTransport()
         self.connected = asyncio.Event()
         if connected:

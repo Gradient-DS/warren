@@ -1,5 +1,4 @@
-r"""
-Job publication worker launcher.
+r"""Job publication worker launcher.
 
 Starts a ``JobPublicationWorkerRunner`` that consumes job messages and
 publishes their documents into the processing pipeline.
@@ -159,19 +158,13 @@ async def start_job_publication_worker(
 
     validate_pipeline(pipeline, logger=log)
     exchange = resolve_observation_exchange(pipeline)
-    resolved_config = resolve_config_path(
-        Path(config_file) if config_file else None, pipeline_dir
-    )
+    resolved_config = resolve_config_path(Path(config_file) if config_file else None, pipeline_dir)
 
     runner_factory = partial(
         JobPublicationWorkerRunner,
         exchange=exchange,
         publish_exchange=pipeline.exchange,
-        route_func=(
-            pipeline.publication.route_func
-            if pipeline.publication is not None
-            else None
-        ),
+        route_func=(pipeline.publication.route_func if pipeline.publication is not None else None),
         documents_publisher_factory=pub_factory_func,
     )
 
@@ -194,9 +187,7 @@ def main() -> None:
     try:
         asyncio.run(start_job_publication_worker(**vars(args), logger=module_logger))
     except Exception as e:
-        module_logger.error(
-            f"Start job publication worker failed: {summarize_exception_chain(e)}"
-        )
+        module_logger.error(f"Start job publication worker failed: {summarize_exception_chain(e)}")
         sys.exit(1)
 
 

@@ -7,9 +7,7 @@ from warren.storage.job_results.mongodb import MongoDBJobResultsStore
 
 
 @pytest.mark.parametrize(("rows", "expected"), [([], 0), ([{"total": 2}], 2)])
-def test_hard_failure_count_matches_the_partial_index(
-    rows: list[dict], expected: int
-) -> None:
+def test_hard_failure_count_matches_the_partial_index(rows: list[dict], expected: int) -> None:
     client = MongoClient()
     collection = AggregateCollection(rows)
     client["test"].collections["job_results"] = collection

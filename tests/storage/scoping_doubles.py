@@ -13,9 +13,7 @@ class Collection(ResultCollection):
         self.indexes: dict[str, dict] = {}
         self.index_calls = 0
 
-    async def create_index(
-        self, keys: str | list[tuple[str, int]], **options: object
-    ) -> str:
+    async def create_index(self, keys: str | list[tuple[str, int]], **options: object) -> str:
         await asyncio.sleep(0)
         self.index_calls += 1
         if isinstance(keys, str):
@@ -30,12 +28,8 @@ class Collection(ResultCollection):
     async def insert_one(self, row: dict) -> None:
         self.rows.append(copy.deepcopy(row))
 
-    async def find_one(
-        self, query: dict, projection: dict | None = None
-    ) -> dict | None:
-        return next(
-            (copy.deepcopy(row) for row in self.rows if self.matches(row, query)), None
-        )
+    async def find_one(self, query: dict, projection: dict | None = None) -> dict | None:
+        return next((copy.deepcopy(row) for row in self.rows if self.matches(row, query)), None)
 
     @staticmethod
     def matches(row: dict, query: dict) -> bool:
@@ -45,9 +39,7 @@ class Collection(ResultCollection):
         count = sum(self.matches(row, query) for row in self.rows)
         return min(count, limit) if limit else count
 
-    async def update_one(
-        self, query: dict, update: dict, *, upsert: bool = False
-    ) -> UpdateResult:
+    async def update_one(self, query: dict, update: dict, *, upsert: bool = False) -> UpdateResult:
         row = next((row for row in self.rows if self.matches(row, query)), None)
         found = row is not None
         if row is None and upsert:

@@ -70,12 +70,8 @@ class _Exclaim(FilteringWorkerBase):
             self._failed_once.add(doc_id)
             reason = "first attempt always fails"
             raise SoftFailureException(reason)
-        text = (await self._read.get_result(doc_id=doc_id, job_id=job_id)).result[
-            "text"
-        ]
-        await self._write.store(
-            result={"text": text + "!"}, doc_id=doc_id, job_id=job_id
-        )
+        text = (await self._read.get_result(doc_id=doc_id, job_id=job_id)).result["text"]
+        await self._write.store(result={"text": text + "!"}, doc_id=doc_id, job_id=job_id)
         return {
             "data_type": "final",
             "data": {"doc_id": doc_id},
@@ -124,9 +120,7 @@ async def _wait_until_completed(stores: MemoryStoreRegistry, job_id: str) -> Non
         await asyncio.sleep(0.01)
 
 
-def _run(
-    exchange: RMQExchangeConfig, *, flaky: bool
-) -> tuple[dict, list[dict], list[str]]:
+def _run(exchange: RMQExchangeConfig, *, flaky: bool) -> tuple[dict, list[dict], list[str]]:
     docs = {"d1": "hello", "d2": "world"}
     config = RuntimeConfig(
         backend="memory",
@@ -142,9 +136,7 @@ def _run(
         infra = await create_runtime_infrastructure(config)
         stores = MemoryStoreRegistry()
         try:
-            runners = await create_in_process_runners(
-                config, pipeline, infra=infra, stores=stores
-            )
+            runners = await create_in_process_runners(config, pipeline, infra=infra, stores=stores)
             job_id = await stores.job_store().create_job(
                 final_data_type=pipeline.final_data_type, num_documents=len(docs)
             )
@@ -173,12 +165,7 @@ def _run(
             await asyncio.wait_for(run_in_process(runners, until=drive), timeout=10)
 
             finals = await stores.results_store("finals")
-            texts = sorted(
-                [
-                    (await finals.get_result(doc_id=d, job_id=job_id)).result["text"]
-                    for d in docs
-                ]
-            )
+            texts = sorted([(await finals.get_result(doc_id=d, job_id=job_id)).result["text"] for d in docs])
             return (
                 await stores.job_store().get_status(job_id),
                 await stores.job_results_store().get_stage_counts(job_id),
@@ -191,9 +178,7 @@ def _run(
 
 
 def test_fanout_pipeline_runs_to_completion() -> None:
-    status, stages, texts = _run(
-        RMQExchangeConfig(name="jobs", type="fanout"), flaky=False
-    )
+    status, stages, texts = _run(RMQExchangeConfig(name="jobs", type="fanout"), flaky=False)
 
     assert status["completed"] is True
     assert status["with_failures"] is False
@@ -317,9 +302,7 @@ def test_invalid_instance_counts_fail_before_setup(instances: dict[str, int]) ->
             with pytest.raises(ValueError, match=r"Instance count|Unknown worker type"):
                 await create_in_process_runners(
                     config,
-                    _pipeline(
-                        RMQExchangeConfig(name="jobs", type="fanout"), flaky=False
-                    ),
+                    _pipeline(RMQExchangeConfig(name="jobs", type="fanout"), flaky=False),
                     infra=infra,
                     stores=MemoryStoreRegistry(),
                     instances=instances,

@@ -1,5 +1,6 @@
 """Pins the readiness endpoint: status codes per path, the JSON body, a
-bind failure that is reported rather than raised, and a clean stop."""
+bind failure that is reported rather than raised, and a clean stop.
+"""
 
 import asyncio
 import json
@@ -11,9 +12,7 @@ from warren.pubsub.common import ConsumerHealth
 from warren.workers.health import HealthConfig, HealthServer
 
 
-READY = ConsumerHealth(
-    connected=True, blocked=False, channel_open=True, consumer_registered=True
-)
+READY = ConsumerHealth(connected=True, blocked=False, channel_open=True, consumer_registered=True)
 LOST = ConsumerHealth(
     connected=True,
     blocked=False,

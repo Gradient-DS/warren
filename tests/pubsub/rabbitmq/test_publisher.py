@@ -24,9 +24,7 @@ from warren.pubsub.rabbitmq.config import RMQExchangeConfig
 def test_publisher_sets_only_integer_priority(fields: dict) -> None:
     async def scenario() -> None:
         connection = AsyncMock()
-        publisher = RMQPublisher(
-            connection, RMQExchangeConfig(name="jobs", type="fanout")
-        )
+        publisher = RMQPublisher(connection, RMQExchangeConfig(name="jobs", type="fanout"))
         await publisher.setup()
         body = {"data_type": "raw_document", **fields}
         with patch(

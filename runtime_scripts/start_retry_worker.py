@@ -1,5 +1,4 @@
-r"""
-Retry worker launcher.
+r"""Retry worker launcher.
 
 Starts a ``RetryWorkerRunner`` that consumes ``soft-failure`` messages
 from the processing exchange, persists them, and republishes after a
@@ -114,9 +113,7 @@ async def start_retry_worker(
     # Observe soft-failures on the observer exchange; republish retried
     # messages to the data exchange (they coincide for fanout/topic).
     exchange = resolve_observation_exchange(pipeline)
-    resolved_config = resolve_config_path(
-        Path(config_file) if config_file else None, pipeline_dir
-    )
+    resolved_config = resolve_config_path(Path(config_file) if config_file else None, pipeline_dir)
 
     await run(
         runner_factory_func=partial(
@@ -141,9 +138,7 @@ def main() -> None:
     try:
         asyncio.run(start_retry_worker(**vars(args), logger=module_logger))
     except Exception as e:
-        module_logger.error(
-            f"Start retry worker failed: {summarize_exception_chain(e)}"
-        )
+        module_logger.error(f"Start retry worker failed: {summarize_exception_chain(e)}")
         sys.exit(1)
 
 

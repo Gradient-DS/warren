@@ -1,5 +1,4 @@
-"""
-Topology declaration helpers for RabbitMQ.
+"""Topology declaration helpers for RabbitMQ.
 
 These functions perform the I/O of declaring exchanges and queues on a
 channel, given pure-data ``RMQExchangeConfig`` / ``RMQQueueConfig`` values.
@@ -55,9 +54,7 @@ async def declare_queue(
     keys = config.binding_keys or (config.routing_key or "",)
     if exchange_type == "fanout":
         if any(keys):
-            get_logger(__name__).debug(
-                "Ignoring binding keys on fanout exchange %s", exchange.name
-            )
+            get_logger(__name__).debug("Ignoring binding keys on fanout exchange %s", exchange.name)
         keys = ("",)
 
     try:
@@ -71,10 +68,7 @@ async def declare_queue(
         for key in keys:
             await queue.bind(exchange.name, routing_key=key)
     except Exception as e:
-        msg = (
-            f"Failed to declare queue '{config.name}' bound to exchange "
-            f"'{exchange.name}' (binding_keys={keys!r})"
-        )
+        msg = f"Failed to declare queue '{config.name}' bound to exchange '{exchange.name}' (binding_keys={keys!r})"
         raise PubSubSetupError(msg) from e
 
     return queue

@@ -1,5 +1,4 @@
-"""
-Document source discovery utilities.
+"""Document source discovery utilities.
 
 Provides functions to discover documents from local directories or GCS
 buckets. Used by publisher scripts to build the source list for job
@@ -80,7 +79,5 @@ def discover_gcs_pdfs(
     if max_docs > 0:
         keys = keys[:max_docs]
 
-    _module_logger.info(
-        "Discovered %d PDFs in gs://%s/%s", len(keys), bucket_name, prefix
-    )
+    _module_logger.info("Discovered %d PDFs in gs://%s/%s", len(keys), bucket_name, prefix)
     return keys

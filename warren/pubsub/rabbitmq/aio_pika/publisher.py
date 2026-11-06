@@ -1,6 +1,4 @@
-"""
-RabbitMQ publisher implementation.
-"""
+"""RabbitMQ publisher implementation."""
 
 from typing import TYPE_CHECKING, Any
 
@@ -33,8 +31,7 @@ if TYPE_CHECKING:
 
 
 class RMQPublisher(BasePublisher):
-    """
-    RabbitMQ publisher that owns its own routing decisions.
+    """RabbitMQ publisher that owns its own routing decisions.
 
     Publishes to ``exchange_config``. A static ``route`` gives one routing
     key for every message. A ``route_func`` computes the routes for each
@@ -71,10 +68,7 @@ class RMQPublisher(BasePublisher):
             raise ValueError(msg)
 
         if exchange_config.type != "fanout" and not has_static and not has_route_func:
-            msg = (
-                f"{exchange_config.type} exchanges require a route or route_func "
-                "to compute the routing key."
-            )
+            msg = f"{exchange_config.type} exchanges require a route or route_func to compute the routing key."
             raise ValueError(msg)
 
         if exchange_config.type == "fanout" and has_static:
@@ -101,14 +95,9 @@ class RMQPublisher(BasePublisher):
         """
         try:
             self._channel = await self._connection_manager.create_channel()
-            self._exchange = await declare_exchange(
-                self._channel, self._exchange_config
-            )
+            self._exchange = await declare_exchange(self._channel, self._exchange_config)
         except Exception as e:
-            msg = (
-                f"{self}: Publisher setup failed for exchange "
-                f"'{self._exchange_config.name}'"
-            )
+            msg = f"{self}: Publisher setup failed for exchange '{self._exchange_config.name}'"
             raise PubSubSetupError(msg) from e
 
     async def teardown(self) -> None:
@@ -116,9 +105,7 @@ class RMQPublisher(BasePublisher):
             try:
                 await self._channel.close()
             except Exception as e:
-                self._log.warning(
-                    f"Error closing publisher channel: {summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error closing publisher channel: {summarize_exception_chain(e)}")
 
     async def __call__(self, message: dict[str, Any]) -> None:
         if self._channel is None:
@@ -127,11 +114,7 @@ class RMQPublisher(BasePublisher):
 
         body = json.dumps(message).encode()
         priority = message.get(PRIORITY_FIELD)
-        properties = (
-            {"priority": priority}
-            if isinstance(priority, int) and not isinstance(priority, bool)
-            else {}
-        )
+        properties = {"priority": priority} if isinstance(priority, int) and not isinstance(priority, bool) else {}
         amqp_message = aio_pika.Message(
             body=body,
             delivery_mode=aio_pika.DeliveryMode(self._delivery_mode),
@@ -140,11 +123,7 @@ class RMQPublisher(BasePublisher):
         )
 
         # If a route function is provided, use it to resolve the routes. Otherwise, use the routing key (which can be None).
-        routes = (
-            await self._route_func(message)
-            if self._route_func is not None
-            else [self._route]
-        )
+        routes = await self._route_func(message) if self._route_func is not None else [self._route]
 
         for route in routes:
             await self._publish_to(
@@ -169,8 +148,5 @@ class RMQPublisher(BasePublisher):
             else:
                 await self._exchange.publish(amqp_message, routing_key=routing_key)
         except Exception as e:
-            msg = (
-                f"Failed to publish to exchange '{self._exchange}' "
-                f"with routing key '{routing_key}': {e}"
-            )
+            msg = f"Failed to publish to exchange '{self._exchange}' with routing key '{routing_key}': {e}"
             raise PublishFailureException(msg) from e

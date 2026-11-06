@@ -17,9 +17,7 @@ class MemoryJobStore(Base, JobStoreInterface):
     so callers cannot tell the two apart. Single-process, gone at exit.
     """
 
-    def __init__(
-        self, *, name: str | None = None, scoping_enabled: bool = False
-    ) -> None:
+    def __init__(self, *, name: str | None = None, scoping_enabled: bool = False) -> None:
         super().__init__(pybase_logger_name=name)
         self._jobs: dict[str, dict] = {}
         self._scoping_enabled = scoping_enabled

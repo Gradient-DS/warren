@@ -1,5 +1,4 @@
-"""
-Run the RAG example in a single process, with no infrastructure.
+"""Run the RAG example in a single process, with no infrastructure.
 
     pip install -e ".[examples]"
     export OPENAI_API_KEY=...
@@ -43,9 +42,7 @@ async def run(urls: list[str]) -> bool:
     infra = await create_runtime_infrastructure(config)
     stores = MemoryStoreRegistry()
     try:
-        runners = await create_in_process_runners(
-            config, PIPELINE, infra=infra, stores=stores
-        )
+        runners = await create_in_process_runners(config, PIPELINE, infra=infra, stores=stores)
         job_store = stores.job_store()
         job_id = await job_store.create_job(
             final_data_type=PIPELINE.final_data_type,

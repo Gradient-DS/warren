@@ -1,5 +1,4 @@
-"""
-Runtime infrastructure: create and close connections from a ``RuntimeConfig``.
+"""Runtime infrastructure: create and close connections from a ``RuntimeConfig``.
 MongoDB and Redis connections are created for the RabbitMQ and Kafka backends;
 ``backend: memory`` creates neither.
 
@@ -122,9 +121,7 @@ async def create_runtime_infrastructure(
             await mongo_client.admin.command("ping")
             await redis_client.ping()
         except (Exception, asyncio.CancelledError) as e:
-            await close_runtime_infrastructure(
-                RuntimeInfra(mongo_client, redis_client, manager)
-            )
+            await close_runtime_infrastructure(RuntimeInfra(mongo_client, redis_client, manager))
             if isinstance(e, asyncio.CancelledError):
                 raise
             _module_logger.warning(
@@ -166,9 +163,7 @@ async def close_runtime_infrastructure(infra: RuntimeInfra) -> None:
 
     :param infra: Infrastructure to close.
     """
-    await _close_connection(
-        infra.pubsub_connection_manager.teardown, "pubsub connection"
-    )
+    await _close_connection(infra.pubsub_connection_manager.teardown, "pubsub connection")
     if infra.redis_client is not None:
         await _close_connection(infra.redis_client.aclose, "Redis client")
     if infra.mongo_client is not None:

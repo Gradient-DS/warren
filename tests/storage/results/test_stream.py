@@ -14,9 +14,7 @@ def test_stream_reads_complete_sorted_results(change: str, try_cache: bool) -> N
     async def run() -> None:
         mongo, redis = MongoClient(), RedisClient()
         store = make_store(mongo, redis)
-        await store.store_many(
-            [ResultItem({"value": index}, "a", index, "j") for index in [2, 0, 1]]
-        )
+        await store.store_many([ResultItem({"value": index}, "a", index, "j") for index in [2, 0, 1]])
         await store.store({"value": "other job"}, "a", job_id="other")
         await store.store({"value": "other item"}, "b", job_id="j")
         if change == "evict":
@@ -25,12 +23,7 @@ def test_stream_reads_complete_sorted_results(change: str, try_cache: bool) -> N
             redis.entries.clear()
             await store.store({"value": 9}, "a", part_idx=1, job_id="j")
         entries = dict(redis.entries)
-        rows = [
-            row
-            async for row in store.stream_doc_processing_results(
-                "a", "j", try_cache=try_cache
-            )
-        ]
+        rows = [row async for row in store.stream_doc_processing_results("a", "j", try_cache=try_cache)]
         assert [row.part_idx for row in rows] == [0, 1, 2]
         assert [row.result["value"] for row in rows] == [
             0,

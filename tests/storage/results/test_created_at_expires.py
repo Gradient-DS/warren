@@ -123,9 +123,7 @@ def test_storing_a_result_still_populates_a_json_cache() -> None:
 
 def test_a_result_read_back_from_the_cache_still_has_a_datetime() -> None:
     document_store = _RecordingDocumentStore()
-    store = DefaultResultsStore(
-        document_store=document_store, cache=_SerialisingCache()
-    )
+    store = DefaultResultsStore(document_store=document_store, cache=_SerialisingCache())
 
     async def run() -> ResultDoc:
         await store.store(result={"x": 1}, doc_id="doc-1", job_id="job-1")
@@ -138,9 +136,7 @@ def test_a_result_read_back_from_the_cache_still_has_a_datetime() -> None:
 
 
 def test_a_result_doc_still_accepts_an_iso_string_written_before_0_2_4() -> None:
-    doc = ResultDoc(
-        doc_id="doc-1", result={"x": 1}, created_at="2026-08-19T15:05:07+00:00"
-    )
+    doc = ResultDoc(doc_id="doc-1", result={"x": 1}, created_at="2026-08-19T15:05:07+00:00")
 
     assert doc.created_at == datetime(2026, 8, 19, 15, 5, 7, tzinfo=UTC)
 

@@ -1,5 +1,4 @@
-"""
-Real PDF -> chunks -> embeddings pipeline (fanout exchange).
+"""Real PDF -> chunks -> embeddings pipeline (fanout exchange).
 
 The get-started example that does actual work: it downloads real PDFs (two
 arXiv papers by default), extracts their text with ``pypdf``, splits the text

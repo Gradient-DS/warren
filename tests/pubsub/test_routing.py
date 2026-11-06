@@ -37,9 +37,7 @@ def test_message_field_router_routes_by_data_type():
 
 
 def test_message_field_router_custom_field():
-    routes = asyncio.run(
-        MessageFieldRouter(field="kind")({"kind": "abc", "data_type": "ignored"})
-    )
+    routes = asyncio.run(MessageFieldRouter(field="kind")({"kind": "abc", "data_type": "ignored"}))
     assert [r.key for r in routes] == ["abc"]
 
 
@@ -139,9 +137,7 @@ def test_routing_plan_accepts_model_instance():
 
 
 def test_replay_router_replays_stamped_key():
-    routes = asyncio.run(
-        ReplayRouter()({REPLAY_ROUTING_KEY_FIELD: "markdown_document"})
-    )
+    routes = asyncio.run(ReplayRouter()({REPLAY_ROUTING_KEY_FIELD: "markdown_document"}))
     assert [r.key for r in routes] == ["markdown_document"]
 
 

@@ -115,17 +115,13 @@ from warren.pubsub.routing import LANE_FIELD, MessageFieldRouter
 from warren.runtime.spec import PublishSpec
 
 exchange = RMQExchangeConfig(name="jobs", type="topic")
-publish = PublishSpec(
-    route_func=MessageFieldRouter(prefix_field=LANE_FIELD, default_prefix="bulk")
-)
+publish = PublishSpec(route_func=MessageFieldRouter(prefix_field=LANE_FIELD, default_prefix="bulk"))
 interactive_queue = RMQQueueConfig(
     name="jobs.parser_interactive",
     binding_keys=("interactive.raw_document",),
     arguments={"x-max-priority": 2},
 )
-bulk_queue = RMQQueueConfig(
-    name="jobs.parser_bulk", binding_keys=("bulk.raw_document",)
-)
+bulk_queue = RMQQueueConfig(name="jobs.parser_bulk", binding_keys=("bulk.raw_document",))
 ```
 
 A message with `data_type="raw_document"`, `lane="interactive"`, and

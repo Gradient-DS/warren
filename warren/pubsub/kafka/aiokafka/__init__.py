@@ -1,5 +1,4 @@
-"""
-``aiokafka``-based implementation of the Kafka pubsub layer.
+"""``aiokafka``-based implementation of the Kafka pubsub layer.
 
 The protocol-level configs in :mod:`...kafka.config` describe *what*
 to set up; the modules here use ``aiokafka`` to actually do it.

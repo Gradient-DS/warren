@@ -1,5 +1,4 @@
-"""
-Kafka pubsub layer.
+"""Kafka pubsub layer.
 
 The top-level module exposes only the **protocol-level configs** —
 pure-data Pydantic models that describe the Kafka topology and consumer

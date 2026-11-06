@@ -32,9 +32,7 @@ def _pipeline(worker, exchange_type="fanout"):
 
 
 def test_valid_fanout_pipeline_passes():
-    worker = WorkerSpec(
-        collections={"write": "c"}, factory=_factory, publish=PublishSpec()
-    )
+    worker = WorkerSpec(collections={"write": "c"}, factory=_factory, publish=PublishSpec())
     validate_pipeline(_pipeline(worker))
 
 
@@ -50,16 +48,12 @@ def test_valid_topic_pipeline_passes():
 
 def test_topic_consumer_requires_binding_key():
     worker = WorkerSpec(collections={"write": "c"}, factory=_factory)  # no binding_key
-    with pytest.raises(
-        PipelineValidationError, match="requires non-empty binding_keys"
-    ):
+    with pytest.raises(PipelineValidationError, match="requires non-empty binding_keys"):
         validate_pipeline(_pipeline(worker, exchange_type="topic"))
 
 
 def test_fanout_consumer_ignores_binding_key():
-    worker = WorkerSpec(
-        collections={"write": "c"}, factory=_factory, binding_key="oops"
-    )
+    worker = WorkerSpec(collections={"write": "c"}, factory=_factory, binding_key="oops")
     validate_pipeline(_pipeline(worker))
 
 
@@ -85,9 +79,7 @@ def test_fanout_publish_forbids_route():
 
 
 @pytest.mark.parametrize("exchange_type", ["fanout", "topic", "direct"])
-@pytest.mark.parametrize(
-    "publication", [None, PublishSpec(route_func=MessageFieldRouter())]
-)
+@pytest.mark.parametrize("publication", [None, PublishSpec(route_func=MessageFieldRouter())])
 def test_publication_default_and_custom_routing_pass(exchange_type, publication):
     pipeline = replace(
         _pipeline(WorkerSpec({}, _factory), exchange_type),

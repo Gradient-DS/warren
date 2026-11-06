@@ -1,5 +1,4 @@
-"""
-Base class for running a worker process.
+"""Base class for running a worker process.
 
 Defines a transport-independent lifecycle for worker processes. Subclasses
 implement ``setup()`` to wire their specific components and set
@@ -84,9 +83,9 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
     Usage::
 
         runner = MyRunner(...)
-        await runner.setup()    # subclass wires components
-        await runner.run()      # consume until shutdown signal
-        await runner.teardown() # cleanup
+        await runner.setup()  # subclass wires components
+        await runner.run()  # consume until shutdown signal
+        await runner.teardown()  # cleanup
     """
 
     def __init__(
@@ -167,9 +166,7 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
         while True:
             await asyncio.sleep(self._health.check_interval_s)
             try:
-                health = await self._consumer_manager.health(
-                    probe_timeout=self._health.probe_timeout_s
-                )
+                health = await self._consumer_manager.health(probe_timeout=self._health.probe_timeout_s)
             except Exception as e:
                 self._log.error(f"Health check failed: {summarize_exception_chain(e)}")
                 continue
@@ -191,9 +188,7 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
                 shutdown_event.set()
                 return
 
-    def _log_health_transition(
-        self, previous: ConsumerHealth | None, current: ConsumerHealth
-    ) -> None:
+    def _log_health_transition(self, previous: ConsumerHealth | None, current: ConsumerHealth) -> None:
         if previous is not None and previous.state == current.state:
             return
         level = _HEALTH_LOG_LEVEL.get(current.state, logging.WARNING)
@@ -212,9 +207,7 @@ class WorkerRunnerBase(Base, metaclass=ABCMeta):
             try:
                 await self._consumer_manager.stop_consuming()
             except Exception as e:
-                self._log.warning(
-                    f"Error stopping consumer: {summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error stopping consumer: {summarize_exception_chain(e)}")
 
         try:
             await self._on_teardown()

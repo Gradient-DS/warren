@@ -1,5 +1,4 @@
-"""
-Content-based routing helpers for direct/topic exchanges.
+"""Content-based routing helpers for direct/topic exchanges.
 
 A fanout exchange ignores routing keys — every bound queue receives every
 message, and workers self-select via ``should_process()``. Direct and topic

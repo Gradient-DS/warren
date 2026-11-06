@@ -91,9 +91,7 @@ def _env_flag(name: str, *, default: bool) -> bool:
     raise ValueError(msg)
 
 
-def parse_retry_after(
-    value: str | None, *, now: datetime | None = None
-) -> float | None:
+def parse_retry_after(value: str | None, *, now: datetime | None = None) -> float | None:
     """Seconds asked for by a ``Retry-After`` header (delay-seconds or HTTP-date).
 
     :param value: Raw header value, or None when the header is absent.
@@ -140,15 +138,11 @@ def build_client(
     :raises ValueError: If an environment override cannot be parsed.
     """
     if follow_redirects is None:
-        follow_redirects = _env_flag(
-            "HTTP_FOLLOW_REDIRECTS", default=DEFAULT_FOLLOW_REDIRECTS
-        )
+        follow_redirects = _env_flag("HTTP_FOLLOW_REDIRECTS", default=DEFAULT_FOLLOW_REDIRECTS)
     if timeout_s is None:
         timeout_s = float(os.environ.get("HTTP_TIMEOUT_S") or DEFAULT_TIMEOUT_S)
     if max_redirects is None:
-        max_redirects = int(
-            os.environ.get("HTTP_MAX_REDIRECTS") or DEFAULT_MAX_REDIRECTS
-        )
+        max_redirects = int(os.environ.get("HTTP_MAX_REDIRECTS") or DEFAULT_MAX_REDIRECTS)
     return httpx.AsyncClient(
         timeout=timeout_s,
         follow_redirects=follow_redirects,
@@ -180,13 +174,9 @@ async def resolve_http(
         msg = f"Document not found at URL: {url_location.url}"
         raise DocumentNotFoundError(msg)
     if response.status_code == httpx.codes.TOO_MANY_REQUESTS or (
-        response.status_code == httpx.codes.SERVICE_UNAVAILABLE
-        and "Retry-After" in response.headers
+        response.status_code == httpx.codes.SERVICE_UNAVAILABLE and "Retry-After" in response.headers
     ):
-        msg = (
-            f"Throttled by {response.url.host} ({response.status_code}): "
-            f"{url_location.url}"
-        )
+        msg = f"Throttled by {response.url.host} ({response.status_code}): {url_location.url}"
         raise DocumentThrottledError(
             msg,
             retry_after=parse_retry_after(response.headers.get("Retry-After")),

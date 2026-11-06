@@ -1,5 +1,4 @@
-"""
-Abstract base for publishing job documents into the processing pipeline.
+"""Abstract base for publishing job documents into the processing pipeline.
 
 Orchestrates the load → register → publish flow for each document and
 automatically records outcomes via ``PublishingTrackerInterface``. Concrete
@@ -130,9 +129,7 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
 
         if published == 0:
             self._log.warning(
-                f"Job {job_id}: no documents published "
-                f"({failed} failed, {total} attempted). "
-                f"Marking job as completed."
+                f"Job {job_id}: no documents published ({failed} failed, {total} attempted). Marking job as completed."
             )
             await self._job_store.update_completion(
                 job_id=job_id,
@@ -217,10 +214,7 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
         except HardFailureException:
             raise
         except Exception as e:
-            self._log.warning(
-                f"Failed to record '{stage}' failure for {source_id}: "
-                f"{summarize_exception_chain(e)}"
-            )
+            self._log.warning(f"Failed to record '{stage}' failure for {source_id}: {summarize_exception_chain(e)}")
 
     async def _record_success_safe(self, job_id: str, doc_id: str) -> None:
         """Record a per-document success, best-effort.
@@ -234,10 +228,7 @@ class JobDocumentsPublisher(Base, metaclass=ABCMeta):
         except HardFailureException:
             raise
         except Exception as e:
-            self._log.warning(
-                f"Failed to record success for doc '{doc_id}': "
-                f"{summarize_exception_chain(e)}"
-            )
+            self._log.warning(f"Failed to record success for doc '{doc_id}': {summarize_exception_chain(e)}")
 
     @abstractmethod
     async def _load_document(self, source: Any) -> Any:

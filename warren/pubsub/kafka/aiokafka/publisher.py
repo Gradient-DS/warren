@@ -1,6 +1,4 @@
-"""
-Kafka publisher implementation.
-"""
+"""Kafka publisher implementation."""
 
 from typing import TYPE_CHECKING, Any
 
@@ -31,8 +29,7 @@ if TYPE_CHECKING:
 
 
 class KafkaPublisher(BasePublisher):
-    """
-    Kafka publisher for a single topic.
+    """Kafka publisher for a single topic.
 
     A topic plays the role of a fanout exchange in the Kafka backend, so
     the publisher is fanout-only: routes are rejected with ``ValueError``
@@ -52,10 +49,7 @@ class KafkaPublisher(BasePublisher):
         name: str | None = None,
     ) -> None:
         if route is not None or route_func is not None:
-            msg = (
-                "Kafka topics are fanout-only: "
-                "'route' and 'route_func' are not supported."
-            )
+            msg = "Kafka topics are fanout-only: 'route' and 'route_func' are not supported."
             raise ValueError(msg)
 
         super().__init__(name=name)
@@ -91,9 +85,7 @@ class KafkaPublisher(BasePublisher):
             self._producer = producer
             await producer.start()
         except Exception as e:
-            msg = (
-                f"{self}: Publisher setup failed for topic '{self._topic_config.name}'"
-            )
+            msg = f"{self}: Publisher setup failed for topic '{self._topic_config.name}'"
             raise PubSubSetupError(msg) from e
 
     async def teardown(self) -> None:
@@ -101,9 +93,7 @@ class KafkaPublisher(BasePublisher):
             try:
                 await self._producer.stop()
             except Exception as e:
-                self._log.warning(
-                    f"Error stopping publisher producer: {summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error stopping publisher producer: {summarize_exception_chain(e)}")
 
     async def __call__(self, message: dict[str, Any]) -> None:
         if self._producer is None:

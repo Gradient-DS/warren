@@ -72,9 +72,7 @@ def test_hard_failure_with_dead_channel_skips_envelope(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     control = FakePublisher()
-    manager = make_manager(
-        FakeWorker(error=HardFailureException("bad")), control_publisher=control
-    )
+    manager = make_manager(FakeWorker(error=HardFailureException("bad")), control_publisher=control)
     message = FakeIncomingMessage(closed=True)
 
     process(manager, message)
@@ -88,9 +86,7 @@ def test_soft_failure_with_dead_channel_skips_envelope(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     control = FakePublisher()
-    manager = make_manager(
-        FakeWorker(error=SoftFailureException("later")), control_publisher=control
-    )
+    manager = make_manager(FakeWorker(error=SoftFailureException("later")), control_publisher=control)
     message = FakeIncomingMessage(closed=True)
 
     process(manager, message)
@@ -104,9 +100,7 @@ def test_publish_failure_with_dead_channel_skips_requeue(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     data = FakePublisher(error=PublishFailureException("broker gone"))
-    manager = make_manager(
-        FakeWorker(result={"data_type": "parsed"}), data_publisher=data
-    )
+    manager = make_manager(FakeWorker(result={"data_type": "parsed"}), data_publisher=data)
     message = FakeIncomingMessage()
     data.side_effect = lambda: setattr(message, "closed", True)
 
@@ -148,9 +142,7 @@ def test_shutdown_nack_on_dead_channel_is_logged(
 
 def test_success_publishes_and_acks() -> None:
     data = FakePublisher()
-    manager = make_manager(
-        FakeWorker(result={"data_type": "parsed"}), data_publisher=data
-    )
+    manager = make_manager(FakeWorker(result={"data_type": "parsed"}), data_publisher=data)
     message = FakeIncomingMessage()
 
     process(manager, message)
@@ -161,9 +153,7 @@ def test_success_publishes_and_acks() -> None:
 
 def test_hard_failure_publishes_envelope_and_rejects() -> None:
     control = FakePublisher()
-    manager = make_manager(
-        FakeWorker(error=HardFailureException("bad")), control_publisher=control
-    )
+    manager = make_manager(FakeWorker(error=HardFailureException("bad")), control_publisher=control)
     message = FakeIncomingMessage()
 
     process(manager, message)
@@ -200,8 +190,9 @@ def test_message_task_exception_is_logged(caplog: pytest.LogCaptureFixture) -> N
 
 
 def test_settle_absorbs_internal_cancellation(caplog: pytest.LogCaptureFixture) -> None:
-    """aiormq cancels the drain future when the channel closes mid-ack; that
-    CancelledError is not a cancellation of *our* task and is logged."""
+    """Aiormq cancels the drain future when the channel closes mid-ack; that
+    CancelledError is not a cancellation of *our* task and is logged.
+    """
     manager = make_manager(FakeWorker())
     message = FakeIncomingMessage(settle_error=asyncio.CancelledError())
 
@@ -228,15 +219,11 @@ def test_settle_reraises_real_cancellation() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _counting_manager(
-    worker: FakeWorker, control: FakePublisher | None, max_deliveries: int = 3
-):
+def _counting_manager(worker: FakeWorker, control: FakePublisher | None, max_deliveries: int = 3):
     return make_manager(
         worker,
         control_publisher=control,
-        consumer_config=RMQConsumerConfig(
-            max_deliveries=max_deliveries, redelivery_delay=5
-        ),
+        consumer_config=RMQConsumerConfig(max_deliveries=max_deliveries, redelivery_delay=5),
     )
 
 

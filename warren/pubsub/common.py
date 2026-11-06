@@ -1,5 +1,4 @@
-"""
-Pubsub-specific interfaces and exceptions.
+"""Pubsub-specific interfaces and exceptions.
 
 Defines the protocols and types used within the pubsub package hierarchy.
 For shared contracts between pubsub and workers, see distributed/common.py.
@@ -63,8 +62,7 @@ class ConsumerHealth:
     @property
     def live(self) -> bool:
         return self.handler_timeout_seconds is None or all(
-            time.monotonic() - started <= 2 * self.handler_timeout_seconds
-            for started in self.handler_started_at
+            time.monotonic() - started <= 2 * self.handler_timeout_seconds for started in self.handler_started_at
         )
 
     @property
@@ -73,21 +71,12 @@ class ConsumerHealth:
 
     @property
     def ready(self) -> bool:
-        return (
-            self.connected
-            and not self.blocked
-            and self.channel_open
-            and self.consumer_registered is True
-        )
+        return self.connected and not self.blocked and self.channel_open and self.consumer_registered is True
 
     @property
     def consumer_lost(self) -> bool:
         """Connection alive and unblocked, but no live consumer on it."""
-        return (
-            self.connected
-            and not self.blocked
-            and (not self.channel_open or self.consumer_registered is False)
-        )
+        return self.connected and not self.blocked and (not self.channel_open or self.consumer_registered is False)
 
     @property
     def state(
@@ -139,8 +128,7 @@ class RetryConfig(BaseModel):
 
 @dataclass(frozen=True)
 class Route:
-    """
-    A transport-agnostic route to a destination, specified by the key.
+    """A transport-agnostic route to a destination, specified by the key.
     Can be extended to include other routing information if necessary.
 
     :param key: The routing key.
@@ -151,8 +139,7 @@ class Route:
 
 class RouteFunc(Protocol):
     async def __call__(self, message: dict) -> list[Route]:
-        """
-        Resolve the routes for a message. Can route to multiple
+        """Resolve the routes for a message. Can route to multiple
         destinations, for example, a processing destination and a
         logging destination.
 
@@ -171,8 +158,7 @@ class PublisherInterface(Protocol):
         ...
 
     async def __call__(self, message: dict) -> None:
-        """
-        Publish a message.
+        """Publish a message.
 
         :param message: Message body as a dictionary.
         """

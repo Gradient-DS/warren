@@ -9,9 +9,7 @@ if TYPE_CHECKING:
     from pymongo.asynchronous.collection import AsyncCollection
 
 
-async def configure_ttl_index(
-    collection: "AsyncCollection", field: str, seconds: int | None
-) -> None:
+async def configure_ttl_index(collection: "AsyncCollection", field: str, seconds: int | None) -> None:
     """Configure a positive TTL; leave indexes untouched when unset.
 
     Drops an existing single-field index on ``field`` with other options,

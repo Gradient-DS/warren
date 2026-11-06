@@ -2,7 +2,8 @@
 for longer than the grace period, ends the process; blocked and
 reconnecting states are logged and waited out; a failing health() is
 logged and ignored. Intervals are shrunk so each test runs in
-milliseconds."""
+milliseconds.
+"""
 
 import asyncio
 import signal
@@ -15,9 +16,7 @@ from warren.workers.health import HealthConfig
 from warren.workers.runners import WorkerRunnerBase
 
 
-READY = ConsumerHealth(
-    connected=True, blocked=False, channel_open=True, consumer_registered=True
-)
+READY = ConsumerHealth(connected=True, blocked=False, channel_open=True, consumer_registered=True)
 LOST = ConsumerHealth(
     connected=True,
     blocked=False,
@@ -25,12 +24,8 @@ LOST = ConsumerHealth(
     consumer_registered=None,
     detail="closed",
 )
-BLOCKED = ConsumerHealth(
-    connected=True, blocked=True, channel_open=True, consumer_registered=True
-)
-DOWN = ConsumerHealth(
-    connected=False, blocked=False, channel_open=False, consumer_registered=None
-)
+BLOCKED = ConsumerHealth(connected=True, blocked=True, channel_open=True, consumer_registered=True)
+DOWN = ConsumerHealth(connected=False, blocked=False, channel_open=False, consumer_registered=None)
 
 
 class _ScriptedManager:
@@ -150,9 +145,7 @@ def test_reconnecting_never_exits() -> None:
 
 
 def test_health_error_is_logged_and_ignored(caplog: pytest.LogCaptureFixture) -> None:
-    runner = _Runner(
-        _ScriptedManager([READY], error=RuntimeError("boom")), _config(grace=0.0)
-    )
+    runner = _Runner(_ScriptedManager([READY], error=RuntimeError("boom")), _config(grace=0.0))
 
     event = _watch(runner, for_s=0.05)
 

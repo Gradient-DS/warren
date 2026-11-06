@@ -20,9 +20,7 @@ class _DocumentsPublisher(JobDocumentsPublisher):
     async def _register_document(self, job_id: str, doc_data: dict) -> str:
         return "doc-1"
 
-    def _create_message(
-        self, job_id: str, doc_id: str, doc_data: dict, job_parameters: dict
-    ) -> dict:
+    def _create_message(self, job_id: str, doc_id: str, doc_data: dict, job_parameters: dict) -> dict:
         return {**doc_data, "job_id": job_id, "doc_id": doc_id}
 
     def _get_source_id(self, source: dict) -> str:
@@ -37,9 +35,7 @@ def test_documents_use_publication_route_func(exchange_type: str, routing: str) 
         message = {"data_type": "raw_document"}
         kwargs = {}
         if routing.startswith("custom"):
-            kwargs["route_func"] = MessageFieldRouter(
-                prefix_field=LANE_FIELD, default_prefix="bulk"
-            )
+            kwargs["route_func"] = MessageFieldRouter(prefix_field=LANE_FIELD, default_prefix="bulk")
             if routing == "custom":
                 message[LANE_FIELD] = "interactive"
             expected_key = f"{message.get(LANE_FIELD, 'bulk')}.raw_document"
@@ -53,12 +49,8 @@ def test_documents_use_publication_route_func(exchange_type: str, routing: str) 
 
         async def factory(publisher, infra, config, worker_name):
             nonlocal documents_publisher, queue
-            queue = infra.pubsub_connection_manager.broker.bind(
-                exchange, "downstream", expected_key
-            )
-            documents_publisher = _DocumentsPublisher(
-                publisher=publisher, tracker=AsyncMock(), job_store=AsyncMock()
-            )
+            queue = infra.pubsub_connection_manager.broker.bind(exchange, "downstream", expected_key)
+            documents_publisher = _DocumentsPublisher(publisher=publisher, tracker=AsyncMock(), job_store=AsyncMock())
             return documents_publisher
 
         runner = JobPublicationWorkerRunner(

@@ -1,5 +1,4 @@
-"""
-``aio_pika``-based implementation of the RabbitMQ pubsub layer.
+"""``aio_pika``-based implementation of the RabbitMQ pubsub layer.
 
 The protocol-level configs in :mod:`...rabbitmq.config` describe *what*
 to set up; the modules here use ``aio_pika`` to actually do it.

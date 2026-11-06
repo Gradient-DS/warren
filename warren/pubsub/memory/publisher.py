@@ -44,16 +44,10 @@ class MemoryPublisher(BasePublisher):
         try:
             body = json.dumps(message).encode()
         except (TypeError, ValueError) as e:
-            msg = (
-                f"Message for exchange '{self._exchange.name}' is not JSON-serialisable"
-            )
+            msg = f"Message for exchange '{self._exchange.name}' is not JSON-serialisable"
             raise PublishFailureException(msg) from e
 
-        routes = (
-            await self._route_func(message)
-            if self._route_func is not None
-            else [self._route]
-        )
+        routes = await self._route_func(message) if self._route_func is not None else [self._route]
         for route in routes:
             self._connection_manager.broker.publish(
                 self._exchange,

@@ -50,9 +50,7 @@ def test_runtime_ttls_reach_single_batch_and_fetcher_cache_writes(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "config.yaml"
-    path.write_text(
-        "documents: {cache_ttl_seconds: 123}\nresults: {cache_ttl_seconds: 45}\n"
-    )
+    path.write_text("documents: {cache_ttl_seconds: 123}\nresults: {cache_ttl_seconds: 45}\n")
     config = RuntimeConfig.from_yaml(path)
 
     async def run() -> None:
@@ -103,9 +101,7 @@ def test_binary_cache_write_and_read_through_expire(ttl: int) -> None:
 @pytest.mark.parametrize("cap", [300, 7200])
 def test_retry_cache_outlives_the_delay_cap(cap: int) -> None:
     async def run() -> None:
-        config = RuntimeConfig.model_validate(
-            {"retry": {"policy": {"max_delay_cap": cap}}}
-        )
+        config = RuntimeConfig.model_validate({"retry": {"policy": {"max_delay_cap": cap}}})
         mongo, redis = MongoClient(), RedisClient()
         runner = RetryWorkerRunner(
             config,
@@ -114,9 +110,7 @@ def test_retry_cache_outlives_the_delay_cap(cap: int) -> None:
             infra=RuntimeInfra(mongo, redis, None),
         )
         store = await runner._create_default_retry_store()
-        await store.insert(
-            {RetryWorker.REQUIRED_DOC_ID_FIELD: "retry-1"}, overwrite_existing=True
-        )
+        await store.insert({RetryWorker.REQUIRED_DOC_ID_FIELD: "retry-1"}, overwrite_existing=True)
         assert redis.ttls == {"retry:retries:retry-1": cap + 60}
 
     asyncio.run(run())

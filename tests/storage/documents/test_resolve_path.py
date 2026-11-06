@@ -84,9 +84,7 @@ def test_runner_wires_path_base_dir_from_config(layout: Path) -> None:
         )
 
     assert "path" not in runner(RuntimeConfig())._create_resolvers()
-    configured = RuntimeConfig.model_validate(
-        {"documents": {"path_base_dir": str(layout)}}
-    )
+    configured = RuntimeConfig.model_validate({"documents": {"path_base_dir": str(layout)}})
     resolver = runner(configured)._create_resolvers()["path"]
     location = DocumentPathLocation(relative_path="sub/doc.txt")
     assert asyncio.run(resolver(location)) == b"inside"

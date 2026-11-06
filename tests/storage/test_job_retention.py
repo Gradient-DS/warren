@@ -19,9 +19,7 @@ from warren.storage.publishing_tracker.mongodb import MongoDBPublishingTracker
     ],
 )
 @pytest.mark.parametrize("ttl", [None, 1, 3600])
-def test_retention_index_specs(
-    store_type: type, collection: str, field: str, ttl: int | None
-) -> None:
+def test_retention_index_specs(store_type: type, collection: str, field: str, ttl: int | None) -> None:
     client = MongoClient()
     store = store_type(client, database_name="test", job_records_ttl_seconds=ttl)
     asyncio.run(store.setup())
@@ -33,9 +31,7 @@ def test_retention_index_specs(
 
 def test_job_max_age_is_independent_of_completion_ttl() -> None:
     client = MongoClient()
-    store = MongoDBJobStore(
-        client, database_name="test", job_records_max_age_seconds=7200
-    )
+    store = MongoDBJobStore(client, database_name="test", job_records_max_age_seconds=7200)
     asyncio.run(store.setup())
     assert client["test"]["jobs"].indexes["created_at_1"] == {
         "key": [("created_at", 1)],
@@ -130,12 +126,8 @@ def test_all_result_writes_refresh_the_retention_datetime() -> None:
     async def scenario() -> None:
         results = MongoDBJobResultsStore(client, database_name="test")
         await results.record_success("j", "stage", "a", "worker", "w")
-        await results.record_soft_failure(
-            "j", "stage", "a", "worker", "w", "worker", "w2", 1, "retry"
-        )
-        await results.record_hard_failure(
-            "j", "stage", "a", "worker", "w", "worker", "w2", "failed"
-        )
+        await results.record_soft_failure("j", "stage", "a", "worker", "w", "worker", "w2", 1, "retry")
+        await results.record_hard_failure("j", "stage", "a", "worker", "w", "worker", "w2", "failed")
         tracker = MongoDBPublishingTracker(client, database_name="test")
         await tracker.record_success("j", "a")
         await tracker.record_failure("j", "a", "source", "failed", "publish")

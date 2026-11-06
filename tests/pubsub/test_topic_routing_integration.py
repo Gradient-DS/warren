@@ -1,5 +1,4 @@
-"""
-Integration test: a topic exchange routes by binding key.
+"""Integration test: a topic exchange routes by binding key.
 
 Requires a running RabbitMQ on localhost:5672 (e.g. the docker container from
 the README). Skips cleanly when no broker is reachable, so it is safe in CI
@@ -34,16 +33,15 @@ async def _broker_reachable() -> bool:
 
 async def _run_topic_routing() -> tuple[str | None, str | None]:
     """Bind two queues to a topic exchange with distinct keys, publish to one,
-    and return (message on queue 'a', message on queue 'b')."""
+    and return (message on queue 'a', message on queue 'b').
+    """
     suffix = uuid.uuid4().hex[:8]
     exchange_name = f"test-topic-{suffix}"
     mgr = RMQConnectionManager(RMQConnectionConfig())
     await mgr.setup()
     try:
         channel = await mgr.create_channel()
-        exchange = await declare_exchange(
-            channel, RMQExchangeConfig(name=exchange_name, type="topic", durable=False)
-        )
+        exchange = await declare_exchange(channel, RMQExchangeConfig(name=exchange_name, type="topic", durable=False))
         # Exclusive queues are connection-scoped and auto-removed on close
         # (RabbitMQ 4 blocks transient non-exclusive queues by default).
         queue_a = await declare_queue(

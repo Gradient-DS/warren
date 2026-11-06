@@ -1,5 +1,4 @@
-"""
-PDF parser worker — the first real stage of the ``examples/rag`` pipeline.
+"""PDF parser worker — the first real stage of the ``examples/rag`` pipeline.
 
 Receives a ``pdf_document`` message carrying a PDF ``url``, downloads the PDF,
 extracts its text with ``pypdf``, stores it, and publishes a
@@ -86,18 +85,14 @@ class PdfParserWorker(FilteringWorkerBase):
             msg = f"PDF download failed: {url}"
             raise SoftFailureException(msg, cause=exc) from exc
 
-        text = await asyncio.get_event_loop().run_in_executor(
-            None, _extract_text, response.content
-        )
+        text = await asyncio.get_event_loop().run_in_executor(None, _extract_text, response.content)
 
         await self._write_store.store(
             result={"text": text},
             doc_id=doc_id,
             job_id=job_id,
         )
-        self._log.info(
-            f"Parsed {doc_id} ({len(text)} chars from {len(response.content)} bytes)"
-        )
+        self._log.info(f"Parsed {doc_id} ({len(text)} chars from {len(response.content)} bytes)")
 
         return {
             "data_type": "parsed_document",

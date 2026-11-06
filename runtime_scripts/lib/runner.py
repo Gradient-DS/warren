@@ -1,5 +1,4 @@
-"""
-Shared worker lifecycle for all launcher scripts.
+"""Shared worker lifecycle for all launcher scripts.
 
 Provides the single ``run()`` function that all launchers call.
 The only thing that differs between launchers is the

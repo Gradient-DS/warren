@@ -6,8 +6,7 @@ from warren.exceptions import WarrenError
 
 
 class CacheOperationError(WarrenError):
-    """
-    Raised when a cache operation fails.
+    """Raised when a cache operation fails.
 
     :param message: Optional error message with details.
     :param operation: Optional operation name (e.g., "get", "set", "delete")
@@ -34,8 +33,7 @@ class CacheOperationError(WarrenError):
 
 
 class CacheInterface[T](Protocol):
-    """
-    Generic async cache interface for storing typed values.
+    """Generic async cache interface for storing typed values.
 
     All methods are async — implementations must use non-blocking I/O
     (e.g., redis.asyncio) to avoid blocking the event loop.
@@ -57,8 +55,7 @@ class CacheInterface[T](Protocol):
     """
 
     async def get(self, key: str) -> T | None:
-        """
-        Retrieve value from cache.
+        """Retrieve value from cache.
 
         :param key: Cache key.
 
@@ -67,8 +64,7 @@ class CacheInterface[T](Protocol):
         ...
 
     async def set(self, key: str, value: T, ttl_seconds: int | None = None) -> None:
-        """
-        Store value in cache.
+        """Store value in cache.
 
         :param key: Cache key.
         :param value: Value to cache.
@@ -77,8 +73,7 @@ class CacheInterface[T](Protocol):
         ...
 
     async def delete(self, key: str) -> bool:
-        """
-        Delete key from cache.
+        """Delete key from cache.
 
         :param key: Cache key.
 
@@ -87,8 +82,7 @@ class CacheInterface[T](Protocol):
         ...
 
     async def exists(self, key: str) -> bool:
-        """
-        Check if key exists in cache.
+        """Check if key exists in cache.
 
         :param key: Cache key.
 
@@ -97,8 +91,7 @@ class CacheInterface[T](Protocol):
         ...
 
     async def get_by_key_prefix(self, key_prefix: str) -> dict[str, T]:
-        """
-        Get all items where key starts with key_prefix.
+        """Get all items where key starts with key_prefix.
 
         IMPORTANT: The prefix is matched literally with a wildcard appended.
         To match only sub-keys, include the hierarchy separator (":") at the
@@ -110,11 +103,8 @@ class CacheInterface[T](Protocol):
         """
         ...
 
-    async def set_many(
-        self, items: dict[str, T], ttl_seconds: int | None = None
-    ) -> None:
-        """
-        Store multiple key-value pairs.
+    async def set_many(self, items: dict[str, T], ttl_seconds: int | None = None) -> None:
+        """Store multiple key-value pairs.
 
         :param items: Dictionary of key-value pairs to cache.
         :param ttl_seconds: Time-to-live in seconds. None uses default TTL.
@@ -122,8 +112,7 @@ class CacheInterface[T](Protocol):
         ...
 
     async def delete_by_key_prefix(self, key_prefix: str) -> int:
-        """
-        Delete all items where key starts with key_prefix.
+        """Delete all items where key starts with key_prefix.
 
         IMPORTANT: The prefix is matched literally with a wildcard appended.
         To delete only sub-keys, include the hierarchy separator (":") at the
@@ -146,8 +135,7 @@ async def get_or_set[T](
     factory: Callable[[], Awaitable[T]],
     ttl_seconds: int | None = None,
 ) -> T:
-    """
-    Return cached value, or compute via async factory, cache it, and return.
+    """Return cached value, or compute via async factory, cache it, and return.
 
     This implements the cache-aside pattern: if the key exists in cache,
     return the cached value. Otherwise, call factory() to compute the value,
@@ -160,12 +148,15 @@ async def get_or_set[T](
     from functools import partial
     from warren.storage.cache import MemoryCache, get_or_set
 
+
     async def load(key: str) -> dict:
         return {"key": key}
+
 
     async def main() -> None:
         cached = partial(get_or_set, MemoryCache[dict]())
         print(await cached("doc-1", lambda: load("doc-1")))
+
 
     asyncio.run(main())
     ```

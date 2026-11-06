@@ -1,5 +1,4 @@
-"""
-Storage protocol for per-document processing results.
+"""Storage protocol for per-document processing results.
 
 Each record represents one document's outcome at one pipeline stage,
 keyed by ``(job_id, data_type, doc_id)``. Separated from

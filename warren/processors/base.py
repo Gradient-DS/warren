@@ -1,5 +1,4 @@
-"""
-Protocols for distributed processors.
+"""Protocols for distributed processors.
 
 Processors are pure, synchronous transformation units. They are generic over
 input and output types, making them reusable outside the distributed system.

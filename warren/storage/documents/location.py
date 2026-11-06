@@ -1,5 +1,4 @@
-"""
-Document location models for the distributed processing system.
+"""Document location models for the distributed processing system.
 
 Discriminated union of Pydantic models representing where a document
 lives. Locations are pure data — no I/O, no behavior. Resolution is
@@ -8,6 +7,7 @@ handled by resolver functions (see resolvers.py).
 Deserialization from a dict uses the ``location_type`` discriminator::
 
     from pydantic import TypeAdapter
+
     adapter = TypeAdapter(AnyDocumentLocation)
     location = adapter.validate_python({"location_type": "path", "relative_path": "data/test.pdf"})
 """

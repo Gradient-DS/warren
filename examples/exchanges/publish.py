@@ -1,5 +1,4 @@
-"""
-Publish synthetic documents into a **fanout or topic** exchange example.
+"""Publish synthetic documents into a **fanout or topic** exchange example.
 
 Creates a job entry, publishes the stand-in documents via
 ``MockDocumentsPublisher``, and reports the outcome. The exchange is taken
@@ -127,8 +126,7 @@ async def _publish(
         )
 
         module_logger.info(
-            f"Job {job_id}: published={result['published']}, "
-            f"failed={result['failed']}, total={result['total']}"
+            f"Job {job_id}: published={result['published']}, failed={result['failed']}, total={result['total']}"
         )
 
     finally:

@@ -22,8 +22,7 @@ def _to_snake_case(name: str) -> str:
 
 
 class AsyncProcessingWorkerBase(Base, AsyncMessageConsumerInterface, metaclass=ABCMeta):
-    """
-    Abstract base class for async processing workers.
+    """Abstract base class for async processing workers.
 
     Satisfies the ``AsyncMessageConsumerInterface`` protocol. Workers
     receive plain dictionaries and return optional dictionaries — they
@@ -106,8 +105,7 @@ class AsyncProcessingWorkerBase(Base, AsyncMessageConsumerInterface, metaclass=A
 
     @abstractmethod
     async def __call__(self, message: dict) -> dict | None:
-        """
-        Process a message from the queue.
+        """Process a message from the queue.
 
         :param message: Message body as a dictionary.
 
@@ -124,8 +122,7 @@ class AsyncProcessingWorkerBase(Base, AsyncMessageConsumerInterface, metaclass=A
 
 
 class SyncProcessingWorkerBase(Base, SyncMessageConsumerInterface, metaclass=ABCMeta):
-    """
-    Abstract base class for sync processing workers.
+    """Abstract base class for sync processing workers.
 
     Satisfies the ``SyncMessageConsumerInterface`` protocol. The framework
     automatically runs ``__call__`` in a ``ThreadPoolExecutor`` via
@@ -199,8 +196,7 @@ class SyncProcessingWorkerBase(Base, SyncMessageConsumerInterface, metaclass=ABC
 
     @abstractmethod
     def __call__(self, message: dict) -> dict | None:
-        """
-        Process a message from the queue.
+        """Process a message from the queue.
 
         :param message: Message body as a dictionary.
 
@@ -223,8 +219,7 @@ class SyncProcessingWorkerBase(Base, SyncMessageConsumerInterface, metaclass=ABC
 # accepts/produces and an overridable should_process. See warren/docs/routing.md
 # ("Worker base classes") and PR discussion. Not changing the API yet.
 class FilteringWorkerBase(AsyncProcessingWorkerBase):
-    """
-    Async worker that self-selects messages via should_process().
+    """Async worker that self-selects messages via should_process().
 
     Subclasses implement should_process() to decide whether a message
     is relevant, and process() for the actual work. When should_process()

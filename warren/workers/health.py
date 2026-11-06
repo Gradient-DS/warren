@@ -91,13 +91,10 @@ class HealthServer:
         :return: True if serving.
         """
         try:
-            self._server = await asyncio.start_server(
-                self._handle, self._host, self._port
-            )
+            self._server = await asyncio.start_server(self._handle, self._host, self._port)
         except OSError as e:
             _module_logger.error(
-                f"Health endpoint not started on {self._host}:{self._port}: {e}; "
-                f"the worker keeps consuming without it"
+                f"Health endpoint not started on {self._host}:{self._port}: {e}; the worker keeps consuming without it"
             )
             return False
         _module_logger.info(f"Health endpoint serving on {self._host}:{self.port}")
@@ -110,9 +107,7 @@ class HealthServer:
         await self._server.wait_closed()
         self._server = None
 
-    async def _handle(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             request_line = await asyncio.wait_for(reader.readline(), timeout=5.0)
             parts = request_line.decode("latin-1").split()

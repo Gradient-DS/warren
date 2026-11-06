@@ -24,8 +24,7 @@ from warren.workers.messages import (
 
 
 class DefaultResultsStore(Base, ResultsStoreInterface):
-    """
-    Default async implementation of ResultsStoreInterface.
+    """Default async implementation of ResultsStoreInterface.
 
     Stores document processing results using an injected DocumentStoreInterface
     for persistence and an optional CacheInterface for caching.
@@ -47,8 +46,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         *,
         cache_ttl_seconds: int = 3600,
     ) -> None:
-        """
-        Initialize the results store.
+        """Initialize the results store.
 
         :param document_store: Storage backend for persistence. Must have a unique
             composite index on (doc_id, job_id, part_idx).
@@ -64,25 +62,18 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
 
         self._document_store = document_store
         self._cache = cache
-        self._result_type = (
-            result_type
-            if result_type is not None
-            else document_store.get_document_type()
-        )
+        self._result_type = result_type if result_type is not None else document_store.get_document_type()
         self._doc_id_field = document_store.get_doc_id_field()
 
     async def setup(self) -> None:
-        """
-        Validate that the document store has the required unique index.
+        """Validate that the document store has the required unique index.
 
         Call it after construction, before you use the store.
         ``create_default_results_store`` calls it for you.
 
         :raises ValueError: If document store lacks required unique index.
         """
-        if not await self._document_store.has_unique_index(
-            ("doc_id", "job_id", "part_idx")
-        ):
+        if not await self._document_store.has_unique_index(("doc_id", "job_id", "part_idx")):
             msg = (
                 "Document store must have a unique composite index on "
                 "(doc_id, job_id, part_idx). Without this index, duplicate "
@@ -100,8 +91,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         do_cache: bool = True,
         overwrite_existing: bool = True,
     ) -> str:
-        """
-        Store a processing result.
+        """Store a processing result.
 
         :param result: The processing result to store.
         :param doc_id: Document ID.
@@ -116,9 +106,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         :raises DocumentAlreadyExistsError: If overwrite_existing is False and a
             result for these keys exists.
         """
-        doc = self._build_row(
-            ResultItem(result, doc_id, part_idx, job_id, result_metadata)
-        )
+        doc = self._build_row(ResultItem(result, doc_id, part_idx, job_id, result_metadata))
 
         result_id = await self._document_store.insert(doc, overwrite_existing)
         doc["result_id"] = result_id
@@ -132,10 +120,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         """Upsert results in bulk. For repeated keys, the last item wins."""
         if not items:
             return
-        rows = {
-            (item.doc_id, item.job_id, item.part_idx or 0): self._build_row(item)
-            for item in items
-        }
+        rows = {(item.doc_id, item.job_id, item.part_idx or 0): self._build_row(item) for item in items}
         docs = list(rows.values())
         ids = await self._document_store.upsert_many(docs)
         for doc, result_id in zip(docs, ids, strict=True):
@@ -144,20 +129,13 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         if self._cache is not None:
             try:
                 await self._cache.set_many(
-                    {
-                        self._build_cache_key(
-                            doc["doc_id"], doc["part_idx"], doc["job_id"]
-                        ): doc
-                        for doc in docs
-                    },
+                    {self._build_cache_key(doc["doc_id"], doc["part_idx"], doc["job_id"]): doc for doc in docs},
                     ttl_seconds=self._cache_ttl_seconds,
                 )
             except HardFailureException:
                 raise
             except Exception as e:
-                self._log.warning(
-                    f"Caching results failed: {summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Caching results failed: {summarize_exception_chain(e)}")
 
     def _build_row(self, item: ResultItem) -> dict:
         return {
@@ -175,8 +153,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         part_idx: int | None = None,
         job_id: str | None = None,
     ) -> ResultDoc:
-        """
-        Retrieve a processing result by business keys.
+        """Retrieve a processing result by business keys.
 
         :param doc_id: Document ID.
         :param part_idx: Part index (None or 0 for single-part results).
@@ -199,10 +176,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
             await self._cache_set(doc_id, normalized_part_idx, job_id, doc)
             return self._dict_to_result_doc(doc)
 
-        msg = (
-            f"Result not found for doc_id={doc_id}, part_idx={normalized_part_idx}, "
-            f"job_id={job_id}"
-        )
+        msg = f"Result not found for doc_id={doc_id}, part_idx={normalized_part_idx}, job_id={job_id}"
         raise ResultNotFound(msg)
 
     async def stream_doc_processing_results(
@@ -211,8 +185,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         job_id: str | None = None,
         try_cache: bool = True,
     ) -> AsyncGenerator[ResultDoc, None]:
-        """
-        Stream persisted results in ascending part order, bypassing the cache.
+        """Stream persisted results in ascending part order, bypassing the cache.
 
         :param doc_id: Document ID.
         :param job_id: Job ID (None if not using job grouping).

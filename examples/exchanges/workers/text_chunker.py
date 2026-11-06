@@ -1,5 +1,4 @@
-"""
-Text chunker worker for E2E testing.
+"""Text chunker worker for E2E testing.
 
 Receives markdown_document messages, reads the stored markdown,
 splits by paragraph (double newline), stores each chunk, and

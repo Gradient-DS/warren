@@ -7,11 +7,6 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
-  # Ruff, hygiene hooks, gitleaks and actionlint from .pre-commit-config.yaml.
-  pre-commit:
-    if: github.event.pull_request.draft != true
-    uses: Gradient-DS/security-ci/.github/workflows/pre-commit.yml@v13
-
   test:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest

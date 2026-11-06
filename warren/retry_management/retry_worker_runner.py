@@ -1,5 +1,4 @@
-"""
-Runner for the retry worker.
+"""Runner for the retry worker.
 
 Manages the RetryWorker lifecycle: creates infrastructure connections,
 builds the retry store and publisher, sets up the consumer, schedules

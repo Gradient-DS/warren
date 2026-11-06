@@ -1,5 +1,4 @@
-"""
-Fake document parser worker for E2E testing.
+"""Fake document parser worker for E2E testing.
 
 Receives pdf_document messages, looks up fake markdown content,
 stores the result, and publishes a markdown_document message.

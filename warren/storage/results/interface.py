@@ -43,8 +43,7 @@ class DocumentProcessingResultsNotFound(ResourceNotFoundError):
 
 
 class ResultsStoreInterface(Protocol):
-    """
-    Async document-level results store for a specific type of document processing.
+    """Async document-level results store for a specific type of document processing.
 
     All methods are async — implementations must use non-blocking I/O
     to avoid blocking the event loop.
@@ -63,8 +62,7 @@ class ResultsStoreInterface(Protocol):
         do_cache: bool = True,
         overwrite_existing: bool = True,
     ) -> str:
-        """
-        Store (partial) result for processing a document.
+        """Store (partial) result for processing a document.
 
         :param result: Document processing (partial) result.
         :param doc_id: Original document ID.
@@ -88,8 +86,7 @@ class ResultsStoreInterface(Protocol):
         part_idx: int | None = None,
         job_id: str | None = None,
     ) -> ResultDoc:
-        """
-        Retrieves the document processing result for given business keys.
+        """Retrieves the document processing result for given business keys.
 
         :param doc_id: The document ID.
         :param part_idx: The part index (None or 0 for single-part results).
@@ -106,8 +103,7 @@ class ResultsStoreInterface(Protocol):
         job_id: str | None = None,
         try_cache: bool = True,
     ) -> AsyncGenerator[ResultDoc, None]:
-        """
-        Stream persisted results in ascending part order, bypassing the cache.
+        """Stream persisted results in ascending part order, bypassing the cache.
 
         :param doc_id: The document ID.
         :param job_id: The job ID (None if not using job grouping).

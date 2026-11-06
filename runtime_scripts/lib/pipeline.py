@@ -1,5 +1,4 @@
-"""
-Pipeline spec and config loading utilities.
+"""Pipeline spec and config loading utilities.
 
 Shared by all launcher scripts for resolving pipeline specs from
 directories, files, or dotted module paths.

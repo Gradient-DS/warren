@@ -1,5 +1,4 @@
-"""
-Kafka connection management.
+"""Kafka connection management.
 
 ``KafkaConnectionManager`` is the shared infrastructure object of the
 ``aiokafka`` implementation — the counterpart of ``RMQConnectionManager``

@@ -1,5 +1,4 @@
-"""
-Concrete publisher for the synthetic exchange examples.
+"""Concrete publisher for the synthetic exchange examples.
 
 Publishes the stand-in documents from ``FAKE_DOCUMENTS`` — no actual file
 loading or document store registration. Each doc_id is pre-assigned. (The

@@ -24,8 +24,7 @@ from warren.workers.messages import (
 
 
 class DefaultResultsStore(Base, ResultsStoreInterface):
-    """
-    Default async implementation of ResultsStoreInterface.
+    """Default async implementation of ResultsStoreInterface.
 
     Stores document processing results using an injected DocumentStoreInterface
     for persistence and an optional CacheInterface for caching.
@@ -47,8 +46,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         *,
         cache_ttl_seconds: int = 3600,
     ) -> None:
-        """
-        Initialize the results store.
+        """Initialize the results store.
 
         :param document_store: Storage backend for persistence. Must have a unique
             composite index on (doc_id, job_id, part_idx).
@@ -68,8 +66,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         self._doc_id_field = document_store.get_doc_id_field()
 
     async def setup(self) -> None:
-        """
-        Validate that the document store has the required unique index.
+        """Validate that the document store has the required unique index.
 
         Call it after construction, before you use the store.
         ``create_default_results_store`` calls it for you.
@@ -94,8 +91,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         do_cache: bool = True,
         overwrite_existing: bool = True,
     ) -> str:
-        """
-        Store a processing result.
+        """Store a processing result.
 
         :param result: The processing result to store.
         :param doc_id: Document ID.
@@ -157,8 +153,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         part_idx: int | None = None,
         job_id: str | None = None,
     ) -> ResultDoc:
-        """
-        Retrieve a processing result by business keys.
+        """Retrieve a processing result by business keys.
 
         :param doc_id: Document ID.
         :param part_idx: Part index (None or 0 for single-part results).
@@ -190,8 +185,7 @@ class DefaultResultsStore(Base, ResultsStoreInterface):
         job_id: str | None = None,
         try_cache: bool = True,
     ) -> AsyncGenerator[ResultDoc, None]:
-        """
-        Stream persisted results in ascending part order, bypassing the cache.
+        """Stream persisted results in ascending part order, bypassing the cache.
 
         :param doc_id: Document ID.
         :param job_id: Job ID (None if not using job grouping).

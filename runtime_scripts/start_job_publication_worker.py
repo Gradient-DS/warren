@@ -1,5 +1,4 @@
-r"""
-Job publication worker launcher.
+r"""Job publication worker launcher.
 
 Starts a ``JobPublicationWorkerRunner`` that consumes job messages and
 publishes their documents into the processing pipeline.

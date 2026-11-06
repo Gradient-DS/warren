@@ -1,5 +1,4 @@
-"""
-Cached document fetcher implementation.
+"""Cached document fetcher implementation.
 
 Warren's take on the **claim-check pattern**: messages stay small and carry
 only a payload *location*; workers resolve the actual bytes on demand

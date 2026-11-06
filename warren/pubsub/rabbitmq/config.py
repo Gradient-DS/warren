@@ -1,5 +1,4 @@
-"""
-Pure-data configuration models for the RabbitMQ pubsub layer.
+"""Pure-data configuration models for the RabbitMQ pubsub layer.
 
 These models are intentionally free of any ``aio_pika`` dependency: they
 describe *what* a connection, exchange, queue, consumer, or retry policy

@@ -1,5 +1,4 @@
-"""
-Publish synthetic documents into a **fanout or topic** exchange example.
+"""Publish synthetic documents into a **fanout or topic** exchange example.
 
 Creates a job entry, publishes the stand-in documents via
 ``MockDocumentsPublisher``, and reports the outcome. The exchange is taken

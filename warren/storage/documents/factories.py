@@ -1,6 +1,4 @@
-"""
-Factory functions for document fetching components.
-"""
+"""Factory functions for document fetching components."""
 
 from collections.abc import Mapping
 

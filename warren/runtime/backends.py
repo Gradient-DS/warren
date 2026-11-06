@@ -1,5 +1,4 @@
-"""
-Pubsub backend factory: select RabbitMQ, Kafka or in-process memory from ``RuntimeConfig``.
+"""Pubsub backend factory: select RabbitMQ, Kafka or in-process memory from ``RuntimeConfig``.
 
 This module is the single place that switches on ``config.backend``.
 Every runner builds its connection manager, publishers, and consumer

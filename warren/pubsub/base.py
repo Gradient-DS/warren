@@ -56,8 +56,7 @@ class BasePublisher(Base, PublisherInterface, metaclass=ABCMeta):
 
     @abstractmethod
     async def __call__(self, message: dict) -> None:
-        """
-        Publish a message. Routing is determined internally by the publisher.
+        """Publish a message. Routing is determined internally by the publisher.
 
         :param message: Message body as a dictionary.
         """

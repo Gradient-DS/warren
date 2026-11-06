@@ -1,5 +1,4 @@
-"""
-Job-defined-routing pipeline (direct exchange).
+"""Job-defined-routing pipeline (direct exchange).
 
 The deployment is the same three capabilities (parse → chunk → embed), but the
 **path is decided per job**, not by the topology. Each worker binds its queue to

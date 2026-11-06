@@ -1,5 +1,4 @@
-"""
-Watch a job progress while it runs.
+"""Watch a job progress while it runs.
 
 Looks up a job by its ``--job-name`` (stored in metadata at publish time) and
 polls the job's status and per-stage counts, printing a live view until the job

@@ -137,7 +137,8 @@ def test_binary_results_store_prepopulates_job_scoped_key() -> None:
 
 def test_throttled_error_passes_through_unwrapped() -> None:
     """The fetcher wraps unknown exceptions; a DocumentThrottledError must
-    reach the worker as the same object, retry_after intact."""
+    reach the worker as the same object, retry_after intact.
+    """
     error = DocumentThrottledError("slow down", retry_after=30, status_code=429)
 
     class _Throttling:

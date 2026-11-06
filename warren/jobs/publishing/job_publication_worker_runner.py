@@ -1,5 +1,4 @@
-"""
-Runner for the job publication worker.
+"""Runner for the job publication worker.
 
 Manages the JobPublicationWorker lifecycle: creates infrastructure,
 wires the consumer, and delegates document publishing to an

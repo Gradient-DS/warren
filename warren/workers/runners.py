@@ -1,5 +1,4 @@
-"""
-Base class for running a worker process.
+"""Base class for running a worker process.
 
 Defines a transport-independent lifecycle for worker processes. Subclasses
 implement ``setup()`` to wire their specific components and set

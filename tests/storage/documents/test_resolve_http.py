@@ -202,7 +202,8 @@ def test_503_with_retry_after_is_throttled() -> None:
 
 def test_503_without_retry_after_stays_a_status_error() -> None:
     """Only an explicit request to slow down is throttling; a bare 503 keeps
-    the slot-consuming retry ladder (spec D4)."""
+    the slot-consuming retry ladder (spec D4).
+    """
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(503)

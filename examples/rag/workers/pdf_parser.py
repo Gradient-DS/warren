@@ -1,5 +1,4 @@
-"""
-PDF parser worker — the first real stage of the ``examples/rag`` pipeline.
+"""PDF parser worker — the first real stage of the ``examples/rag`` pipeline.
 
 Receives a ``pdf_document`` message carrying a PDF ``url``, downloads the PDF,
 extracts its text with ``pypdf``, stores it, and publishes a

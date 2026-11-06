@@ -1,5 +1,4 @@
-"""
-Pure-data configuration models for the Kafka pubsub layer.
+"""Pure-data configuration models for the Kafka pubsub layer.
 
 These models are intentionally free of any ``aiokafka`` dependency: they
 describe *what* a connection, topic, or consumer should look like, and

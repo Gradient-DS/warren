@@ -697,7 +697,8 @@ def test_max_retries_hard_failure_envelope_matches_rmq_path() -> None:
 def test_first_deferral_without_retry_slot_is_not_halved() -> None:
     """A deferral (retry_count_consumed=False) on a never-retried message keeps
     the count at 0. The backoff exponent must clamp at 0 there: ``2 ** -1``
-    silently halved the requested delay (30 → 15) on both backends."""
+    silently halved the requested delay (30 → 15) on both backends.
+    """
     error = SoftFailureException("throttled", retry_after=30, retry_count_consumed=False)
 
     kafka_envelopes, rmq_envelopes, _, _ = _parity_envelopes(_BODY, error)

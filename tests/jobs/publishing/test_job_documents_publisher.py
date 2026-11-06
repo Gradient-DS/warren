@@ -106,7 +106,8 @@ async def _agen(items: list):
 
 def test_record_success_failure_does_not_abort_or_misreport() -> None:
     """A failing ``record_success`` must not abort the loop, nor turn a
-    genuinely-published document into a reported failure."""
+    genuinely-published document into a reported failure.
+    """
     pub = _FakePublisher()
     tracker = _FakeTracker(fail_success=True)
     store = _FakeJobStore()
@@ -123,7 +124,8 @@ def test_record_success_failure_does_not_abort_or_misreport() -> None:
 
 def test_record_failure_raising_does_not_abort_loop() -> None:
     """If recording a per-document failure itself raises, the loop must
-    still process the remaining sources."""
+    still process the remaining sources.
+    """
     pub = _FakePublisher()
     tracker = _FakeTracker(fail_failure_stages=("load",))
     store = _FakeJobStore()

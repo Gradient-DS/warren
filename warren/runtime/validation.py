@@ -1,5 +1,4 @@
-"""
-Deploy-time validation for a ``PipelineSpec``.
+"""Deploy-time validation for a ``PipelineSpec``.
 
 ``validate_pipeline`` is a cheap, fail-fast check run at launcher startup (and
 available as a standalone CLI) to catch topology mistakes before any worker

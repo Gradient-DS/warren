@@ -1,5 +1,4 @@
-"""
-Pubsub-specific interfaces and exceptions.
+"""Pubsub-specific interfaces and exceptions.
 
 Defines the protocols and types used within the pubsub package hierarchy.
 For shared contracts between pubsub and workers, see distributed/common.py.
@@ -129,8 +128,7 @@ class RetryConfig(BaseModel):
 
 @dataclass(frozen=True)
 class Route:
-    """
-    A transport-agnostic route to a destination, specified by the key.
+    """A transport-agnostic route to a destination, specified by the key.
     Can be extended to include other routing information if necessary.
 
     :param key: The routing key.
@@ -141,8 +139,7 @@ class Route:
 
 class RouteFunc(Protocol):
     async def __call__(self, message: dict) -> list[Route]:
-        """
-        Resolve the routes for a message. Can route to multiple
+        """Resolve the routes for a message. Can route to multiple
         destinations, for example, a processing destination and a
         logging destination.
 
@@ -161,8 +158,7 @@ class PublisherInterface(Protocol):
         ...
 
     async def __call__(self, message: dict) -> None:
-        """
-        Publish a message.
+        """Publish a message.
 
         :param message: Message body as a dictionary.
         """

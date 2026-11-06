@@ -2,7 +2,8 @@
 for longer than the grace period, ends the process; blocked and
 reconnecting states are logged and waited out; a failing health() is
 logged and ignored. Intervals are shrunk so each test runs in
-milliseconds."""
+milliseconds.
+"""
 
 import asyncio
 import signal

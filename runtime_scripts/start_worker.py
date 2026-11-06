@@ -1,5 +1,4 @@
-r"""
-Generic processing-worker launcher.
+r"""Generic processing-worker launcher.
 
 Loads a ``PipelineSpec``, creates a ``DefaultWorkerRunner`` (or a custom
 runner class), and runs a single worker type until shutdown.

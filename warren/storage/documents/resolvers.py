@@ -1,5 +1,4 @@
-"""
-Resolver functions for document location types.
+"""Resolver functions for document location types.
 
 Each resolver fetches bytes from a specific location type. Resolvers
 are standalone async functions — bind configuration (e.g., base_dir)

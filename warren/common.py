@@ -1,5 +1,4 @@
-"""
-Shared contracts for the distributed processing system.
+"""Shared contracts for the distributed processing system.
 
 Defines the message consumer protocols and failure exceptions that form
 the contract between pubsub (consumer managers) and workers. These live
@@ -139,8 +138,7 @@ class MessageConsumerIdentity(Protocol):
 
 
 class AsyncMessageConsumerInterface(MessageConsumerIdentity, Protocol):
-    """
-    Async consumer with identity — runs on the main event loop.
+    """Async consumer with identity — runs on the main event loop.
 
     Heartbeat safety: this consumer runs on the same event loop as the
     RabbitMQ connection.
@@ -158,8 +156,7 @@ class AsyncMessageConsumerInterface(MessageConsumerIdentity, Protocol):
     """
 
     async def __call__(self, message: dict) -> dict | None:
-        """
-        Process a message.
+        """Process a message.
 
         Example — async consumer with CPU offloading::
 
@@ -204,8 +201,7 @@ class AsyncMessageConsumerInterface(MessageConsumerIdentity, Protocol):
 
 
 class SyncMessageConsumerInterface(MessageConsumerIdentity, Protocol):
-    """
-    Sync consumer with identity — framework runs this in a thread pool.
+    """Sync consumer with identity — framework runs this in a thread pool.
 
     The framework automatically executes this consumer in a
     ``ThreadPoolExecutor`` via ``run_in_executor()``, keeping the main
@@ -224,8 +220,7 @@ class SyncMessageConsumerInterface(MessageConsumerIdentity, Protocol):
     """
 
     def __call__(self, message: dict) -> dict | None:
-        """
-        Process a message.
+        """Process a message.
 
         Example — sync consumer with HTTP calls::
 

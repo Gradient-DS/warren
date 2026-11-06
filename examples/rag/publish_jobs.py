@@ -1,5 +1,4 @@
-"""
-Publish PDF URLs into the ``examples/rag`` pipeline.
+"""Publish PDF URLs into the ``examples/rag`` pipeline.
 
 Each URL becomes one small ``pdf_document`` message; the parser worker
 downloads and parses it. Defaults to two arXiv papers so the example runs

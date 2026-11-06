@@ -112,5 +112,6 @@ def test_underlay_without_consumers_attribute_is_unknown() -> None:
 
 def test_aiormq_channel_defines_consumers() -> None:
     """health() reads ``aiormq.Channel.consumers``, a plain attribute that is
-    not on aiormq's ABC. Fail here, not in production, if an upgrade drops it."""
+    not on aiormq's ABC. Fail here, not in production, if an upgrade drops it.
+    """
     assert "self.consumers" in inspect.getsource(aiormq.Channel.__init__)

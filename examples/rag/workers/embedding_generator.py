@@ -1,5 +1,4 @@
-"""
-Embedding worker — the final stage of the ``examples/rag`` pipeline.
+"""Embedding worker — the final stage of the ``examples/rag`` pipeline.
 
 Reads the stored chunks for a document, embeds them with OpenAI
 (``text-embedding-3-small`` by default), stores ``{embedding, text}`` per

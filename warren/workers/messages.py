@@ -1,5 +1,4 @@
-"""
-Message data structures for the distributed processing framework.
+"""Message data structures for the distributed processing framework.
 
 Defines the canonical message format used by workers. The transport layer
 handles only raw dicts — ``ProcessingMessage`` is instantiated from

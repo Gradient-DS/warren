@@ -1,5 +1,4 @@
-"""
-Topology helpers for Kafka.
+"""Topology helpers for Kafka.
 
 These functions perform the I/O of verifying (and optionally creating)
 topics, given pure-data ``KafkaTopicConfig`` values. Keeping the behavior

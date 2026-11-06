@@ -1,5 +1,4 @@
-"""
-Generic cached document store — write-through/read-through wrapper.
+"""Generic cached document store — write-through/read-through wrapper.
 
 Conforms to ``DocumentStoreInterface`` via structural typing and composes
 an injected ``DocumentStoreInterface`` (backing store) with a

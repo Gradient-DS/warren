@@ -14,8 +14,7 @@ from warren.storage.scoping import scoped_cache_key
 
 
 class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
-    """
-    Abstract base class for async Redis-backed cache implementations.
+    """Abstract base class for async Redis-backed cache implementations.
 
     Uses redis.asyncio for non-blocking I/O. Handles Redis connection,
     key namespacing, TTL management, and error handling.
@@ -33,8 +32,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
         scoping_enabled: bool = False,
         scope_required: bool = True,
     ) -> None:
-        """
-        Initialize the Redis cache.
+        """Initialize the Redis cache.
 
         :param client: Async Redis client instance (injected, not created internally).
         :param base_key: Namespace prefix for all keys in this cache.
@@ -63,8 +61,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
         self._key_separator = key_separator
 
     async def get(self, key: str) -> T | None:
-        """
-        Retrieve value from cache.
+        """Retrieve value from cache.
 
         :param key: Cache key.
 
@@ -81,8 +78,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
             raise CacheOperationError(operation="get") from e
 
     async def set(self, key: str, value: T, ttl_seconds: int | None = None) -> None:
-        """
-        Store value in cache.
+        """Store value in cache.
 
         :param key: Cache key.
         :param value: Value to cache.
@@ -98,8 +94,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
             raise CacheOperationError(operation="set") from e
 
     async def delete(self, key: str) -> bool:
-        """
-        Delete key from cache.
+        """Delete key from cache.
 
         :param key: Cache key.
 
@@ -114,8 +109,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
             raise CacheOperationError(operation="delete") from e
 
     async def exists(self, key: str) -> bool:
-        """
-        Check if key exists in cache.
+        """Check if key exists in cache.
 
         :param key: Cache key.
 
@@ -129,8 +123,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
             raise CacheOperationError(operation="exists") from e
 
     async def get_by_key_prefix(self, key_prefix: str) -> dict[str, T]:
-        """
-        Get all items where key starts with key_prefix.
+        """Get all items where key starts with key_prefix.
 
         IMPORTANT: The prefix is matched literally with a wildcard appended.
         To match only sub-keys of a hierarchical key, include the hierarchy
@@ -162,8 +155,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
             raise CacheOperationError(operation="get_by_key_prefix") from e
 
     async def set_many(self, items: dict[str, T], ttl_seconds: int | None = None) -> None:
-        """
-        Store multiple key-value pairs.
+        """Store multiple key-value pairs.
 
         :param items: Dictionary of key-value pairs to cache.
         :param ttl_seconds: Time-to-live in seconds. None uses default TTL.
@@ -187,8 +179,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
             raise CacheOperationError(operation="set_many") from e
 
     async def delete_by_key_prefix(self, key_prefix: str) -> int:
-        """
-        Delete all items where key starts with key_prefix.
+        """Delete all items where key starts with key_prefix.
 
         IMPORTANT: The prefix is matched literally with a wildcard appended.
         To delete only sub-keys of a hierarchical key, include the hierarchy
@@ -214,8 +205,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
             raise CacheOperationError(operation="delete_by_key_prefix") from e
 
     async def clear(self) -> None:
-        """
-        Clear all entries from this cache namespace.
+        """Clear all entries from this cache namespace.
 
         :raises CacheOperationError: If Redis operation fails.
         """
@@ -264,8 +254,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
         return ttl
 
     async def _scan_keys(self, pattern: str) -> list[str]:
-        """
-        Scan for keys matching pattern.
+        """Scan for keys matching pattern.
 
         Uses Redis glob-style patterns:
         - * matches any sequence of characters
@@ -283,8 +272,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
 
 
 def _as_json_scalar(value: object) -> str:
-    """
-    Render a value JSON cannot encode natively.
+    """Render a value JSON cannot encode natively.
 
     Datetimes become ISO 8601 text; anything else raises, as plain
     ``json.dumps`` would.
@@ -299,8 +287,7 @@ def _as_json_scalar(value: object) -> str:
 
 
 class RedisDictCache(RedisCacheBase[dict]):
-    """
-    Async Redis cache for Dict values using JSON serialization.
+    """Async Redis cache for Dict values using JSON serialization.
 
     Suitable for caching document metadata, extracted text, processing results,
     and other JSON-serializable data. Datetime values are stored as ISO 8601
@@ -318,8 +305,7 @@ class RedisDictCache(RedisCacheBase[dict]):
 
 
 class RedisBinaryCache(RedisCacheBase[bytes]):
-    """
-    Async Redis cache for binary data (pass-through, no serialization).
+    """Async Redis cache for binary data (pass-through, no serialization).
 
     Suitable for binary values.
     """

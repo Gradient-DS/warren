@@ -1,5 +1,4 @@
-"""
-Storage protocol for publishing outcomes.
+"""Storage protocol for publishing outcomes.
 
 Tracks what happened when documents were submitted for processing.
 Independent from ``JobResultsStoreInterface``, which tracks what

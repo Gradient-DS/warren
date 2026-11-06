@@ -1,5 +1,4 @@
-"""
-Publish the synthetic documents through a **job-defined route**.
+"""Publish the synthetic documents through a **job-defined route**.
 
 Builds a ``RoutingPlan`` (parse → chunk → embed), validates it against the
 deployed workers' declared capabilities (`validate_routing_plan`), then

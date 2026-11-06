@@ -26,8 +26,7 @@ class DocumentAlreadyExistsError(ResourceAlreadyExistsError):
 
 
 class DocumentStoreInterface(Protocol):
-    """
-    Async document store interface.
+    """Async document store interface.
 
     All I/O methods are async — implementations must use non-blocking drivers
     (e.g., pymongo.AsyncMongoClient) to avoid blocking the event loop.
@@ -37,8 +36,7 @@ class DocumentStoreInterface(Protocol):
     """
 
     async def insert(self, doc: dict, overwrite_existing: bool = False) -> str:
-        """
-        Insert a document into the document store and return its ID.
+        """Insert a document into the document store and return its ID.
 
         :param doc: Document to insert.
         :param overwrite_existing: Allow overwrite of existing document if True.
@@ -58,8 +56,7 @@ class DocumentStoreInterface(Protocol):
         ...
 
     async def update(self, doc_id: str, updates: dict) -> None:
-        """
-        Update document with document id with given updates.
+        """Update document with document id with given updates.
 
         :param doc_id: Document ID.
         :param updates: Fields to set. Fields that are not named stay as they
@@ -74,8 +71,7 @@ class DocumentStoreInterface(Protocol):
         self,
         doc_id: str,
     ) -> bool:
-        """
-        Check if document id exists.
+        """Check if document id exists.
 
         :param doc_id: Document ID.
 
@@ -87,8 +83,7 @@ class DocumentStoreInterface(Protocol):
         self,
         doc_id: str,
     ) -> dict:
-        """
-        Get document with document id.
+        """Get document with document id.
 
         :param doc_id: Document ID.
 
@@ -99,8 +94,7 @@ class DocumentStoreInterface(Protocol):
         ...
 
     def query(self, params: dict, *, sort_by: str | None = None) -> AsyncGenerator[dict, None]:
-        """
-        Query document store.
+        """Query document store.
 
         Returns an async generator — callers use ``async for doc in store.query(params)``.
 
@@ -117,8 +111,7 @@ class DocumentStoreInterface(Protocol):
         *,
         expected: dict | None = None,
     ) -> bool:
-        """
-        Delete a document by its ID.
+        """Delete a document by its ID.
 
         :param doc_id: Document ID.
         :param expected: Additional field values required for deletion.
@@ -129,24 +122,21 @@ class DocumentStoreInterface(Protocol):
         ...
 
     def get_document_type(self) -> str:
-        """
-        Returns the document type identifier for this store.
+        """Returns the document type identifier for this store.
 
         :return: Document type identifier (e.g., collection name).
         """
         ...
 
     def get_doc_id_field(self) -> str:
-        """
-        Returns the field name used for document IDs.
+        """Returns the field name used for document IDs.
 
         :return: Field name containing document IDs.
         """
         ...
 
     async def has_unique_index(self, index_spec: IndexSpec) -> bool:
-        """
-        Check if a unique index exists on the given field(s).
+        """Check if a unique index exists on the given field(s).
 
         :param index_spec: Single field name or tuple of field names for composite index.
 

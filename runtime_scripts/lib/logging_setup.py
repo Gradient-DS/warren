@@ -1,5 +1,4 @@
-"""
-Logging setup for runtime script entry points.
+"""Logging setup for runtime script entry points.
 
 Workaround for basics.logging auto-configuring the root logger at
 DEBUG on import. Call ``configure_logging()`` early in ``main()``

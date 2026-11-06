@@ -1,5 +1,4 @@
-"""
-Default worker runner for the distributed processing framework.
+"""Default worker runner for the distributed processing framework.
 
 ``DefaultWorkerRunner`` wires the pubsub backend (RabbitMQ or Kafka,
 selected by ``config.backend`` via :mod:`warren.runtime.backends`),

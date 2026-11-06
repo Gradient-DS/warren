@@ -1,5 +1,4 @@
-"""
-Document location models for the distributed processing system.
+"""Document location models for the distributed processing system.
 
 Discriminated union of Pydantic models representing where a document
 lives. Locations are pure data — no I/O, no behavior. Resolution is

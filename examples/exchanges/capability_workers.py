@@ -1,5 +1,4 @@
-"""
-Capability workers for the job-defined-routing example.
+"""Capability workers for the job-defined-routing example.
 
 Same parse → chunk → embed work as the fanout example, but written as
 ``CapabilityWorkerBase`` subclasses: each declares the ``data_type`` it

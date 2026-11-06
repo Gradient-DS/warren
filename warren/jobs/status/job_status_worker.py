@@ -1,5 +1,4 @@
-"""
-Framework-level worker that observes all messages on the fanout exchange
+"""Framework-level worker that observes all messages on the fanout exchange
 and records per-document processing results. Detects job completion and
 signals it on the exchange.
 

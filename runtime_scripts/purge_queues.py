@@ -1,5 +1,4 @@
-r"""
-Purge RabbitMQ queues and exchange.
+r"""Purge RabbitMQ queues and exchange.
 
 Thin CLI wrapper around the framework ``purge_queues()`` utility.
 Reads queue names from a pipeline spec or accepts them as CLI args.

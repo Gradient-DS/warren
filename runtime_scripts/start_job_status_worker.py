@@ -1,5 +1,4 @@
-r"""
-Job status worker launcher.
+r"""Job status worker launcher.
 
 Starts a ``JobStatusWorkerRunner`` that observes all messages on the
 fanout exchange and records per-document processing results.

@@ -1,5 +1,4 @@
-"""
-Topology declaration helpers for RabbitMQ.
+"""Topology declaration helpers for RabbitMQ.
 
 These functions perform the I/O of declaring exchanges and queues on a
 channel, given pure-data ``RMQExchangeConfig`` / ``RMQQueueConfig`` values.

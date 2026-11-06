@@ -1,6 +1,4 @@
-"""
-RabbitMQ publisher implementation.
-"""
+"""RabbitMQ publisher implementation."""
 
 from typing import TYPE_CHECKING, Any
 
@@ -33,8 +31,7 @@ if TYPE_CHECKING:
 
 
 class RMQPublisher(BasePublisher):
-    """
-    RabbitMQ publisher that owns its own routing decisions.
+    """RabbitMQ publisher that owns its own routing decisions.
 
     Publishes to ``exchange_config``. A static ``route`` gives one routing
     key for every message. A ``route_func`` computes the routes for each

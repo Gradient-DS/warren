@@ -1,6 +1,4 @@
-"""
-Kafka publisher implementation.
-"""
+"""Kafka publisher implementation."""
 
 from typing import TYPE_CHECKING, Any
 
@@ -31,8 +29,7 @@ if TYPE_CHECKING:
 
 
 class KafkaPublisher(BasePublisher):
-    """
-    Kafka publisher for a single topic.
+    """Kafka publisher for a single topic.
 
     A topic plays the role of a fanout exchange in the Kafka backend, so
     the publisher is fanout-only: routes are rejected with ``ValueError``

@@ -66,8 +66,7 @@ async def _completes(awaitable: Awaitable[Any], within: float) -> bool:
 
 
 class RMQConsumerManager(ConsumerManagerBase):
-    """
-    RabbitMQ consumer manager that bridges message queue operations with application workers.
+    """RabbitMQ consumer manager that bridges message queue operations with application workers.
 
     This class handles all RabbitMQ-specific concerns (connection management, message
     acknowledgment, retry logic) while delegating business logic to a worker function
@@ -127,8 +126,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         self._shutting_down: bool = False
 
     async def setup(self) -> None:
-        """
-        Initialize RabbitMQ resources for consumption.
+        """Initialize RabbitMQ resources for consumption.
 
         - Sets up all publishers.
         - Creates a channel from the shared connection manager.
@@ -173,8 +171,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         self._queue = queue
 
     async def start_consuming(self) -> None:
-        """
-        Begin consuming messages from the configured queue.
+        """Begin consuming messages from the configured queue.
 
         Each delivery spawns a task; handler concurrency is bounded separately
         from the channel prefetch.
@@ -189,8 +186,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         )
 
     async def stop_consuming(self) -> None:
-        """
-        Gracefully stop message consumption and close RabbitMQ resources.
+        """Gracefully stop message consumption and close RabbitMQ resources.
 
         1. Signals shutdown (stops accepting new work)
         2. Cancels the consumer (no new messages delivered)

@@ -1,5 +1,4 @@
-"""
-Runner for the job status worker.
+"""Runner for the job status worker.
 
 Manages the JobStatusWorker lifecycle: creates infrastructure, builds
 stores and consumer, observes all messages on the observer exchange and

@@ -1,5 +1,4 @@
-"""
-Runtime infrastructure: create and close connections from a ``RuntimeConfig``.
+"""Runtime infrastructure: create and close connections from a ``RuntimeConfig``.
 MongoDB and Redis connections are created for the RabbitMQ and Kafka backends;
 ``backend: memory`` creates neither.
 

@@ -1,5 +1,4 @@
-"""
-Text chunker worker — the second stage of the ``examples/rag`` pipeline.
+"""Text chunker worker — the second stage of the ``examples/rag`` pipeline.
 
 Reads the parsed text, splits it into overlapping character-bounded chunks
 on paragraph/sentence boundaries (a small, dependency-free splitter — good

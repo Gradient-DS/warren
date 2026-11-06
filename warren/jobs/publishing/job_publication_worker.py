@@ -1,5 +1,4 @@
-"""
-Framework worker that consumes job messages and publishes their documents.
+"""Framework worker that consumes job messages and publishes their documents.
 
 Listens on the observer exchange for ``data_type == "job"`` messages,
 extracts document sources from the message data, and delegates to a

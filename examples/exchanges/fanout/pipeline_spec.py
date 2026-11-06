@@ -1,5 +1,4 @@
-"""
-Fake pipeline spec for the minimal runnable example.
+"""Fake pipeline spec for the minimal runnable example.
 
 Uses fake workers with pre-baked data — fast, deterministic, no
 external dependencies. 4 fake documents produce 18 chunks and

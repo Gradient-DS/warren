@@ -190,8 +190,9 @@ def test_message_task_exception_is_logged(caplog: pytest.LogCaptureFixture) -> N
 
 
 def test_settle_absorbs_internal_cancellation(caplog: pytest.LogCaptureFixture) -> None:
-    """aiormq cancels the drain future when the channel closes mid-ack; that
-    CancelledError is not a cancellation of *our* task and is logged."""
+    """Aiormq cancels the drain future when the channel closes mid-ack; that
+    CancelledError is not a cancellation of *our* task and is logged.
+    """
     manager = make_manager(FakeWorker())
     message = FakeIncomingMessage(settle_error=asyncio.CancelledError())
 

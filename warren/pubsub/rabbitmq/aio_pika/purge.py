@@ -1,5 +1,4 @@
-"""
-Purge RabbitMQ queues and optionally delete an exchange.
+"""Purge RabbitMQ queues and optionally delete an exchange.
 
 Framework-level utility for cleaning up RabbitMQ state between runs.
 Queue/exchange names are caller-provided — no hardcoded topology knowledge.

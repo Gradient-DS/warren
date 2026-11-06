@@ -48,8 +48,7 @@ _FETCH_ERROR_BACKOFF_SECONDS = 5.0
 
 
 class KafkaConsumerManager(ConsumerManagerBase):
-    """
-    Kafka consumer manager that bridges message queue operations with application workers.
+    """Kafka consumer manager that bridges message queue operations with application workers.
 
     This class handles all Kafka-specific concerns (consumer lifecycle, offset
     management, retry logic) while delegating business logic to a worker function
@@ -118,8 +117,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
         self._fetch_error_backoff: float = _FETCH_ERROR_BACKOFF_SECONDS
 
     async def setup(self) -> None:
-        """
-        Initialize Kafka resources for consumption.
+        """Initialize Kafka resources for consumption.
 
         - Sets up all publishers.
         - Ensures the configured topic exists.
@@ -162,8 +160,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
             raise PubSubSetupError(msg) from e
 
     async def start_consuming(self) -> None:
-        """
-        Begin consuming messages from the configured topic.
+        """Begin consuming messages from the configured topic.
 
         Launches the poll loop: messages are fetched one at a time and
         processed sequentially (≙ prefetch_count 1), with the offset
@@ -177,8 +174,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
         self._poll_task.add_done_callback(self._on_poll_loop_done)
 
     async def stop_consuming(self) -> None:
-        """
-        Gracefully stop message consumption and close Kafka resources.
+        """Gracefully stop message consumption and close Kafka resources.
 
         1. Signals shutdown (stops accepting new work)
         2. Cancels the poll loop (no new messages fetched)

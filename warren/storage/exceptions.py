@@ -1,5 +1,4 @@
-"""
-Common storage exception base classes.
+"""Common storage exception base classes.
 
 Domain-specific storage modules derive from these for consistent
 exception handling across the framework. Callers can catch the base

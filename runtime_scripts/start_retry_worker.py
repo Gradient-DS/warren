@@ -1,5 +1,4 @@
-r"""
-Retry worker launcher.
+r"""Retry worker launcher.
 
 Starts a ``RetryWorkerRunner`` that consumes ``soft-failure`` messages
 from the processing exchange, persists them, and republishes after a

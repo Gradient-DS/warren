@@ -1,5 +1,4 @@
-"""
-Abstract base for publishing job documents into the processing pipeline.
+"""Abstract base for publishing job documents into the processing pipeline.
 
 Orchestrates the load → register → publish flow for each document and
 automatically records outcomes via ``PublishingTrackerInterface``. Concrete

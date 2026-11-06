@@ -1,5 +1,4 @@
-"""
-Topic-exchange variant of the fake pipeline.
+"""Topic-exchange variant of the fake pipeline.
 
 Same three workers as the fanout example (parse → chunk → embed), but on a
 **topic** exchange: instead of broadcasting every message to every worker,

@@ -1,5 +1,4 @@
-"""
-Document source discovery utilities.
+"""Document source discovery utilities.
 
 Provides functions to discover documents from local directories or GCS
 buckets. Used by publisher scripts to build the source list for job

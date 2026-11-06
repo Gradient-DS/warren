@@ -1,5 +1,6 @@
 """Pins the readiness endpoint: status codes per path, the JSON body, a
-bind failure that is reported rather than raised, and a clean stop."""
+bind failure that is reported rather than raised, and a clean stop.
+"""
 
 import asyncio
 import json

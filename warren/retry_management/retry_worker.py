@@ -1,5 +1,4 @@
-"""
-Retry worker -- persists messages and schedules delayed republishing.
+"""Retry worker -- persists messages and schedules delayed republishing.
 
 Consumes ``data_type: "soft-failure"`` messages from the observer
 exchange, unwraps the failed message, stores it durably, and uses
@@ -309,7 +308,8 @@ class RetryWorker(AsyncProcessingWorkerBase):
         expected_generation: str | int | None,
     ) -> None:
         """Synchronous callback for ``call_later`` -- creates async
-        republish task."""
+        republish task.
+        """
         self._pending_timers.pop(retry_key, None)
         self._spawn_republish(retry_key, expected_generation)
 

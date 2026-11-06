@@ -1,5 +1,4 @@
-"""
-Protocols, type aliases, and exceptions for document fetching.
+"""Protocols, type aliases, and exceptions for document fetching.
 
 Defines the contract between workers and the payload-fetching layer (the
 claim-check pattern: messages carry a location, not bytes). Workers depend

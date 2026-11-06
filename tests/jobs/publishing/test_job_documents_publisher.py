@@ -69,9 +69,7 @@ class _FakeJobStore:
     async def update_num_documents(self, job_id: str, num_documents: int) -> None:
         self.num_documents = num_documents
 
-    async def update_completion(
-        self, job_id: str, completed: bool, with_failures: bool
-    ) -> bool:
+    async def update_completion(self, job_id: str, completed: bool, with_failures: bool) -> bool:
         if self.completion is not None and self.completion[0]:
             return False
         self.completion = (completed, with_failures)
@@ -94,9 +92,7 @@ class _StubPublisher(JobDocumentsPublisher):
     async def _register_document(self, job_id: str, doc_data: Any) -> str:
         return f"doc-{doc_data['src']}"
 
-    def _create_message(
-        self, job_id: str, doc_id: str, doc_data: Any, job_parameters: dict
-    ) -> dict:
+    def _create_message(self, job_id: str, doc_id: str, doc_data: Any, job_parameters: dict) -> dict:
         return {"job_id": job_id, "doc_id": doc_id}
 
     def _get_source_id(self, source: Any) -> str:
@@ -131,9 +127,7 @@ def test_record_failure_raising_does_not_abort_loop() -> None:
     pub = _FakePublisher()
     tracker = _FakeTracker(fail_failure_stages=("load",))
     store = _FakeJobStore()
-    publisher = _StubPublisher(
-        publisher=pub, tracker=tracker, job_store=store, fail_load_for=("b",)
-    )
+    publisher = _StubPublisher(publisher=pub, tracker=tracker, job_store=store, fail_load_for=("b",))
 
     result = asyncio.run(publisher.publish_job("job-1", _agen(["a", "b", "c"])))
 
@@ -148,9 +142,7 @@ def test_publication_carries_scope_and_restores_context() -> None:
 
     async def scenario() -> None:
         pub = _FakePublisher()
-        publisher = _StubPublisher(
-            publisher=pub, tracker=_FakeTracker(), job_store=_FakeJobStore()
-        )
+        publisher = _StubPublisher(publisher=pub, tracker=_FakeTracker(), job_store=_FakeJobStore())
         token = current_scope.set("outer")
         try:
             await publisher.publish_job("job-1", _agen(["a"]), scope="a")

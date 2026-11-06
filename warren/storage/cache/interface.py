@@ -110,9 +110,7 @@ class CacheInterface[T](Protocol):
         """
         ...
 
-    async def set_many(
-        self, items: dict[str, T], ttl_seconds: int | None = None
-    ) -> None:
+    async def set_many(self, items: dict[str, T], ttl_seconds: int | None = None) -> None:
         """
         Store multiple key-value pairs.
 
@@ -160,12 +158,15 @@ async def get_or_set[T](
     from functools import partial
     from warren.storage.cache import MemoryCache, get_or_set
 
+
     async def load(key: str) -> dict:
         return {"key": key}
+
 
     async def main() -> None:
         cached = partial(get_or_set, MemoryCache[dict]())
         print(await cached("doc-1", lambda: load("doc-1")))
+
 
     asyncio.run(main())
     ```

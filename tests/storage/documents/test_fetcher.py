@@ -144,9 +144,7 @@ def test_throttled_error_passes_through_unwrapped() -> None:
         async def __call__(self, location) -> bytes:
             raise error
 
-    fetcher = CachedDocumentFetcher(
-        cache=_FakeBytesCache(), resolvers={"path": _Throttling()}
-    )
+    fetcher = CachedDocumentFetcher(cache=_FakeBytesCache(), resolvers={"path": _Throttling()})
 
     with pytest.raises(DocumentThrottledError) as excinfo:
         asyncio.run(fetcher("doc-1", _LOCATION, job_id="job-a"))

@@ -21,9 +21,7 @@ The interface uses a generic type parameter `T` to support different value types
 ```python
 class CacheInterface(Protocol[T]):
     async def get(self, key: str) -> Optional[T]: ...
-    async def set(
-        self, key: str, value: T, ttl_seconds: Optional[int] = None
-    ) -> None: ...
+    async def set(self, key: str, value: T, ttl_seconds: Optional[int] = None) -> None: ...
 
     # ... etc
 ```

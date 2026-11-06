@@ -100,11 +100,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         #   exchange — set only when the data exchange can't be observed in place
         #   (direct). None for fanout/topic, so they don't double their traffic.
         # The base tracks all of them for setup/teardown.
-        all_publishers = [
-            p
-            for p in (data_publisher, control_publisher, observer_publisher)
-            if p is not None
-        ]
+        all_publishers = [p for p in (data_publisher, control_publisher, observer_publisher) if p is not None]
         super().__init__(
             consumer,
             publishers=all_publishers,
@@ -156,9 +152,7 @@ class RMQConsumerManager(ConsumerManagerBase):
             raise PubSubSetupError(msg) from e
         self._channel = channel
 
-        prefetch_count = max(
-            self._config.consumer.prefetch_count, self._config.consumer.concurrency or 0
-        )
+        prefetch_count = max(self._config.consumer.prefetch_count, self._config.consumer.concurrency or 0)
         try:
             await channel.set_qos(prefetch_count=prefetch_count)
         except Exception as e:
@@ -209,10 +203,7 @@ class RMQConsumerManager(ConsumerManagerBase):
             try:
                 await self._queue.cancel(self._consumer_tag)
             except Exception as e:
-                self._log.warning(
-                    f"Error cancelling queue consumption: "
-                    f"{summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error cancelling queue consumption: {summarize_exception_chain(e)}")
 
         if self._in_flight_tasks:
             try:
@@ -232,9 +223,7 @@ class RMQConsumerManager(ConsumerManagerBase):
             try:
                 await self._channel.close()
             except Exception as e:
-                self._log.warning(
-                    f"Error closing consumer channel: {summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error closing consumer channel: {summarize_exception_chain(e)}")
 
         # Tear down all publishers — best-effort so one failure cannot
         # block the rest of shutdown.
@@ -242,10 +231,7 @@ class RMQConsumerManager(ConsumerManagerBase):
             try:
                 await publisher.teardown()
             except Exception as e:
-                self._log.warning(
-                    f"Error tearing down publisher during shutdown: "
-                    f"{summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error tearing down publisher during shutdown: {summarize_exception_chain(e)}")
 
         # Consumer stopped.
         # Connection is owned by RMQConnectionManager — not our responsibility to close.
@@ -258,12 +244,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         its absence reads as unknown, never as lost.
         """
         conn = self._connection_manager.connection
-        connected = (
-            conn is not None
-            and not conn.is_closed
-            and conn.transport is not None
-            and conn.connected.is_set()
-        )
+        connected = conn is not None and not conn.is_closed and conn.transport is not None and conn.connected.is_set()
         if not connected:
             return ConsumerHealth(
                 handler_timeout_seconds=self._handler_timeout_seconds,
@@ -279,23 +260,15 @@ class RMQConsumerManager(ConsumerManagerBase):
         blocked = not await _completes(conn.transport.ready(), probe_timeout)
         channel = self._channel
         channel_open = channel is not None and not channel.is_closed
-        registered = (
-            await self._consumer_registered(channel, probe_timeout)
-            if channel_open
-            else None
-        )
+        registered = await self._consumer_registered(channel, probe_timeout) if channel_open else None
         if blocked:
             detail = "broker blocked this connection (Connection.Blocked)"
         elif not channel_open:
             detail = "consume channel closed"
         elif registered is False:
-            detail = (
-                f"consumer tag {self._consumer_tag!r} not registered on the channel"
-            )
+            detail = f"consumer tag {self._consumer_tag!r} not registered on the channel"
         elif registered is None:
-            detail = (
-                "consumer registration unknown (probe timed out or attribute missing)"
-            )
+            detail = "consumer registration unknown (probe timed out or attribute missing)"
         else:
             detail = ""
         return ConsumerHealth(
@@ -308,13 +281,9 @@ class RMQConsumerManager(ConsumerManagerBase):
             detail=detail,
         )
 
-    async def _consumer_registered(
-        self, channel: AbstractChannel, probe_timeout: float
-    ) -> bool | None:
+    async def _consumer_registered(self, channel: AbstractChannel, probe_timeout: float) -> bool | None:
         try:
-            underlay = await asyncio.wait_for(
-                channel.get_underlay_channel(), timeout=probe_timeout
-            )
+            underlay = await asyncio.wait_for(channel.get_underlay_channel(), timeout=probe_timeout)
         except (TimeoutError, ChannelInvalidStateError):
             return None
         consumers = getattr(underlay, "consumers", None)
@@ -340,9 +309,7 @@ class RMQConsumerManager(ConsumerManagerBase):
             return
         exc = task.exception()
         if exc is not None:
-            self._log.error(
-                f"Unhandled error in message task: {summarize_exception_chain(exc)}"
-            )
+            self._log.error(f"Unhandled error in message task: {summarize_exception_chain(exc)}")
 
     async def _process_message(self, message: AbstractIncomingMessage) -> None:
         """Process a single message: deserialize, execute worker, handle ack/nack."""
@@ -350,9 +317,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         try:
             body = json.loads(message.body)
         except json.JSONDecodeError as e:
-            self._log.error(
-                f"Failed to deserialize message: {summarize_exception_chain(e)}"
-            )
+            self._log.error(f"Failed to deserialize message: {summarize_exception_chain(e)}")
             await self._settle(message, "reject", identity="?")
             return
 
@@ -463,8 +428,7 @@ class RMQConsumerManager(ConsumerManagerBase):
             if task is None or task.cancelling():
                 raise
             self._log.error(
-                f"[{identity}] {action} interrupted by a channel close; "
-                f"the broker will redeliver this delivery."
+                f"[{identity}] {action} interrupted by a channel close; the broker will redeliver this delivery."
             )
             return False
         return True
@@ -493,8 +457,7 @@ class RMQConsumerManager(ConsumerManagerBase):
             return True
         if self._control_publisher is None:
             self._log.warning(
-                f"[{identity}] Redelivered (delivery {count}) but no control "
-                f"publisher to count it; processing"
+                f"[{identity}] Redelivered (delivery {count}) but no control publisher to count it; processing"
             )
             return False
         body[DELIVERY_COUNT_FIELD] = count
@@ -565,10 +528,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         # Check if max retries exceeded (skip when redelivery does not
         # consume a slot — the worker controls termination itself).
         if error.retry_count_consumed and new_count > retry_max:
-            self._log.error(
-                f"[{identity}] Max retries ({retry_max}) exceeded, "
-                f"treating as hard failure."
-            )
+            self._log.error(f"[{identity}] Max retries ({retry_max}) exceeded, treating as hard failure.")
             await self._handle_hard_failure(message, body, error)
             return
 
@@ -579,8 +539,7 @@ class RMQConsumerManager(ConsumerManagerBase):
             )
         else:
             self._log.info(
-                f"[{identity}] Delayed redelivery in {retry_after}s "
-                f"(no retry slot consumed): {error.reason}"
+                f"[{identity}] Delayed redelivery in {retry_after}s (no retry slot consumed): {error.reason}"
             )
 
         # Embed retry metadata in the failed message, and stamp the routing key
@@ -633,10 +592,7 @@ class RMQConsumerManager(ConsumerManagerBase):
             self._log_delivery_lost(identity, "not requeued")
             return
         delay = self._retry_config.fallback_requeue_delay
-        self._log.warning(
-            f"[{identity}] Publish failed, requeued after {delay}s: "
-            f"{summarize_exception_chain(error)}"
-        )
+        self._log.warning(f"[{identity}] Publish failed, requeued after {delay}s: {summarize_exception_chain(error)}")
         await asyncio.sleep(delay)
         await self._settle(message, "requeue", identity=identity)
 
@@ -661,10 +617,7 @@ class RMQConsumerManager(ConsumerManagerBase):
                 f"failure not recorded: {summarize_exception_chain(error)}",
             )
             return
-        self._log.error(
-            f"[{identity}] Hard failure (message rejected): "
-            f"{summarize_exception_chain(error)}"
-        )
+        self._log.error(f"[{identity}] Hard failure (message rejected): {summarize_exception_chain(error)}")
 
         if self._publish_hard_failures and self._control_publisher is not None:
             hard_failure_msg: dict = {
@@ -682,8 +635,7 @@ class RMQConsumerManager(ConsumerManagerBase):
                 await self._control_publisher(hard_failure_msg)
             except Exception as pub_error:
                 self._log.warning(
-                    f"[{identity}] Failed to publish hard-failure envelope: "
-                    f"{summarize_exception_chain(pub_error)}"
+                    f"[{identity}] Failed to publish hard-failure envelope: {summarize_exception_chain(pub_error)}"
                 )
 
         await self._settle(message, "reject", identity=identity)
@@ -692,9 +644,7 @@ class RMQConsumerManager(ConsumerManagerBase):
         """Calculate delay for this retry attempt with exponential backoff and optional jitter."""
         base = error.retry_after or self._retry_config.initial_delay
         exp_base = error.backoff_base or self._retry_config.backoff_base
-        use_jitter = (
-            error.jitter if error.jitter is not None else self._retry_config.jitter
-        )
+        use_jitter = error.jitter if error.jitter is not None else self._retry_config.jitter
 
         # attempt is 0 for a deferral that consumed no retry slot; clamp so
         # the exponent never goes negative and halves the requested delay.

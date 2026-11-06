@@ -74,9 +74,7 @@ def test_resolve_http_follows_redirects_by_default() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/permalink":
-            return httpx.Response(
-                307, headers={"Location": "https://cdn.example.com/real.pdf"}
-            )
+            return httpx.Response(307, headers={"Location": "https://cdn.example.com/real.pdf"})
         return httpx.Response(200, content=b"%PDF-1.7")
 
     loc = DocumentURLLocation(url="https://example.com/permalink")
@@ -96,17 +94,13 @@ def test_build_client_follows_redirects_by_default(
 
 
 @pytest.mark.parametrize("raw", ["false", "FALSE", "0", "no", "off", " Off "])
-def test_build_client_redirects_can_be_disabled(
-    monkeypatch: pytest.MonkeyPatch, raw: str
-) -> None:
+def test_build_client_redirects_can_be_disabled(monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
     monkeypatch.setenv("HTTP_FOLLOW_REDIRECTS", raw)
     assert build_client().follow_redirects is False
 
 
 @pytest.mark.parametrize("raw", ["true", "TRUE", "1", "yes", "on"])
-def test_build_client_redirects_can_be_enabled_explicitly(
-    monkeypatch: pytest.MonkeyPatch, raw: str
-) -> None:
+def test_build_client_redirects_can_be_enabled_explicitly(monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
     monkeypatch.setenv("HTTP_FOLLOW_REDIRECTS", raw)
     assert build_client().follow_redirects is True
 
@@ -148,16 +142,12 @@ def test_resolve_http_surfaces_the_redirect_when_following_is_off() -> None:
     """The old behaviour is still reachable, and still loses the document."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            307, headers={"Location": "https://cdn.example.com/real.pdf"}
-        )
+        return httpx.Response(307, headers={"Location": "https://cdn.example.com/real.pdf"})
 
     loc = DocumentURLLocation(url="https://example.com/permalink")
 
     async def run() -> None:
-        async with build_client(
-            follow_redirects=False, transport=httpx.MockTransport(handler)
-        ) as client:
+        async with build_client(follow_redirects=False, transport=httpx.MockTransport(handler)) as client:
             await resolve_http(loc, client=client)
 
     with pytest.raises(httpx.HTTPStatusError):

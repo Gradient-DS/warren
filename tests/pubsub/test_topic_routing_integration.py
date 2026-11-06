@@ -41,9 +41,7 @@ async def _run_topic_routing() -> tuple[str | None, str | None]:
     await mgr.setup()
     try:
         channel = await mgr.create_channel()
-        exchange = await declare_exchange(
-            channel, RMQExchangeConfig(name=exchange_name, type="topic", durable=False)
-        )
+        exchange = await declare_exchange(channel, RMQExchangeConfig(name=exchange_name, type="topic", durable=False))
         # Exclusive queues are connection-scoped and auto-removed on close
         # (RabbitMQ 4 blocks transient non-exclusive queues by default).
         queue_a = await declare_queue(

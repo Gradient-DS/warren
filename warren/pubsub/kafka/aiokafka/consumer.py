@@ -86,11 +86,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
         # control (soft/hard-failure envelopes), observer (result echo —
         # never set on Kafka, which is fanout-only and observed in place).
         # The base tracks all of them for setup/teardown.
-        all_publishers = [
-            p
-            for p in (data_publisher, control_publisher, observer_publisher)
-            if p is not None
-        ]
+        all_publishers = [p for p in (data_publisher, control_publisher, observer_publisher) if p is not None]
         super().__init__(
             consumer,
             publishers=all_publishers,
@@ -144,10 +140,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
         # so every worker type sees every message (fanout parity) while
         # instances of the same type share the partitions. Deployments
         # with platform-assigned group names set group_id explicitly.
-        group_id = (
-            self._config.consumer.group_id
-            or f"{self._config.topic.name}.{self._consumer.type}"
-        )
+        group_id = self._config.consumer.group_id or f"{self._config.topic.name}.{self._consumer.type}"
 
         try:
             kafka_consumer = self._connection_manager.create_consumer(
@@ -165,10 +158,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
             self._kafka_consumer = kafka_consumer
             await kafka_consumer.start()
         except Exception as e:
-            msg = (
-                f"Failed to start Kafka consumer for topic "
-                f"'{self._config.topic.name}' (group_id='{group_id}')"
-            )
+            msg = f"Failed to start Kafka consumer for topic '{self._config.topic.name}' (group_id='{group_id}')"
             raise PubSubSetupError(msg) from e
 
     async def start_consuming(self) -> None:
@@ -216,9 +206,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
             except asyncio.CancelledError:
                 pass
             except Exception as e:
-                self._log.warning(
-                    f"Error stopping poll loop: {summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error stopping poll loop: {summarize_exception_chain(e)}")
 
         if self._in_flight_task is not None and not self._in_flight_task.done():
             try:
@@ -233,10 +221,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
                     f"(timeout={self._config.consumer.on_shutdown_timeout}s)"
                 )
             except Exception as e:
-                self._log.warning(
-                    f"Error in in-flight message during shutdown: "
-                    f"{summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error in in-flight message during shutdown: {summarize_exception_chain(e)}")
 
         # Stop the Kafka consumer (ours to manage). Uncommitted offsets
         # stay with the group and redeliver after the rebalance.
@@ -244,9 +229,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
             try:
                 await self._kafka_consumer.stop()
             except Exception as e:
-                self._log.warning(
-                    f"Error stopping Kafka consumer: {summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error stopping Kafka consumer: {summarize_exception_chain(e)}")
 
         # Tear down all publishers — best-effort so one failure cannot
         # block the rest of shutdown.
@@ -254,10 +237,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
             try:
                 await publisher.teardown()
             except Exception as e:
-                self._log.warning(
-                    f"Error tearing down publisher during shutdown: "
-                    f"{summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error tearing down publisher during shutdown: {summarize_exception_chain(e)}")
 
         # Consumer stopped.
         # Admin client is owned by KafkaConnectionManager — not our responsibility to close.
@@ -327,9 +307,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
                 # catches only transport errors (commit/seek). Logged so
                 # the loop can move on — the uncommitted offset
                 # redelivers after a rebalance.
-                self._log.error(
-                    f"Error finalising message offsets: {summarize_exception_chain(e)}"
-                )
+                self._log.error(f"Error finalising message offsets: {summarize_exception_chain(e)}")
 
     def _clear_in_flight_task(self, task: asyncio.Task) -> None:
         """Drop the in-flight handle when its message task completes.
@@ -347,9 +325,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
             return
         exc = task.exception()
         if exc is not None:
-            self._log.error(
-                f"Poll loop terminated unexpectedly: {summarize_exception_chain(exc)}"
-            )
+            self._log.error(f"Poll loop terminated unexpectedly: {summarize_exception_chain(exc)}")
 
     async def _commit(self, message: ConsumerRecord) -> None:
         """Commit past the message — ≙ ack / reject(requeue=False).
@@ -375,9 +351,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
         try:
             body = json.loads(message.value)
         except (json.JSONDecodeError, TypeError) as e:
-            self._log.error(
-                f"Failed to deserialize message: {summarize_exception_chain(e)}"
-            )
+            self._log.error(f"Failed to deserialize message: {summarize_exception_chain(e)}")
             await self._commit(message)  # ≙ reject(requeue=False)
             return
 
@@ -463,10 +437,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
         # Check if max retries exceeded (skip when redelivery does not
         # consume a slot — the worker controls termination itself).
         if error.retry_count_consumed and new_count > retry_max:
-            self._log.error(
-                f"[{identity}] Max retries ({retry_max}) exceeded, "
-                f"treating as hard failure."
-            )
+            self._log.error(f"[{identity}] Max retries ({retry_max}) exceeded, treating as hard failure.")
             await self._handle_hard_failure(message, body, error)
             return
 
@@ -477,8 +448,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
             )
         else:
             self._log.info(
-                f"[{identity}] Delayed redelivery in {retry_after}s "
-                f"(no retry slot consumed): {error.reason}"
+                f"[{identity}] Delayed redelivery in {retry_after}s (no retry slot consumed): {error.reason}"
             )
 
         # Embed retry metadata in the failed message, and stamp an empty
@@ -528,8 +498,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
         identity = self._extract_identity(body)
         delay = self._retry_config.fallback_requeue_delay
         self._log.warning(
-            f"[{identity}] Publish failed, redelivered after {delay}s: "
-            f"{summarize_exception_chain(error)}"
+            f"[{identity}] Publish failed, redelivered after {delay}s: {summarize_exception_chain(error)}"
         )
         await asyncio.sleep(delay)
         self._seek_back(message)  # ≙ nack(requeue=True)
@@ -549,10 +518,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
         offset is still committed.
         """
         identity = self._extract_identity(body)
-        self._log.error(
-            f"[{identity}] Hard failure (message dropped): "
-            f"{summarize_exception_chain(error)}"
-        )
+        self._log.error(f"[{identity}] Hard failure (message dropped): {summarize_exception_chain(error)}")
 
         if self._publish_hard_failures and self._control_publisher is not None:
             hard_failure_msg: dict = {
@@ -570,8 +536,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
                 await self._control_publisher(hard_failure_msg)
             except Exception as pub_error:
                 self._log.warning(
-                    f"[{identity}] Failed to publish hard-failure envelope: "
-                    f"{summarize_exception_chain(pub_error)}"
+                    f"[{identity}] Failed to publish hard-failure envelope: {summarize_exception_chain(pub_error)}"
                 )
 
         await self._commit(message)  # ≙ reject(requeue=False)
@@ -580,9 +545,7 @@ class KafkaConsumerManager(ConsumerManagerBase):
         """Calculate delay for this retry attempt with exponential backoff and optional jitter."""
         base = error.retry_after or self._retry_config.initial_delay
         exp_base = error.backoff_base or self._retry_config.backoff_base
-        use_jitter = (
-            error.jitter if error.jitter is not None else self._retry_config.jitter
-        )
+        use_jitter = error.jitter if error.jitter is not None else self._retry_config.jitter
 
         # attempt is 0 for a deferral that consumed no retry slot; clamp so
         # the exponent never goes negative and halves the requested delay.

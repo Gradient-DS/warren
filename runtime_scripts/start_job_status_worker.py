@@ -111,9 +111,7 @@ async def start_job_status_worker(
         raise WarrenError(msg) from e
 
     exchange = resolve_observation_exchange(pipeline)
-    resolved_config = resolve_config_path(
-        Path(config_file) if config_file else None, pipeline_dir
-    )
+    resolved_config = resolve_config_path(Path(config_file) if config_file else None, pipeline_dir)
 
     await run(
         runner_factory_func=partial(JobStatusWorkerRunner, exchange=exchange),
@@ -134,9 +132,7 @@ def main() -> None:
     try:
         asyncio.run(start_job_status_worker(**vars(args), logger=module_logger))
     except Exception as e:
-        module_logger.error(
-            f"Start job status worker failed: {summarize_exception_chain(e)}"
-        )
+        module_logger.error(f"Start job status worker failed: {summarize_exception_chain(e)}")
         sys.exit(1)
 
 

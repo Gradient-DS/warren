@@ -80,7 +80,5 @@ def discover_gcs_pdfs(
     if max_docs > 0:
         keys = keys[:max_docs]
 
-    _module_logger.info(
-        "Discovered %d PDFs in gs://%s/%s", len(keys), bucket_name, prefix
-    )
+    _module_logger.info("Discovered %d PDFs in gs://%s/%s", len(keys), bucket_name, prefix)
     return keys

@@ -76,21 +76,12 @@ class BinaryResultsStore(Base):
         self._cache_ttl_seconds = cache_ttl_seconds
         self._document_store: DocumentStoreInterface = document_store
         self._cache: CacheInterface[bytes] | None = cache
-        self._result_type: str = (
-            result_type
-            if result_type is not None
-            else document_store.get_document_type()
-        )
+        self._result_type: str = result_type if result_type is not None else document_store.get_document_type()
 
     async def setup(self) -> None:
         """Validate the document store's unique composite index."""
-        if not await self._document_store.has_unique_index(
-            ("doc_id", "job_id", "part_idx")
-        ):
-            msg = (
-                "Document store must have a unique composite index on "
-                "(doc_id, job_id, part_idx)."
-            )
+        if not await self._document_store.has_unique_index(("doc_id", "job_id", "part_idx")):
+            msg = "Document store must have a unique composite index on (doc_id, job_id, part_idx)."
             raise ValueError(msg)
 
     async def store_bytes(
@@ -154,9 +145,7 @@ class BinaryResultsStore(Base):
         if cached is not None:
             return cached
 
-        async for found in self._document_store.query(
-            {"doc_id": doc_id, "part_idx": part_idx, "job_id": job_id}
-        ):
+        async for found in self._document_store.query({"doc_id": doc_id, "part_idx": part_idx, "job_id": job_id}):
             payload = found.get(_PAYLOAD_FIELD)
             if not isinstance(payload, (bytes, bytearray)):
                 msg = (
@@ -168,10 +157,7 @@ class BinaryResultsStore(Base):
             await self._safe_cache_set(doc_id, payload_bytes, job_id=job_id)
             return payload_bytes
 
-        msg = (
-            f"No binary result for doc_id={doc_id}, job_id={job_id}, "
-            f"part_idx={part_idx}."
-        )
+        msg = f"No binary result for doc_id={doc_id}, job_id={job_id}, part_idx={part_idx}."
         raise ResultNotFound(msg)
 
     async def query_metadata(
@@ -184,9 +170,7 @@ class BinaryResultsStore(Base):
 
         Use it to list records without the transfer of the payload bytes.
         """
-        async for doc in self._document_store.query(
-            {"doc_id": doc_id, "job_id": job_id}
-        ):
+        async for doc in self._document_store.query({"doc_id": doc_id, "job_id": job_id}):
             # Strip the potentially large payload before handing it up.
             doc.pop(_PAYLOAD_FIELD, None)
             yield doc
@@ -210,8 +194,7 @@ class BinaryResultsStore(Base):
             raise
         except Exception as exc:
             self._log.warning(
-                f"BinaryResultsStore cache set failed for doc_id={doc_id}: "
-                f"{summarize_exception_chain(exc)}"
+                f"BinaryResultsStore cache set failed for doc_id={doc_id}: {summarize_exception_chain(exc)}"
             )
 
     async def _safe_cache_get(
@@ -228,7 +211,6 @@ class BinaryResultsStore(Base):
             raise
         except Exception as exc:
             self._log.warning(
-                f"BinaryResultsStore cache get failed for doc_id={doc_id}: "
-                f"{summarize_exception_chain(exc)}"
+                f"BinaryResultsStore cache get failed for doc_id={doc_id}: {summarize_exception_chain(exc)}"
             )
             return None

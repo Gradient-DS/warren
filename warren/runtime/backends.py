@@ -246,9 +246,7 @@ def create_consumer_manager(
             raise ValueError(msg)
         binding_keys = (binding_key,)
     if exchange.type == "fanout" and binding_keys:
-        get_logger(__name__).debug(
-            "Ignoring binding keys on fanout exchange %s", exchange.name
-        )
+        get_logger(__name__).debug("Ignoring binding keys on fanout exchange %s", exchange.name)
         binding_keys = ()
 
     if config.backend == "memory":
@@ -279,12 +277,8 @@ def create_consumer_manager(
 
         # Pre-resolve the group here so the naming convention is owned by
         # the factory, not split with the manager's internal fallback.
-        group_id = (
-            config.kafka.consumer.group_id or f"{config.kafka.topic.name}.{worker_type}"
-        )
-        consumer_config = config.kafka.consumer.model_copy(
-            update={"group_id": group_id}
-        )
+        group_id = config.kafka.consumer.group_id or f"{config.kafka.topic.name}.{worker_type}"
+        consumer_config = config.kafka.consumer.model_copy(update={"group_id": group_id})
         manager_config = KafkaConsumerManagerConfig(
             topic=config.kafka.topic,
             consumer=consumer_config,

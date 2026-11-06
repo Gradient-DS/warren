@@ -26,9 +26,7 @@ from warren.storage.document_store.memory import MemoryDocumentStore
 @pytest.mark.parametrize("redelivered", [False, True])
 @pytest.mark.parametrize("recovered", [False, True])
 @pytest.mark.parametrize("priority", [0, 2])
-def test_retry_replays_original_lane_key_and_amqp_priority(
-    redelivered: bool, recovered: bool, priority: int
-) -> None:
+def test_retry_replays_original_lane_key_and_amqp_priority(redelivered: bool, recovered: bool, priority: int) -> None:
     async def scenario() -> None:
         control = FakePublisher()
         manager = make_manager(
@@ -56,9 +54,7 @@ def test_retry_replays_original_lane_key_and_amqp_priority(
         )
         await publisher.setup()
         store = MemoryDocumentStore(collection_name="retries", doc_id_field="retry_key")
-        retry = RetryWorker(
-            "retry", retry_store=store, republish_publisher=publisher, clock=lambda: 0
-        )
+        retry = RetryWorker("retry", retry_store=store, republish_publisher=publisher, clock=lambda: 0)
         await retry(json.loads(json.dumps(control.published[0])))
         row = await anext(store.query({}))
         if recovered:

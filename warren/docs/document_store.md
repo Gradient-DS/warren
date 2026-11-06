@@ -219,9 +219,7 @@ class CachedDocumentFetcher(Base):
     async def _resolve(self, document_location: DocumentLocation) -> bytes:
         resolver = self._resolvers.get(document_location.location_type)
         if resolver is None:
-            raise ValueError(
-                f"No resolver for location type: {document_location.location_type}"
-            )
+            raise ValueError(f"No resolver for location type: {document_location.location_type}")
         return await resolver(document_location)
 ```
 

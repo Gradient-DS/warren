@@ -72,9 +72,7 @@ class KafkaConnectionManager(Base):
             try:
                 await self._admin.close()
             except Exception as e:
-                self._log.warning(
-                    f"Error closing admin client: {summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error closing admin client: {summarize_exception_chain(e)}")
             self._admin = None
 
     @property

@@ -38,8 +38,7 @@ def _render(status: dict, stages: list[dict]) -> str:
     ]
     for s in sorted(stages, key=lambda x: x["data_type"]):
         lines.append(
-            f"  {s['data_type']:<22} {s['total']:>6} {s['succeeded']:>6} "
-            f"{s['soft_failed']:>6} {s['hard_failed']:>6}"
+            f"  {s['data_type']:<22} {s['total']:>6} {s['succeeded']:>6} {s['soft_failed']:>6} {s['hard_failed']:>6}"
         )
     done = status.get("completed", False)
     state = "COMPLETED" if done else "running"
@@ -80,12 +79,8 @@ async def _watch(config: RuntimeConfig, job_name: str, *, once: bool) -> None:
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Watch a job's progress")
     parser.add_argument("--job-name", required=True, help="Job name (in metadata).")
-    parser.add_argument(
-        "--config-file", type=Path, required=True, help="RuntimeConfig YAML."
-    )
-    parser.add_argument(
-        "--once", action="store_true", default=False, help="Print one snapshot, exit."
-    )
+    parser.add_argument("--config-file", type=Path, required=True, help="RuntimeConfig YAML.")
+    parser.add_argument("--once", action="store_true", default=False, help="Print one snapshot, exit.")
     return parser.parse_args()
 
 

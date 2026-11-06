@@ -29,9 +29,7 @@ def _health(
     channel: FakeChannel | None = None,
     tag: str | None = TAG,
 ) -> ConsumerHealth:
-    manager = make_manager(
-        FakeWorker(), connection_manager=FakeConnectionManager(connection)
-    )
+    manager = make_manager(FakeWorker(), connection_manager=FakeConnectionManager(connection))
     manager._channel = channel  # type: ignore[assignment]
     manager._consumer_tag = tag
     return asyncio.run(manager.health(probe_timeout=0.05))

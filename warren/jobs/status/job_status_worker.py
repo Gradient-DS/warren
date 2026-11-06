@@ -159,8 +159,7 @@ class JobStatusWorker(FilteringWorkerBase):
 
         if doc_id is None:
             self._log.warning(
-                f"Job {job_id}: success message with data_type="
-                f"'{message.get('data_type')}' has no doc_id, skipping"
+                f"Job {job_id}: success message with data_type='{message.get('data_type')}' has no doc_id, skipping"
             )
             return
 
@@ -186,8 +185,7 @@ class JobStatusWorker(FilteringWorkerBase):
 
         if doc_id is None:
             self._log.warning(
-                f"Job {job_id}: soft-failure for data_type="
-                f"'{inner.get('data_type')}' has no doc_id, skipping"
+                f"Job {job_id}: soft-failure for data_type='{inner.get('data_type')}' has no doc_id, skipping"
             )
             return
 
@@ -216,8 +214,7 @@ class JobStatusWorker(FilteringWorkerBase):
 
         if doc_id is None:
             self._log.warning(
-                f"Job {job_id}: hard-failure for data_type="
-                f"'{inner.get('data_type')}' has no doc_id, skipping"
+                f"Job {job_id}: hard-failure for data_type='{inner.get('data_type')}' has no doc_id, skipping"
             )
             return
 
@@ -245,9 +242,7 @@ class JobStatusWorker(FilteringWorkerBase):
             return None
 
         final_data_type = job["final_data_type"]
-        completed_count = await self._job_results_store.count_completed_docs(
-            job_id, final_data_type
-        )
+        completed_count = await self._job_results_store.count_completed_docs(job_id, final_data_type)
         hard_failed_count = await self._job_results_store.count_hard_failed_docs(job_id)
         total_resolved = completed_count + hard_failed_count
 
@@ -263,10 +258,7 @@ class JobStatusWorker(FilteringWorkerBase):
         if not transitioned:
             return None
 
-        self._log.info(
-            f"Job {job_id} completed: {completed_count} succeeded, "
-            f"{hard_failed_count} failed"
-        )
+        self._log.info(f"Job {job_id} completed: {completed_count} succeeded, {hard_failed_count} failed")
 
         # Forward job parameters so downstream consumers can filter on
         # them in should_process without a read of the JobStore.

@@ -107,17 +107,13 @@ async def make_consumer(
 def test_timeout_uses_retry_policy(backend: str, retry_count: int) -> None:
     async def run() -> None:
         publisher = FakePublisher()
-        manager, process = await make_consumer(
-            backend, WaitingWorker(), publisher, 0.001
-        )
+        manager, process = await make_consumer(backend, WaitingWorker(), publisher, 0.001)
         await process({"data_type": "input", "retry": {"count": retry_count}})
         envelope = publisher.published[0]
         if retry_count == 0:
             assert envelope["data_type"] == "soft-failure"
             assert envelope["data"]["retry"]["count"] == 1
-            assert (
-                envelope["data"]["retry"]["reason"] == "handler timed out after 0.001s"
-            )
+            assert envelope["data"]["retry"]["reason"] == "handler timed out after 0.001s"
         else:
             assert envelope["data_type"] == "hard-failure"
         assert (await manager.health()).in_flight_handlers == 0
@@ -173,9 +169,7 @@ def test_sync_handler_stays_in_health_until_thread_finishes() -> None:
             return message
 
     async def run() -> None:
-        manager, process = await make_consumer(
-            "memory", SyncWorker(), FakePublisher(), 0.001
-        )
+        manager, process = await make_consumer("memory", SyncWorker(), FakePublisher(), 0.001)
         try:
             await process({})
             await asyncio.sleep(0.003)
@@ -191,9 +185,7 @@ def test_sync_handler_stays_in_health_until_thread_finishes() -> None:
 def test_handler_timeout_error_is_not_a_deadline_expiry() -> None:
     async def run() -> None:
         publisher = FakePublisher()
-        _, process = await make_consumer(
-            "memory", FakeWorker(error=TimeoutError("upstream")), publisher, 1
-        )
+        _, process = await make_consumer("memory", FakeWorker(error=TimeoutError("upstream")), publisher, 1)
         await process({})
         assert publisher.published[0]["data_type"] == "hard-failure"
 

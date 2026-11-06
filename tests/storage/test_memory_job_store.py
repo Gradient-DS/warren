@@ -65,12 +65,8 @@ def test_update_completion_preserves_the_first_completion(make) -> None:
         job_id = await store.create_job("final")
         assert await store.update_completion(job_id, completed=True, with_failures=True)
         done = await store.get_status(job_id)
-        assert not await store.update_completion(
-            job_id, completed=True, with_failures=False
-        )
-        assert not await store.update_completion(
-            job_id, completed=False, with_failures=False
-        )
+        assert not await store.update_completion(job_id, completed=True, with_failures=False)
+        assert not await store.update_completion(job_id, completed=False, with_failures=False)
         assert await store.get_status(job_id) == done
         return done
 

@@ -31,10 +31,7 @@ def test_results_store_supports_multiple_parts() -> None:
         store = await MemoryStoreRegistry().results_store("chunks")
         for i in range(3):
             await store.store(result={"i": i}, doc_id="d1", part_idx=i, job_id="j")
-        parts = [
-            r.result
-            async for r in store.stream_doc_processing_results(doc_id="d1", job_id="j")
-        ]
+        parts = [r.result async for r in store.stream_doc_processing_results(doc_id="d1", job_id="j")]
         return sorted(parts, key=lambda p: p["i"])
 
     assert asyncio.run(scenario()) == [{"i": 0}, {"i": 1}, {"i": 2}]

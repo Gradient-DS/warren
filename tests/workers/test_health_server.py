@@ -11,9 +11,7 @@ from warren.pubsub.common import ConsumerHealth
 from warren.workers.health import HealthConfig, HealthServer
 
 
-READY = ConsumerHealth(
-    connected=True, blocked=False, channel_open=True, consumer_registered=True
-)
+READY = ConsumerHealth(connected=True, blocked=False, channel_open=True, consumer_registered=True)
 LOST = ConsumerHealth(
     connected=True,
     blocked=False,

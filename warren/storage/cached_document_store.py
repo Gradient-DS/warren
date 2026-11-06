@@ -80,9 +80,7 @@ class CachedDocumentStore(Base):
             except HardFailureException:
                 raise
             except Exception as e:
-                self._log.warning(
-                    f"Cache invalidation failed: {summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Cache invalidation failed: {summarize_exception_chain(e)}")
         for doc_id, doc in zip(ids, docs, strict=True):
             if doc_id is not None:
                 await self._safe_cache_set(doc_id, doc)
@@ -140,10 +138,7 @@ class CachedDocumentStore(Base):
         except HardFailureException:
             raise
         except Exception as e:
-            self._log.warning(
-                f"Cache exists check failed for doc_id={doc_id}: "
-                f"{summarize_exception_chain(e)}"
-            )
+            self._log.warning(f"Cache exists check failed for doc_id={doc_id}: {summarize_exception_chain(e)}")
         return await self._store.exists(doc_id)
 
     async def get_document(
@@ -165,9 +160,7 @@ class CachedDocumentStore(Base):
         except HardFailureException:
             raise
         except Exception as e:
-            self._log.warning(
-                f"Cache get failed for doc_id={doc_id}: {summarize_exception_chain(e)}"
-            )
+            self._log.warning(f"Cache get failed for doc_id={doc_id}: {summarize_exception_chain(e)}")
 
         doc = await self._store.get_document(doc_id)
         await self._safe_cache_set(doc_id, doc)
@@ -206,9 +199,7 @@ class CachedDocumentStore(Base):
         except HardFailureException:
             raise
         except Exception as e:
-            self._log.warning(
-                f"Cache set failed for key={key}: {summarize_exception_chain(e)}"
-            )
+            self._log.warning(f"Cache set failed for key={key}: {summarize_exception_chain(e)}")
 
     async def _safe_cache_delete(self, key: str) -> None:
         """Delete cache entry, logging failures as warnings."""
@@ -217,6 +208,4 @@ class CachedDocumentStore(Base):
         except HardFailureException:
             raise
         except Exception as e:
-            self._log.warning(
-                f"Cache delete failed for key={key}: {summarize_exception_chain(e)}"
-            )
+            self._log.warning(f"Cache delete failed for key={key}: {summarize_exception_chain(e)}")

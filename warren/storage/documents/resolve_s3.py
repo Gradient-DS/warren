@@ -52,10 +52,7 @@ async def resolve_s3(
         except ClientError as exc:
             code = exc.response["Error"]["Code"]
             if code in _NOT_FOUND_CODES:
-                msg = (
-                    f"Document not found in S3: "
-                    f"s3://{cloud_location.bucket}/{cloud_location.key}"
-                )
+                msg = f"Document not found in S3: s3://{cloud_location.bucket}/{cloud_location.key}"
                 raise DocumentNotFoundError(msg) from exc
             raise
 

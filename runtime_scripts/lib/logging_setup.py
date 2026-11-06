@@ -42,20 +42,12 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         entry: dict[str, object] = {
-            "ts": datetime.fromtimestamp(record.created, UTC).isoformat(
-                timespec="milliseconds"
-            ),
+            "ts": datetime.fromtimestamp(record.created, UTC).isoformat(timespec="milliseconds"),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
         }
-        entry.update(
-            {
-                key: value
-                for key, value in vars(record).items()
-                if key not in _RECORD_ATTRIBUTES
-            }
-        )
+        entry.update({key: value for key, value in vars(record).items() if key not in _RECORD_ATTRIBUTES})
         if record.exc_info and record.exc_info[1] is not None:
             entry["error"] = {
                 "type": type(record.exc_info[1]).__qualname__,

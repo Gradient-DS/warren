@@ -63,10 +63,7 @@ async def create_in_process_runners(
     runners: list[WorkerRunnerBase] = []
 
     for worker_type, spec in pipeline.workers.items():
-        results_stores = {
-            role: await stores.results_store(collection)
-            for role, collection in spec.collections.items()
-        }
+        results_stores = {role: await stores.results_store(collection) for role, collection in spec.collections.items()}
         document_store = (
             stores.document_store(
                 "documents",
@@ -79,9 +76,7 @@ async def create_in_process_runners(
         document_fetcher = (
             CachedDocumentFetcher(
                 cache=stores.cache("documents"),
-                resolvers=create_default_resolvers(
-                    path_base_dir=config.documents.path_base_dir
-                ),
+                resolvers=create_default_resolvers(path_base_dir=config.documents.path_base_dir),
                 cache_ttl_seconds=config.documents.cache_ttl_seconds,
             )
             if spec.needs_document_fetcher
@@ -159,9 +154,7 @@ async def run_in_process(
         and wait for it here. A callable, not a coroutine object, so nothing is
         left un-awaited if setup fails.
     """
-    previous_handlers = {
-        sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)
-    }
+    previous_handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
     tasks: list[asyncio.Task] = []
     try:
         for runner in runners:

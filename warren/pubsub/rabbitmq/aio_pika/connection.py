@@ -43,11 +43,7 @@ class RMQConnectionManager(Base):
             # aiormq reads the heartbeat; None is dropped by make_url.
             heartbeat=self._config.heartbeat,
         )
-        heartbeat = (
-            "aiormq default"
-            if self._config.heartbeat is None
-            else f"{self._config.heartbeat}s"
-        )
+        heartbeat = "aiormq default" if self._config.heartbeat is None else f"{self._config.heartbeat}s"
         self._log.info(
             f"AMQP connection to {self._config.host}:{self._config.port} up "
             f"(heartbeat={heartbeat}, connection.blocked notifications on)"
@@ -58,9 +54,7 @@ class RMQConnectionManager(Base):
             try:
                 await self._connection.close()
             except Exception as e:
-                self._log.warning(
-                    f"Error closing connection: {summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error closing connection: {summarize_exception_chain(e)}")
 
     async def create_channel(self) -> AbstractChannel:
         if not self._connection:

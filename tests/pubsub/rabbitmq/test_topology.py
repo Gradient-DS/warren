@@ -41,9 +41,7 @@ def test_declare_queue_forwards_arguments() -> None:
 
 
 def test_runtime_priority_argument_reaches_queue_declaration() -> None:
-    config = RuntimeConfig.model_validate(
-        {"rabbitmq": {"consumer": {"queue_arguments": {"x-max-priority": 2}}}}
-    )
+    config = RuntimeConfig.model_validate({"rabbitmq": {"consumer": {"queue_arguments": {"x-max-priority": 2}}}})
     manager = backends.create_consumer_manager(
         config,
         object(),
@@ -53,22 +51,14 @@ def test_runtime_priority_argument_reaches_queue_declaration() -> None:
         binding_key="interactive.raw_document",
     )
     channel = _FakeChannel()
-    asyncio.run(
-        declare_queue(
-            channel, _FakeExchange(), manager._config.queue, exchange_type="topic"
-        )
-    )
+    asyncio.run(declare_queue(channel, _FakeExchange(), manager._config.queue, exchange_type="topic"))
     assert channel.declared["arguments"] == {"x-max-priority": 2}
 
 
 def test_declare_queue_default_has_no_arguments() -> None:
     channel = _FakeChannel()
 
-    asyncio.run(
-        declare_queue(
-            channel, _FakeExchange(), RMQQueueConfig(name="q"), exchange_type="fanout"
-        )
-    )
+    asyncio.run(declare_queue(channel, _FakeExchange(), RMQQueueConfig(name="q"), exchange_type="fanout"))
 
     assert channel.declared["arguments"] is None
 

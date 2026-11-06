@@ -69,11 +69,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
         # Same three publishing paths as the other backends (see
         # warren/docs/routing.md): data, control, observer. The base
         # tracks all of them for setup/teardown.
-        all_publishers = [
-            p
-            for p in (data_publisher, control_publisher, observer_publisher)
-            if p is not None
-        ]
+        all_publishers = [p for p in (data_publisher, control_publisher, observer_publisher) if p is not None]
         config = MemoryConsumerConfig(
             concurrency=concurrency,
             handler_timeout_seconds=handler_timeout_seconds,
@@ -121,14 +117,10 @@ class MemoryConsumerManager(ConsumerManagerBase):
         keys = self._binding_keys
         if self._exchange.type == "fanout":
             if keys:
-                self._log.debug(
-                    "Ignoring binding keys on fanout exchange %s", self._exchange.name
-                )
+                self._log.debug("Ignoring binding keys on fanout exchange %s", self._exchange.name)
             keys = ()
         for key in keys or ("",):
-            self._queue = self._connection_manager.broker.bind(
-                self._exchange, self._queue_name, key
-            )
+            self._queue = self._connection_manager.broker.bind(self._exchange, self._queue_name, key)
 
     async def start_consuming(self) -> None:
         if self._queue is None:
@@ -158,8 +150,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
                 )
             except TimeoutError:
                 self._log.warning(
-                    f"Timed out waiting for in-flight messages during shutdown "
-                    f"(timeout={self._on_shutdown_timeout}s)"
+                    f"Timed out waiting for in-flight messages during shutdown (timeout={self._on_shutdown_timeout}s)"
                 )
 
         # Best-effort so one failure cannot block the rest of shutdown.
@@ -167,10 +158,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
             try:
                 await publisher.teardown()
             except Exception as e:
-                self._log.warning(
-                    f"Error tearing down publisher during shutdown: "
-                    f"{summarize_exception_chain(e)}"
-                )
+                self._log.warning(f"Error tearing down publisher during shutdown: {summarize_exception_chain(e)}")
 
     async def health(self, *, probe_timeout: float = 1.0) -> ConsumerHealth:
         """No connection to lose and no blocked state; liveness is the loop."""
@@ -211,9 +199,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
             except Exception as e:
                 # _process_message resolves worker failures itself; anything
                 # reaching here is a bug in settlement. Log and move on.
-                self._log.error(
-                    f"Error settling message: {summarize_exception_chain(e)}"
-                )
+                self._log.error(f"Error settling message: {summarize_exception_chain(e)}")
 
     def _on_consume_loop_done(self, task: asyncio.Task) -> None:
         """Log unexpected loop termination; never let it die silently."""
@@ -221,9 +207,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
             return
         exc = task.exception()
         if exc is not None:
-            self._log.error(
-                f"Consume loop terminated unexpectedly: {summarize_exception_chain(exc)}"
-            )
+            self._log.error(f"Consume loop terminated unexpectedly: {summarize_exception_chain(exc)}")
 
     def _requeue(self, delivery: Delivery) -> None:
         assert self._queue is not None
@@ -234,9 +218,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
         try:
             body = json.loads(delivery.body)
         except (json.JSONDecodeError, TypeError) as e:
-            self._log.error(
-                f"Failed to deserialize message: {summarize_exception_chain(e)}"
-            )
+            self._log.error(f"Failed to deserialize message: {summarize_exception_chain(e)}")
             return  # reject(requeue=False)
 
         try:
@@ -297,10 +279,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
         retry_max = self._resolve_retry_max(error)
 
         if error.retry_count_consumed and new_count > retry_max:
-            self._log.error(
-                f"[{identity}] Max retries ({retry_max}) exceeded, "
-                f"treating as hard failure."
-            )
+            self._log.error(f"[{identity}] Max retries ({retry_max}) exceeded, treating as hard failure.")
             await self._handle_hard_failure(body, error)
             return
 
@@ -311,8 +290,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
             )
         else:
             self._log.info(
-                f"[{identity}] Delayed redelivery in {retry_after}s "
-                f"(no retry slot consumed): {error.reason}"
+                f"[{identity}] Delayed redelivery in {retry_after}s (no retry slot consumed): {error.reason}"
             )
 
         body["retry"] = {
@@ -341,8 +319,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
             await self._control_publisher(soft_failure_msg)
         except PublishFailureException as e:
             self._log.warning(
-                f"[{identity}] Failed to publish soft-failure message, "
-                f"requeueing: {summarize_exception_chain(e)}"
+                f"[{identity}] Failed to publish soft-failure message, requeueing: {summarize_exception_chain(e)}"
             )
             self._requeue(delivery)
 
@@ -355,20 +332,14 @@ class MemoryConsumerManager(ConsumerManagerBase):
         """A downstream publish failed; requeue after a delay."""
         identity = self._extract_identity(body)
         delay = self._retry_config.fallback_requeue_delay
-        self._log.warning(
-            f"[{identity}] Publish failed, requeued after {delay}s: "
-            f"{summarize_exception_chain(error)}"
-        )
+        self._log.warning(f"[{identity}] Publish failed, requeued after {delay}s: {summarize_exception_chain(error)}")
         await asyncio.sleep(delay)
         self._requeue(delivery)
 
     async def _handle_hard_failure(self, body: dict, error: Exception) -> None:
         """Publish a best-effort ``hard-failure`` envelope and drop the message."""
         identity = self._extract_identity(body)
-        self._log.error(
-            f"[{identity}] Hard failure (message dropped): "
-            f"{summarize_exception_chain(error)}"
-        )
+        self._log.error(f"[{identity}] Hard failure (message dropped): {summarize_exception_chain(error)}")
 
         if self._publish_hard_failures and self._control_publisher is not None:
             hard_failure_msg: dict = {
@@ -386,17 +357,14 @@ class MemoryConsumerManager(ConsumerManagerBase):
                 await self._control_publisher(hard_failure_msg)
             except Exception as pub_error:
                 self._log.warning(
-                    f"[{identity}] Failed to publish hard-failure envelope: "
-                    f"{summarize_exception_chain(pub_error)}"
+                    f"[{identity}] Failed to publish hard-failure envelope: {summarize_exception_chain(pub_error)}"
                 )
 
     def _resolve_retry_after(self, error: SoftFailureException, attempt: int) -> int:
         """Delay for this attempt: exponential backoff, optional jitter, capped."""
         base = error.retry_after or self._retry_config.initial_delay
         exp_base = error.backoff_base or self._retry_config.backoff_base
-        use_jitter = (
-            error.jitter if error.jitter is not None else self._retry_config.jitter
-        )
+        use_jitter = error.jitter if error.jitter is not None else self._retry_config.jitter
 
         # attempt is 0 for a deferral that consumed no retry slot; clamp so
         # the exponent never goes negative and halves the requested delay.

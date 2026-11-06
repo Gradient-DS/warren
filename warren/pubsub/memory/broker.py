@@ -90,9 +90,7 @@ class MemoryBroker:
             if binding.queue_name in delivered:
                 continue
             if _routes(exchange.type, binding.binding_key, routing_key):
-                self._queues[binding.queue_name].put_nowait(
-                    Delivery(body=body, routing_key=routing_key)
-                )
+                self._queues[binding.queue_name].put_nowait(Delivery(body=body, routing_key=routing_key))
                 delivered.add(binding.queue_name)
         return len(delivered)
 

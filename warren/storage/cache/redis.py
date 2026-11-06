@@ -56,9 +56,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
         self._scope_required = scope_required
         self._client = client
         self._base_key = base_key
-        self._default_ttl_seconds = (
-            3600 if default_ttl_seconds is None else default_ttl_seconds
-        )
+        self._default_ttl_seconds = 3600 if default_ttl_seconds is None else default_ttl_seconds
         if self._default_ttl_seconds <= 0:
             msg = "default_ttl_seconds must be positive"
             raise ValueError(msg)
@@ -95,9 +93,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
         """
         try:
             serialized = self._serialize(value)
-            await self._client.set(
-                self._full_key(key), serialized, ex=self._get_ttl(ttl_seconds)
-            )
+            await self._client.set(self._full_key(key), serialized, ex=self._get_ttl(ttl_seconds))
         except (RedisError, ValueError, TypeError) as e:
             raise CacheOperationError(operation="set") from e
 
@@ -165,9 +161,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
         except (RedisError, ValueError, TypeError) as e:
             raise CacheOperationError(operation="get_by_key_prefix") from e
 
-    async def set_many(
-        self, items: dict[str, T], ttl_seconds: int | None = None
-    ) -> None:
+    async def set_many(self, items: dict[str, T], ttl_seconds: int | None = None) -> None:
         """
         Store multiple key-value pairs.
 
@@ -281,9 +275,7 @@ class RedisCacheBase[T](Base, ABC, CacheInterface[T]):
         keys: list[str] = []
         cursor = 0
         while True:
-            cursor, batch = await self._client.scan(
-                cursor=cursor, match=pattern, count=1000
-            )
+            cursor, batch = await self._client.scan(cursor=cursor, match=pattern, count=1000)
             keys.extend(k.decode("utf-8") if isinstance(k, bytes) else k for k in batch)
             if cursor == 0:
                 break

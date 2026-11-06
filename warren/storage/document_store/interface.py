@@ -98,9 +98,7 @@ class DocumentStoreInterface(Protocol):
         """
         ...
 
-    def query(
-        self, params: dict, *, sort_by: str | None = None
-    ) -> AsyncGenerator[dict, None]:
+    def query(self, params: dict, *, sort_by: str | None = None) -> AsyncGenerator[dict, None]:
         """
         Query document store.
 

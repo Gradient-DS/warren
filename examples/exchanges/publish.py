@@ -127,8 +127,7 @@ async def _publish(
         )
 
         module_logger.info(
-            f"Job {job_id}: published={result['published']}, "
-            f"failed={result['failed']}, total={result['total']}"
+            f"Job {job_id}: published={result['published']}, failed={result['failed']}, total={result['total']}"
         )
 
     finally:

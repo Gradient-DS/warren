@@ -104,10 +104,7 @@ def load_pipeline(
 
     if path.is_dir():
         spec_file = resolve_pipeline_file(path)
-        log.info(
-            f"Loading pipeline spec from directory: {path} "
-            f"(file: {spec_file.name}, var: {var_name})"
-        )
+        log.info(f"Loading pipeline spec from directory: {path} (file: {spec_file.name}, var: {var_name})")
         mod = import_file(spec_file)
         resolved_dir = path
 
@@ -129,10 +126,7 @@ def load_pipeline(
     pipeline = getattr(mod, var_name)
 
     if not isinstance(pipeline, PipelineSpec):
-        msg = (
-            f"{var_name} in {module_name} is "
-            f"{type(pipeline).__name__}, expected PipelineSpec"
-        )
+        msg = f"{var_name} in {module_name} is {type(pipeline).__name__}, expected PipelineSpec"
         raise TypeError(msg)
 
     return pipeline, resolved_dir
@@ -156,10 +150,7 @@ def resolve_config_path(
         candidate = pipeline_dir / DEFAULT_CONFIG_FILE
         if candidate.is_file():
             return candidate
-        msg = (
-            f"No {DEFAULT_CONFIG_FILE} in pipeline directory {pipeline_dir} "
-            f"and no --config-file specified"
-        )
+        msg = f"No {DEFAULT_CONFIG_FILE} in pipeline directory {pipeline_dir} and no --config-file specified"
         raise FileNotFoundError(msg)
 
     msg = (

@@ -103,11 +103,7 @@ class MemoryJobResultsStore(Base, JobResultsStoreInterface):
         record.pop("soft_failures", None)
 
     async def count_completed_docs(self, job_id: str, final_data_type: str) -> int:
-        return sum(
-            1
-            for r in self._for_job(job_id)
-            if r["data_type"] == final_data_type and r["success"]
-        )
+        return sum(1 for r in self._for_job(job_id) if r["data_type"] == final_data_type and r["success"])
 
     async def count_hard_failed_docs(self, job_id: str) -> int:
         return len({r["doc_id"] for r in self._for_job(job_id) if "hard_failure" in r})
@@ -179,9 +175,7 @@ class MemoryJobResultsStore(Base, JobResultsStoreInterface):
 
     def _failures(self, job_id: str, data_type: str | None) -> list[dict]:
         return [
-            r
-            for r in self._for_job(job_id)
-            if not r["success"] and (data_type is None or r["data_type"] == data_type)
+            r for r in self._for_job(job_id) if not r["success"] and (data_type is None or r["data_type"] == data_type)
         ]
 
     def _public(self, record: dict) -> dict:

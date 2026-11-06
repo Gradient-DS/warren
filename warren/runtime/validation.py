@@ -48,13 +48,8 @@ def validate_pipeline(
     errors: list[str] = []
 
     for worker_type, spec in pipeline.workers.items():
-        if not is_fanout and (
-            not spec.binding_keys or any(not key for key in spec.binding_keys)
-        ):
-            errors.append(
-                f"worker '{worker_type}': {pipeline.exchange.type} exchange "
-                f"requires non-empty binding_keys"
-            )
+        if not is_fanout and (not spec.binding_keys or any(not key for key in spec.binding_keys)):
+            errors.append(f"worker '{worker_type}': {pipeline.exchange.type} exchange requires non-empty binding_keys")
 
         # Publish-side route.
         publish = spec.publish
@@ -64,25 +59,19 @@ def validate_pipeline(
         if is_fanout:
             if publish.route is not None:
                 errors.append(
-                    f"worker '{worker_type}': fanout exchange ignores routing "
-                    f"keys, so publish route must be unset"
+                    f"worker '{worker_type}': fanout exchange ignores routing keys, so publish route must be unset"
                 )
         elif not has_route:
             errors.append(
-                f"worker '{worker_type}': {pipeline.exchange.type} exchange "
-                f"requires a publish route or route_func"
+                f"worker '{worker_type}': {pipeline.exchange.type} exchange requires a publish route or route_func"
             )
 
     publication = pipeline.publication
     if publication is not None:
         if publication.route is not None:
-            errors.append(
-                "publication: static route is not supported; use route_func instead"
-            )
+            errors.append("publication: static route is not supported; use route_func instead")
         elif not is_fanout and publication.route_func is None:
-            errors.append(
-                f"publication: {pipeline.exchange.type} exchange requires a route_func"
-            )
+            errors.append(f"publication: {pipeline.exchange.type} exchange requires a route_func")
 
     if errors:
         bullets = "\n  - ".join(errors)
@@ -91,17 +80,13 @@ def validate_pipeline(
 
     if logger is not None:
         logger.info(
-            "Pipeline validation passed (binding/route presence). "
-            "Note: route reachability is not yet validated."
+            "Pipeline validation passed (binding/route presence). Note: route reachability is not yet validated."
         )
 
 
 def build_capability_registry(pipeline: PipelineSpec) -> CapabilityRegistry:
     """Map each worker type to its declared ``(accepts, produces)`` capability."""
-    return {
-        worker_type: (spec.accepts, spec.produces)
-        for worker_type, spec in pipeline.workers.items()
-    }
+    return {worker_type: (spec.accepts, spec.produces) for worker_type, spec in pipeline.workers.items()}
 
 
 def validate_routing_plan(
@@ -122,17 +107,10 @@ def validate_routing_plan(
     """
     errors: list[str] = []
 
-    nodes = (
-        set(plan.entry)
-        | set(plan.edges)
-        | {succ for succs in plan.edges.values() for succ in succs}
-    )
+    nodes = set(plan.entry) | set(plan.edges) | {succ for succs in plan.edges.values() for succ in succs}
     for node in sorted(nodes):
         if node not in registry:
-            errors.append(
-                f"routing node '{node}' is not a deployed worker type "
-                f"{sorted(registry)}"
-            )
+            errors.append(f"routing node '{node}' is not a deployed worker type {sorted(registry)}")
 
     for producer, successors in plan.edges.items():
         if producer not in registry:

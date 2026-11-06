@@ -10,9 +10,7 @@ from pymongo.write_concern import WriteConcern
 
 
 class RetryLeaseInterface(Protocol):
-    async def acquire_or_renew(
-        self, holder_id: str, now: float, expires_at: float
-    ) -> bool:
+    async def acquire_or_renew(self, holder_id: str, now: float, expires_at: float) -> bool:
         """Claim an expired lease or extend this holder's lease."""
         ...
 
@@ -25,13 +23,11 @@ class MongoRetryLease:
         database_name: str,
         collection_name: str,
     ) -> None:
-        self._collection = client[database_name][
-            f"{collection_name}_lease"
-        ].with_options(write_concern=WriteConcern(w="majority"))
+        self._collection = client[database_name][f"{collection_name}_lease"].with_options(
+            write_concern=WriteConcern(w="majority")
+        )
 
-    async def acquire_or_renew(
-        self, holder_id: str, now: float, expires_at: float
-    ) -> bool:
+    async def acquire_or_renew(self, holder_id: str, now: float, expires_at: float) -> bool:
         try:
             result = await self._collection.update_one(
                 {

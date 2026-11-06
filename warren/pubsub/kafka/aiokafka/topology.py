@@ -95,10 +95,7 @@ def _raise_on_topic_errors(response: "Response") -> None:
     """
     topic_errors = getattr(response, "topic_errors", None)
     if topic_errors is None:
-        msg = (
-            f"Unexpected create_topics response shape: "
-            f"{type(response).__name__} has no 'topic_errors' attribute"
-        )
+        msg = f"Unexpected create_topics response shape: {type(response).__name__} has no 'topic_errors' attribute"
         raise PubSubSetupError(msg)
 
     for entry in topic_errors:
@@ -115,8 +112,5 @@ def _raise_on_topic_errors(response: "Response") -> None:
         if error_code in (0, TopicAlreadyExistsError.errno):
             continue
         error_message = rest[0] if rest else None
-        msg = (
-            f"Failed to create topic '{topic_name}': "
-            f"error code {error_code} ({error_message})"
-        )
+        msg = f"Failed to create topic '{topic_name}': error code {error_code} ({error_message})"
         raise PubSubSetupError(msg)

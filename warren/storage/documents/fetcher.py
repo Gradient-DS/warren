@@ -131,10 +131,7 @@ class CachedDocumentFetcher(Base):
         except DocumentResolutionError:
             raise
         except Exception as e:
-            msg = (
-                f"Failed to resolve document '{doc_id}' "
-                f"from {location_type} location: {e}"
-            )
+            msg = f"Failed to resolve document '{doc_id}' from {location_type} location: {e}"
             raise DocumentResolutionError(
                 msg,
                 doc_id=doc_id,

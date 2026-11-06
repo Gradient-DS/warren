@@ -308,9 +308,7 @@ def test_setup_creates_missing_topic_when_configured() -> None:
 
 def test_setup_failure_is_wrapped_as_setup_error() -> None:
     worker = _FakeWorker()
-    conn = _FakeConnectionManager(
-        kafka_consumer=_FakeKafkaConsumer(start_error=RuntimeError("no brokers"))
-    )
+    conn = _FakeConnectionManager(kafka_consumer=_FakeKafkaConsumer(start_error=RuntimeError("no brokers")))
     manager, _ = _manager(worker, conn=conn)
 
     raised = False
@@ -396,9 +394,7 @@ def test_soft_failure_without_control_publisher_seeks_back() -> None:
 
 def test_soft_failure_preserves_lane_and_priority() -> None:
     publisher = _FakePublisher()
-    manager, conn = _manager(
-        _FakeWorker(error=SoftFailureException("later")), control_publisher=publisher
-    )
+    manager, conn = _manager(_FakeWorker(error=SoftFailureException("later")), control_publisher=publisher)
     body = {**_BODY, "lane": "interactive", "priority": 2}
     _process(manager, _msg(body))
     failed = publisher.published[0]["data"]
@@ -485,9 +481,7 @@ def test_soft_failure_max_retries_exceeded_becomes_hard_failure() -> None:
 
 
 def test_soft_failure_without_consuming_retry_slot() -> None:
-    worker = _FakeWorker(
-        error=SoftFailureException("poll again", retry_count_consumed=False)
-    )
+    worker = _FakeWorker(error=SoftFailureException("poll again", retry_count_consumed=False))
     publisher = _FakePublisher()
     manager, conn = _manager(worker, control_publisher=publisher)
     # count already at max — no slot consumed, so no hard-failure escalation
@@ -554,9 +548,7 @@ def test_unexpected_exception_is_treated_as_hard_failure() -> None:
 def test_hard_failure_envelope_suppressed_when_disabled() -> None:
     worker = _FakeWorker(error=HardFailureException("unparseable"))
     publisher = _FakePublisher()
-    manager, conn = _manager(
-        worker, control_publisher=publisher, publish_hard_failures=False
-    )
+    manager, conn = _manager(worker, control_publisher=publisher, publish_hard_failures=False)
 
     _process(manager, _msg(_BODY, offset=7))
 
@@ -635,9 +627,7 @@ def _parity_envelopes(
 
     kafka_worker = _FakeWorker(error=error)
     kafka_publisher = _FakePublisher()
-    manager, conn = _manager(
-        kafka_worker, control_publisher=kafka_publisher, retry_config=retry_config
-    )
+    manager, conn = _manager(kafka_worker, control_publisher=kafka_publisher, retry_config=retry_config)
 
     rmq_worker = _FakeWorker(error=error)
     rmq_publisher = _FakePublisher()
@@ -670,9 +660,7 @@ def _parity_envelopes(
 def test_soft_failure_envelope_matches_rmq_path() -> None:
     error = SoftFailureException("transient")
 
-    kafka_envelopes, rmq_envelopes, rmq_message, kafka_consumer = _parity_envelopes(
-        _BODY, error
-    )
+    kafka_envelopes, rmq_envelopes, rmq_message, kafka_consumer = _parity_envelopes(_BODY, error)
 
     assert kafka_envelopes == rmq_envelopes  # byte-for-byte identical envelopes
     assert json.dumps(kafka_envelopes) == json.dumps(rmq_envelopes)
@@ -685,9 +673,7 @@ def test_soft_failure_re_retry_envelope_matches_rmq_path() -> None:
     error = SoftFailureException("still transient", retry_after=45, backoff_base=2.0)
     body = {**_BODY, "retry": {"count": 2, "after": 90, "reason": "old", "max": 5}}
 
-    kafka_envelopes, rmq_envelopes, rmq_message, kafka_consumer = _parity_envelopes(
-        body, error
-    )
+    kafka_envelopes, rmq_envelopes, rmq_message, kafka_consumer = _parity_envelopes(body, error)
 
     assert kafka_envelopes == rmq_envelopes
     assert json.dumps(kafka_envelopes) == json.dumps(rmq_envelopes)
@@ -699,9 +685,7 @@ def test_max_retries_hard_failure_envelope_matches_rmq_path() -> None:
     error = SoftFailureException("transient")
     body = {**_BODY, "retry": {"count": 5, "after": 300, "reason": "old", "max": 5}}
 
-    kafka_envelopes, rmq_envelopes, rmq_message, kafka_consumer = _parity_envelopes(
-        body, error
-    )
+    kafka_envelopes, rmq_envelopes, rmq_message, kafka_consumer = _parity_envelopes(body, error)
 
     assert kafka_envelopes == rmq_envelopes  # identical hard-failure envelopes
     assert json.dumps(kafka_envelopes) == json.dumps(rmq_envelopes)
@@ -714,9 +698,7 @@ def test_first_deferral_without_retry_slot_is_not_halved() -> None:
     """A deferral (retry_count_consumed=False) on a never-retried message keeps
     the count at 0. The backoff exponent must clamp at 0 there: ``2 ** -1``
     silently halved the requested delay (30 → 15) on both backends."""
-    error = SoftFailureException(
-        "throttled", retry_after=30, retry_count_consumed=False
-    )
+    error = SoftFailureException("throttled", retry_after=30, retry_count_consumed=False)
 
     kafka_envelopes, rmq_envelopes, _, _ = _parity_envelopes(_BODY, error)
 

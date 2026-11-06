@@ -31,9 +31,7 @@ def _connect(monkeypatch: pytest.MonkeyPatch, config: RMQConnectionConfig) -> di
         captured.update(kwargs)
         return _FakeConnection()
 
-    monkeypatch.setattr(
-        connection_module.aio_pika, "connect_robust", fake_connect_robust
-    )
+    monkeypatch.setattr(connection_module.aio_pika, "connect_robust", fake_connect_robust)
     asyncio.run(RMQConnectionManager(config).setup())
     return captured
 

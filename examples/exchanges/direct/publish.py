@@ -101,9 +101,7 @@ async def _publish(config: RuntimeConfig, job_name: str) -> str:
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Publish documents on a defined route")
     parser.add_argument("--job-name", required=True, help="Human-readable job name.")
-    parser.add_argument(
-        "--config-file", type=Path, default=DEFAULT_CONFIG_PATH, help="Config YAML."
-    )
+    parser.add_argument("--config-file", type=Path, default=DEFAULT_CONFIG_PATH, help="Config YAML.")
     parser.add_argument("--debug", action="store_true", default=False)
     return parser.parse_args()
 

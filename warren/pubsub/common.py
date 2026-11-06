@@ -63,8 +63,7 @@ class ConsumerHealth:
     @property
     def live(self) -> bool:
         return self.handler_timeout_seconds is None or all(
-            time.monotonic() - started <= 2 * self.handler_timeout_seconds
-            for started in self.handler_started_at
+            time.monotonic() - started <= 2 * self.handler_timeout_seconds for started in self.handler_started_at
         )
 
     @property
@@ -73,21 +72,12 @@ class ConsumerHealth:
 
     @property
     def ready(self) -> bool:
-        return (
-            self.connected
-            and not self.blocked
-            and self.channel_open
-            and self.consumer_registered is True
-        )
+        return self.connected and not self.blocked and self.channel_open and self.consumer_registered is True
 
     @property
     def consumer_lost(self) -> bool:
         """Connection alive and unblocked, but no live consumer on it."""
-        return (
-            self.connected
-            and not self.blocked
-            and (not self.channel_open or self.consumer_registered is False)
-        )
+        return self.connected and not self.blocked and (not self.channel_open or self.consumer_registered is False)
 
     @property
     def state(

@@ -13,9 +13,7 @@ class ConditionalCollection(Collection):
     @staticmethod
     def matches(row: dict, query: dict) -> bool:
         if "$and" in query:
-            return all(
-                ConditionalCollection.matches(row, part) for part in query["$and"]
-            )
+            return all(ConditionalCollection.matches(row, part) for part in query["$and"])
         return Collection.matches(row, query)
 
 
@@ -37,12 +35,8 @@ def test_conditional_delete_preserves_replaced_rows(backend: str, cached: bool) 
         )
         if cached:
             store = CachedDocumentStore(store, MemoryCache())
-        await store.insert(
-            {"retry_key": "key", "generation": "old"}, overwrite_existing=True
-        )
-        await store.insert(
-            {"retry_key": "key", "generation": "new"}, overwrite_existing=True
-        )
+        await store.insert({"retry_key": "key", "generation": "old"}, overwrite_existing=True)
+        await store.insert({"retry_key": "key", "generation": "new"}, overwrite_existing=True)
         assert not await store.delete("key", expected={"generation": "old"})
         assert (await store.get_document("key"))["generation"] == "new"
         assert not await store.delete("absent", expected={"generation": "new"})

@@ -15,9 +15,7 @@ class MongoCollection:
         self.index_information_calls += 1
         return copy.deepcopy(self.indexes)
 
-    async def create_index(
-        self, keys: str | list[tuple[str, int]], **options: object
-    ) -> str:
+    async def create_index(self, keys: str | list[tuple[str, int]], **options: object) -> str:
         if isinstance(keys, str):
             keys = [(keys, 1)]
         spec = {"key": keys, **options}
@@ -35,9 +33,7 @@ class MongoCollection:
         self.dropped.append(name)
         del self.indexes[name]
 
-    async def update_one(
-        self, query: dict, update: dict, *, upsert: bool
-    ) -> UpdateResult:
+    async def update_one(self, query: dict, update: dict, *, upsert: bool) -> UpdateResult:
         assert upsert
         self.writes.append(copy.deepcopy({**query, **update["$set"]}))
         return UpdateResult({"n": 1, "nModified": 1}, acknowledged=True)
@@ -71,20 +67,15 @@ class JobCollection(MongoCollection):
     async def insert_one(self, row: dict) -> None:
         self.rows[row["job_id"]] = copy.deepcopy(row)
 
-    async def find_one(
-        self, query: dict, projection: dict | None = None
-    ) -> dict | None:
+    async def find_one(self, query: dict, projection: dict | None = None) -> dict | None:
         return copy.deepcopy(self.rows.get(query["job_id"]))
 
-    async def update_one(
-        self, query: dict, update: dict, *, upsert: bool = False
-    ) -> UpdateResult:
+    async def update_one(self, query: dict, update: dict, *, upsert: bool = False) -> UpdateResult:
         assert not upsert
         self.update_filters.append(copy.deepcopy(query))
         row = self.rows.get(query["job_id"])
         matches = row is not None and (
-            "status.completed_at" not in query
-            or row["status"].get("completed_at") == query["status.completed_at"]
+            "status.completed_at" not in query or row["status"].get("completed_at") == query["status.completed_at"]
         )
         if matches:
             for key, value in update["$set"].items():

@@ -32,10 +32,7 @@ def valid_scope(scope: object) -> TypeGuard[str]:
     A valid scope is a string of 1 to 40 characters that matches
     ``[a-z0-9][a-z0-9-]{0,39}``.
     """
-    return (
-        isinstance(scope, str)
-        and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,39}", scope) is not None
-    )
+    return isinstance(scope, str) and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,39}", scope) is not None
 
 
 def require_scope(*, required: bool = True) -> str | None:
@@ -161,9 +158,7 @@ async def erase_scope(
     if database_name == control_database:
         reason = "scope database must differ from the control database"
         raise ValueError(reason)
-    if isinstance(infra_or_clients, tuple) and not hasattr(
-        infra_or_clients, "mongo_client"
-    ):
+    if isinstance(infra_or_clients, tuple) and not hasattr(infra_or_clients, "mongo_client"):
         mongo, redis = infra_or_clients
     else:
         mongo = infra_or_clients.mongo_client
@@ -183,9 +178,7 @@ async def erase_scope(
             await database.drop_collection(name)
     for resolver in ScopedDatabase._instances:
         if resolver.client is mongo:
-            resolver._prepared.difference_update(
-                key for key in tuple(resolver._prepared) if key[0] == database_name
-            )
+            resolver._prepared.difference_update(key for key in tuple(resolver._prepared) if key[0] == database_name)
 
     redis_count = 0
     cursor = 0

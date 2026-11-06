@@ -54,10 +54,7 @@ class MemoryCache[T](Base, CacheInterface[T]):
         return self._alive(key)
 
     async def get_by_key_prefix(self, key_prefix: str) -> dict[str, T]:
-        return {
-            key: copy.deepcopy(self._entries[key][0])
-            for key in self._alive_keys(key_prefix)
-        }
+        return {key: copy.deepcopy(self._entries[key][0]) for key in self._alive_keys(key_prefix)}
 
     async def set_many(
         self,
@@ -87,8 +84,4 @@ class MemoryCache[T](Base, CacheInterface[T]):
         return True
 
     def _alive_keys(self, key_prefix: str) -> list[str]:
-        return [
-            key
-            for key in list(self._entries)
-            if key.startswith(key_prefix) and self._alive(key)
-        ]
+        return [key for key in list(self._entries) if key.startswith(key_prefix) and self._alive(key)]

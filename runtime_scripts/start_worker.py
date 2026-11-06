@@ -92,10 +92,7 @@ def _parse_args() -> argparse.Namespace:
         "--runner",
         type=str,
         default=None,
-        help=(
-            "Dotted path to custom runner class, e.g. my.module:MyRunner. "
-            "Default: DefaultWorkerRunner."
-        ),
+        help=("Dotted path to custom runner class, e.g. my.module:MyRunner. Default: DefaultWorkerRunner."),
     )
     parser.add_argument(
         "--list-workers",
@@ -220,10 +217,7 @@ async def start_worker(
     try:
         resolved_config_path = resolve_config_path(config_file, pipeline_dir)
     except Exception as e:
-        msg = (
-            f"Unable to resolve config path from: "
-            f"config_file={config_file}, pipeline_dir={pipeline_dir}"
-        )
+        msg = f"Unable to resolve config path from: config_file={config_file}, pipeline_dir={pipeline_dir}"
         raise WarrenError(msg) from e
 
     runner_factory_func = partial(

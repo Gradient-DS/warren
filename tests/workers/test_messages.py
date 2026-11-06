@@ -19,18 +19,14 @@ def test_delivery_count_is_not_copied_downstream() -> None:
         }
     )
 
-    derived = incoming.derive(
-        data_type="parsed", data={}, origin=MessageOrigin(type="parser", name="p-1")
-    )
+    derived = incoming.derive(data_type="parsed", data={}, origin=MessageOrigin(type="parser", name="p-1"))
 
     assert DELIVERY_COUNT_FIELD not in derived.to_dict()
 
 
 @pytest.mark.parametrize("priority", [None, 0, 2, 255])
 @pytest.mark.parametrize("lane", [None, "interactive", "bulk"])
-def test_lane_and_priority_round_trip_and_derive(
-    lane: str | None, priority: int | None
-) -> None:
+def test_lane_and_priority_round_trip_and_derive(lane: str | None, priority: int | None) -> None:
     parent = ProcessingMessage(
         data_type="raw_document",
         data={},

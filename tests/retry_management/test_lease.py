@@ -30,9 +30,7 @@ class Collection:
         self.write_concern = write_concern
         return self
 
-    async def update_one(
-        self, query: dict, update: dict, *, upsert: bool
-    ) -> UpdateResult:
+    async def update_one(self, query: dict, update: dict, *, upsert: bool) -> UpdateResult:
         await asyncio.sleep(0)
         if self.error is not None:
             raise self.error
@@ -41,9 +39,7 @@ class Collection:
             and self.row["_id"] == query["_id"]
             and any(
                 all(
-                    self.row[key] <= value["$lte"]
-                    if isinstance(value, dict)
-                    else self.row[key] == value
+                    self.row[key] <= value["$lte"] if isinstance(value, dict) else self.row[key] == value
                     for key, value in clause.items()
                 )
                 for clause in query["$or"]
@@ -130,9 +126,7 @@ def make_worker(
         "retry",
         retry_store=retries,
         republish_publisher=publisher,
-        lease=MongoRetryLease(
-            client, database_name="control", collection_name="retries"
-        ),
+        lease=MongoRetryLease(client, database_name="control", collection_name="retries"),
         clock=clock,
         sleep=sleep,
     )
@@ -146,9 +140,7 @@ async def finish_publishing(worker: RetryWorker) -> None:
 def test_mongo_lease_is_exclusive_renewable_and_expires() -> None:
     async def run() -> None:
         client = MongoClient()
-        lease = MongoRetryLease(
-            client, database_name="control", collection_name="custom"
-        )
+        lease = MongoRetryLease(client, database_name="control", collection_name="custom")
         results = await asyncio.gather(
             lease.acquire_or_renew("a", 1000, 1030),
             lease.acquire_or_renew("b", 1000, 1030),
@@ -174,10 +166,7 @@ def test_only_holder_publishes_including_work_received_by_standby() -> None:
         client, retries, clock = MongoClient(), store(), Clock()
         publishers = [FakePublisher(), FakePublisher()]
         sleeps = [Sleep(), Sleep()]
-        workers = [
-            make_worker(client, retries, publishers[i], clock, sleeps[i])
-            for i in range(2)
-        ]
+        workers = [make_worker(client, retries, publishers[i], clock, sleeps[i]) for i in range(2)]
         await workers[0](failed("startup"))
         await asyncio.gather(*(worker.start() for worker in workers))
         await finish_publishing(workers[0])
@@ -293,9 +282,7 @@ def test_runner_wires_lease_and_ttl(backend: str) -> None:
         exchange = RMQExchangeConfig(name="jobs")
 
         def factory(consumer: MessageConsumerInterface) -> MemoryConsumerManager:
-            return MemoryConsumerManager(
-                connection, consumer, exchange=exchange, queue_name="retry"
-            )
+            return MemoryConsumerManager(connection, consumer, exchange=exchange, queue_name="retry")
 
         config = RuntimeConfig.model_validate(
             {

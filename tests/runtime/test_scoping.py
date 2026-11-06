@@ -50,9 +50,7 @@ def test_runtime_scoping_reaches_stores_and_factory_context() -> None:
             contexts.append(context)
             return _NoopWorker(context.worker_name)
 
-        config = RuntimeConfig.model_validate(
-            {"scoping": {"enabled": True, "database_prefix": "test_"}}
-        )
+        config = RuntimeConfig.model_validate({"scoping": {"enabled": True, "database_prefix": "test_"}})
         mongo, redis = MongoClient(), RedisClient()
         connection = MemoryConnectionManager()
         await connection.setup()
@@ -81,16 +79,12 @@ def test_runtime_scoping_reaches_stores_and_factory_context() -> None:
             assert context.scoped_database() is mongo["test_a"]
             await context.stores["write"].store({}, "item")
             await context.document_store.insert({"doc_id": "item"})
-            await context.get_document_func(
-                "item", DocumentLocation(location_type="test")
-            )
+            await context.get_document_func("item", DocumentLocation(location_type="test"))
             assert set(mongo.databases) == {"test_a"}
             assert all(key.startswith("s:a:") for key in redis.entries)
         finally:
             current_scope.reset(token)
-        retry_runner = RetryWorkerRunner(
-            config, "retry", exchange=exchange, infra=infra
-        )
+        retry_runner = RetryWorkerRunner(config, "retry", exchange=exchange, infra=infra)
         store = await retry_runner._create_default_retry_store()
         redis.entries.clear()
         await store.insert({"retry_key": "key", "scope": "a"})

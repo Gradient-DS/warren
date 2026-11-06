@@ -94,16 +94,12 @@ class ConsumerManagerBase(Base, ConsumerManagerInterface, metaclass=ABCMeta):
         scope_token = current_scope.set(body.get("scope"))
         try:
             async with deadline:
-                is_async = inspect.iscoroutinefunction(
-                    self._consumer
-                ) or inspect.iscoroutinefunction(
+                is_async = inspect.iscoroutinefunction(self._consumer) or inspect.iscoroutinefunction(
                     getattr(self._consumer, "__call__", None)
                 )
                 if is_async:
                     return await self._consumer(body)
-                future = asyncio.get_running_loop().run_in_executor(
-                    None, copy_context().run, self._consumer, body
-                )
+                future = asyncio.get_running_loop().run_in_executor(None, copy_context().run, self._consumer, body)
                 # A timeout cannot stop the executor thread; track it until it exits.
                 executor_running = True
 

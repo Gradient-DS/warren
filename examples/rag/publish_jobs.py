@@ -87,9 +87,7 @@ async def _publish(
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Publish PDF URLs into the rag pipeline"
-    )
+    parser = argparse.ArgumentParser(description="Publish PDF URLs into the rag pipeline")
     parser.add_argument("--job-name", required=True, help="Human-readable job name.")
     parser.add_argument(
         "--url",
@@ -98,9 +96,7 @@ def _parse_args() -> argparse.Namespace:
         metavar="URL",
         help="PDF URL to process (repeatable). Defaults to two arXiv papers.",
     )
-    parser.add_argument(
-        "--config-file", type=Path, default=DEFAULT_CONFIG_PATH, help="Config YAML."
-    )
+    parser.add_argument("--config-file", type=Path, default=DEFAULT_CONFIG_PATH, help="Config YAML.")
     parser.add_argument("--debug", action="store_true", default=False)
     return parser.parse_args()
 

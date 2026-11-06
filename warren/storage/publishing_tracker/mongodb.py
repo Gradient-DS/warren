@@ -75,9 +75,7 @@ class MongoDBPublishingTracker(Base, PublishingTrackerInterface):
             ],
         )
 
-        await configure_ttl_index(
-            self._collection, "time", self._job_records_ttl_seconds
-        )
+        await configure_ttl_index(self._collection, "time", self._job_records_ttl_seconds)
 
     async def record_success(
         self,

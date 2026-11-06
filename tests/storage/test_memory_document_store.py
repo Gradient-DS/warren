@@ -83,9 +83,7 @@ def test_overwrite_replaces_by_doc_id(make) -> None:
 @pytest.mark.parametrize("make", STORE_FACTORIES)
 def test_overwrite_replaces_by_first_unique_index(make) -> None:
     async def scenario() -> list[dict]:
-        store = make(
-            doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")]
-        )
+        store = make(doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")])
         await store.insert({"doc_id": "d1", "job_id": "j", "part_idx": 0, "v": 1})
         await store.insert(
             {"doc_id": "d1", "job_id": "j", "part_idx": 0, "v": 2},
@@ -101,9 +99,7 @@ def test_overwrite_replaces_by_first_unique_index(make) -> None:
 @pytest.mark.parametrize("make", STORE_FACTORIES)
 def test_unique_index_is_enforced_without_overwrite(make) -> None:
     async def scenario() -> None:
-        store = make(
-            doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")]
-        )
+        store = make(doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")])
         await store.insert({"doc_id": "d1", "job_id": "j", "part_idx": 0})
         await store.insert({"doc_id": "d1", "job_id": "j", "part_idx": 0})
 
@@ -114,9 +110,7 @@ def test_unique_index_is_enforced_without_overwrite(make) -> None:
 @pytest.mark.parametrize("make", STORE_FACTORIES)
 def test_overwrite_still_rejects_a_clash_on_another_constraint(make) -> None:
     async def scenario() -> bool:
-        store = make(
-            doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")]
-        )
+        store = make(doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")])
         await store.insert(_result("r1", 0))
         await store.insert(_result("r2", 1))
         # Replaces r1 by the unique index, but its id is r2's.
@@ -128,9 +122,7 @@ def test_overwrite_still_rejects_a_clash_on_another_constraint(make) -> None:
 @pytest.mark.parametrize("make", STORE_FACTORIES)
 def test_overwrite_frees_the_replaced_documents_id(make) -> None:
     async def scenario() -> list[str]:
-        store = make(
-            doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")]
-        )
+        store = make(doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")])
         await store.insert(_result("r1", 0))
         await store.insert(_result("r9", 0), overwrite_existing=True)
         await store.insert(_result("r1", 1))
@@ -142,9 +134,7 @@ def test_overwrite_frees_the_replaced_documents_id(make) -> None:
 @pytest.mark.parametrize("make", STORE_FACTORIES)
 def test_delete_frees_the_id_and_the_unique_key(make) -> None:
     async def scenario() -> list[dict]:
-        store = make(
-            doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")]
-        )
+        store = make(doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")])
         doc = _result("r1", 0)
         await store.insert(doc)
         await store.delete("r1")
@@ -157,9 +147,7 @@ def test_delete_frees_the_id_and_the_unique_key(make) -> None:
 @pytest.mark.parametrize("make", STORE_FACTORIES)
 def test_update_of_an_indexed_field_moves_its_unique_key(make) -> None:
     async def scenario() -> tuple[str, bool]:
-        store = make(
-            doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")]
-        )
+        store = make(doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")])
         await store.insert(_result("r1", 0))
         await store.update("r1", {"part_idx": 1})
         # The old key is free again, the new one is taken.
@@ -260,9 +248,7 @@ def test_stored_state_is_isolated_from_callers(make) -> None:
 @pytest.mark.parametrize("make", STORE_FACTORIES)
 def test_accessors_and_unique_index_introspection(make) -> None:
     async def scenario() -> tuple:
-        store = make(
-            doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")]
-        )
+        store = make(doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")])
         return (
             store.get_document_type(),
             store.get_doc_id_field(),
@@ -277,9 +263,7 @@ def test_accessors_and_unique_index_introspection(make) -> None:
 def test_memory_store_rejects_an_update_that_duplicates_a_unique_key() -> None:
     # Memory-only: MongoDB rejects this too, but with pymongo's DuplicateKeyError.
     async def scenario() -> tuple[bool, dict, bool]:
-        store = _memory_store(
-            doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")]
-        )
+        store = _memory_store(doc_id_field="result_id", unique_indexes=[("doc_id", "job_id", "part_idx")])
         await store.insert(_result("r1", 0))
         await store.insert(_result("r2", 1))
         rejected = await _rejected(store.update("r2", {"part_idx": 0}))
@@ -290,9 +274,7 @@ def test_memory_store_rejects_an_update_that_duplicates_a_unique_key() -> None:
     assert asyncio.run(scenario()) == (True, _result("r2", 1), True)
 
 
-def test_memory_store_frees_the_keys_of_a_document_replaced_through_a_shared_id() -> (
-    None
-):
+def test_memory_store_frees_the_keys_of_a_document_replaced_through_a_shared_id() -> None:
     # Ids 5 and "5" do not clash (fields compare raw) but share a stored key,
     # so the second insert replaces the first, and its unique value is free.
     async def scenario() -> str:

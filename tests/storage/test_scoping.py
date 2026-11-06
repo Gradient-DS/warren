@@ -26,15 +26,11 @@ def test_scope_is_validated_only_on_access(raw: object, required: bool) -> None:
     async def run() -> None:
         mongo, redis = MongoClient(), RedisClient()
         resolver = ScopedDatabase(mongo, required=required, default_database="control")
-        results = await create_default_results_store(
-            "results", mongo, redis, scoped_database=resolver
-        )
+        results = await create_default_results_store("results", mongo, redis, scoped_database=resolver)
         assert not mongo.databases
         token = current_scope.set(raw)
         try:
-            cache = RedisDictCache(
-                redis, base_key="cache", scoping_enabled=True, scope_required=required
-            )
+            cache = RedisDictCache(redis, base_key="cache", scoping_enabled=True, scope_required=required)
             if raw is None and not required:
                 assert resolver().name == "control"
                 await cache.set("key", {})
@@ -57,12 +53,8 @@ def test_content_and_caches_are_isolated() -> None:
     async def run() -> None:
         mongo, redis = MongoClient(), RedisClient()
         resolver = ScopedDatabase(mongo)
-        results = await create_default_results_store(
-            "results", mongo, redis, scoped_database=resolver
-        )
-        binary = await create_binary_results_store(
-            "binary", mongo, redis, scoped_database=resolver
-        )
+        results = await create_default_results_store("results", mongo, redis, scoped_database=resolver)
+        binary = await create_binary_results_store("binary", mongo, redis, scoped_database=resolver)
         registry = MongoDBDocumentStore(
             mongo,
             database_name="control",
@@ -77,9 +69,7 @@ def test_content_and_caches_are_isolated() -> None:
             fetched.append(current_scope.get())
             return current_scope.get().encode()
 
-        fetcher = create_cached_document_fetcher(
-            redis_client=redis, resolvers={"path": resolve}, scoping_enabled=True
-        )
+        fetcher = create_cached_document_fetcher(redis_client=redis, resolvers={"path": resolve}, scoping_enabled=True)
         location = DocumentLocation(location_type="path", path="unused")
         token = current_scope.set("a")
         try:
@@ -98,16 +88,12 @@ def test_content_and_caches_are_isolated() -> None:
             await results.store({"value": "b"}, "item", job_id="job")
             await binary.store_bytes(b"b", doc_id="item", job_id="job")
             current_scope.set("a")
-            assert (await results.get_result("item", job_id="job")).result == {
-                "value": "a"
-            }
+            assert (await results.get_result("item", job_id="job")).result == {"value": "a"}
             assert (await registry.get_document("item"))["value"] == "a"
             assert await binary.get_bytes("item", job_id="job") == b"a"
             assert await fetcher("fetched", location) == b"a"
             redis.entries.clear()
-            assert (await results.get_result("item", job_id="job")).result == {
-                "value": "a"
-            }
+            assert (await results.get_result("item", job_id="job")).result == {"value": "a"}
             assert await binary.get_bytes("item", job_id="job") == b"a"
             assert fetched == ["a", "b"]
             assert set(mongo.databases) == {"wr_a", "wr_b"}
@@ -122,12 +108,7 @@ def test_indexes_are_lazy_and_serialized_per_database() -> None:
     async def run() -> None:
         mongo = MongoClient()
         resolver = ScopedDatabase(mongo)
-        stores = [
-            await create_default_results_store(
-                "results", mongo, scoped_database=resolver
-            )
-            for _ in range(2)
-        ]
+        stores = [await create_default_results_store("results", mongo, scoped_database=resolver) for _ in range(2)]
         assert not mongo.databases
 
         async def write(scope: str, index: int) -> None:
@@ -137,9 +118,7 @@ def test_indexes_are_lazy_and_serialized_per_database() -> None:
             finally:
                 current_scope.reset(token)
 
-        await asyncio.gather(
-            *(write(scope, i) for scope in ("a", "b") for i in range(10))
-        )
+        await asyncio.gather(*(write(scope, i) for scope in ("a", "b") for i in range(10)))
         for scope in ("a", "b"):
             collection = mongo[f"wr_{scope}"]["results"]
             assert len(collection.rows) == 10
@@ -155,12 +134,8 @@ def test_control_rows_record_only_valid_scopes(scope: object, enabled: bool) -> 
     async def run() -> None:
         mongo = MongoClient()
         jobs = MongoDBJobStore(mongo, database_name="control", scoping_enabled=enabled)
-        results = MongoDBJobResultsStore(
-            mongo, database_name="control", scoping_enabled=enabled
-        )
-        tracker = MongoDBPublishingTracker(
-            mongo, database_name="control", scoping_enabled=enabled
-        )
+        results = MongoDBJobResultsStore(mongo, database_name="control", scoping_enabled=enabled)
+        tracker = MongoDBPublishingTracker(mongo, database_name="control", scoping_enabled=enabled)
         token = current_scope.set(scope)
         try:
             await jobs.setup()
@@ -168,12 +143,8 @@ def test_control_rows_record_only_valid_scopes(scope: object, enabled: bool) -> 
             await tracker.setup()
             await jobs.create_job("output")
             await results.record_success("job", "output", "item", "worker", "1")
-            await results.record_soft_failure(
-                "job", "output", "item", "worker", "1", "worker", "2", 1, "retry"
-            )
-            await results.record_hard_failure(
-                "job", "output", "item", "worker", "1", "worker", "2", "failed"
-            )
+            await results.record_soft_failure("job", "output", "item", "worker", "1", "worker", "2", 1, "retry")
+            await results.record_hard_failure("job", "output", "item", "worker", "1", "worker", "2", "failed")
             await tracker.record_success("job", "item")
             await tracker.record_failure("job", None, "source", "failed", "load")
             for collection in mongo["control"].collections.values():
@@ -181,17 +152,9 @@ def test_control_rows_record_only_valid_scopes(scope: object, enabled: bool) -> 
                     assert ({"scope": row["scope"]} if "scope" in row else {}) == (
                         {"scope": "a"} if enabled and scope == "a" else {}
                     )
-                assert (
-                    any(
-                        index["key"] == [("scope", 1)]
-                        for index in collection.indexes.values()
-                    )
-                    == enabled
-                )
+                assert any(index["key"] == [("scope", 1)] for index in collection.indexes.values()) == enabled
             job_id = await jobs.create_job("output", scope="explicit")
-            assert (await jobs.get_job(job_id)).get("scope") == (
-                "explicit" if enabled else None
-            )
+            assert (await jobs.get_job(job_id)).get("scope") == ("explicit" if enabled else None)
         finally:
             current_scope.reset(token)
 
@@ -223,9 +186,7 @@ def test_cache_namespace_operations_stay_in_scope() -> None:
 def test_disabled_storage_ignores_raw_scope() -> None:
     async def run() -> None:
         mongo, redis = MongoClient(), RedisClient()
-        store = await create_default_results_store(
-            "results", mongo, redis, database_name="control"
-        )
+        store = await create_default_results_store("results", mongo, redis, database_name="control")
         token = current_scope.set("INVALID")
         try:
             await store.store({"value": 1}, "item")
@@ -243,15 +204,9 @@ def test_scope_failure_is_not_swallowed_as_a_cache_miss() -> None:
     async def run() -> None:
         mongo, redis = MongoClient(), RedisClient()
         resolver = ScopedDatabase(mongo)
-        results = await create_default_results_store(
-            "results", mongo, redis, scoped_database=resolver
-        )
-        binary = await create_binary_results_store(
-            "binary", mongo, redis, scoped_database=resolver
-        )
-        fetcher = create_cached_document_fetcher(
-            redis_client=redis, resolvers={}, scoping_enabled=True
-        )
+        results = await create_default_results_store("results", mongo, redis, scoped_database=resolver)
+        binary = await create_binary_results_store("binary", mongo, redis, scoped_database=resolver)
+        fetcher = create_cached_document_fetcher(redis_client=redis, resolvers={}, scoping_enabled=True)
         with pytest.raises(HardFailureException, match="missing scope"):
             await results.get_result("item")
         with pytest.raises(HardFailureException, match="missing scope"):

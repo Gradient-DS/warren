@@ -75,9 +75,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         self._fields_to_index = fields_to_index if fields_to_index is not None else []
         self._unique_indexes = unique_indexes if unique_indexes is not None else []
         # Collection reference is sync in pymongo async — no I/O, just a reference.
-        self._collection: AsyncCollection | None = (
-            self._ensure_collection() if scoped_database is None else None
-        )
+        self._collection: AsyncCollection | None = self._ensure_collection() if scoped_database is None else None
 
     async def setup(self) -> None:
         """
@@ -125,10 +123,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
             try:
                 await collection.insert_one(doc_copy)
             except DuplicateKeyError as e:
-                msg = (
-                    f"Document with id '{self._normalize_doc_id(doc_copy[self._doc_id_field])}' "
-                    "already exists"
-                )
+                msg = f"Document with id '{self._normalize_doc_id(doc_copy[self._doc_id_field])}' already exists"
                 raise DocumentAlreadyExistsError(msg) from e
 
         return self._normalize_doc_id(doc_copy[self._doc_id_field])
@@ -287,9 +282,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
         """
         if self._scoped_database is not None:
             # Setup checks the index declaration; creation waits for a scope.
-            return (
-                index_spec in self._unique_indexes or index_spec == self._doc_id_field
-            )
+            return index_spec in self._unique_indexes or index_spec == self._doc_id_field
         target_fields = (index_spec,) if isinstance(index_spec, str) else index_spec
         collection = await self._get_collection()
         indexes = await collection.index_information()
@@ -306,9 +299,7 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
 
     async def _get_collection(self) -> AsyncCollection:
         if self._scoped_database is not None:
-            return await self._scoped_database.collection(
-                self._collection_name, self._create_indexes
-            )
+            return await self._scoped_database.collection(self._collection_name, self._create_indexes)
         return self._collection
 
     async def _create_indexes(self, collection: AsyncCollection) -> None:

@@ -113,9 +113,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         4. Create and set up the consumer manager
         """
         if self._infra is None:
-            with self._exception_wrapping(
-                "Infrastructure setup (RabbitMQ/MongoDB/Redis)"
-            ):
+            with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
                 self._infra = await create_runtime_infrastructure(self._config)
 
         with self._exception_wrapping("Store injection check"):
@@ -153,17 +151,13 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
             try:
                 await self._publisher.teardown()
             except Exception as exc:
-                self._log.warning(
-                    f"Publisher teardown failed: {summarize_exception_chain(exc)}"
-                )
+                self._log.warning(f"Publisher teardown failed: {summarize_exception_chain(exc)}")
 
         if self._infra is not None and self._owns_infra:
             try:
                 await close_runtime_infrastructure(self._infra)
             except Exception as exc:
-                self._log.warning(
-                    f"Infrastructure teardown failed: {summarize_exception_chain(exc)}"
-                )
+                self._log.warning(f"Infrastructure teardown failed: {summarize_exception_chain(exc)}")
 
     async def _create_default_job_store(self) -> JobStoreInterface:
         store = MongoDBJobStore(

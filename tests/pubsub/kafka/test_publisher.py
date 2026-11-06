@@ -39,9 +39,7 @@ class _FakeAdmin:
         if self._create_error is not None:
             raise self._create_error
         self.created.extend(new_topics)
-        return SimpleNamespace(
-            topic_errors=[(nt.name, self._create_error_code, None) for nt in new_topics]
-        )
+        return SimpleNamespace(topic_errors=[(nt.name, self._create_error_code, None) for nt in new_topics])
 
 
 class _FakeProducer:
@@ -204,18 +202,14 @@ def test_setup_skips_creation_when_topic_exists() -> None:
 
 def test_setup_tolerates_concurrent_topic_creation() -> None:
     # Raised by the client...
-    conn = _FakeConnectionManager(
-        admin=_FakeAdmin(topics=[], create_error=TopicAlreadyExistsError())
-    )
+    conn = _FakeConnectionManager(admin=_FakeAdmin(topics=[], create_error=TopicAlreadyExistsError()))
     topic_config = KafkaTopicConfig(name="jobs", create_if_missing=True)
 
     asyncio.run(_publisher(conn, topic_config=topic_config).setup())
     assert conn.producer.started
 
     # ...or reported in the response body.
-    conn = _FakeConnectionManager(
-        admin=_FakeAdmin(topics=[], create_error_code=TopicAlreadyExistsError.errno)
-    )
+    conn = _FakeConnectionManager(admin=_FakeAdmin(topics=[], create_error_code=TopicAlreadyExistsError.errno))
 
     asyncio.run(_publisher(conn, topic_config=topic_config).setup())
     assert conn.producer.started
@@ -237,9 +231,7 @@ def test_ensure_topic_surfaces_response_errors() -> None:
 
 
 def test_setup_failure_is_wrapped_as_setup_error() -> None:
-    conn = _FakeConnectionManager(
-        producer=_FakeProducer(start_error=RuntimeError("broker down"))
-    )
+    conn = _FakeConnectionManager(producer=_FakeProducer(start_error=RuntimeError("broker down")))
     publisher = _publisher(conn)
 
     raised = False
@@ -276,9 +268,7 @@ def test_publish_sends_json_to_topic_without_key() -> None:
 
 
 def test_publish_failure_is_wrapped() -> None:
-    conn = _FakeConnectionManager(
-        producer=_FakeProducer(send_error=RuntimeError("leader not available"))
-    )
+    conn = _FakeConnectionManager(producer=_FakeProducer(send_error=RuntimeError("leader not available")))
     publisher = _publisher(conn)
 
     async def scenario() -> None:

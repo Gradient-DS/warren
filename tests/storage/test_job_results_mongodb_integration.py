@@ -39,12 +39,8 @@ def test_stage_counts_count_soft_and_hard_failures() -> None:
         store = MongoDBJobResultsStore(client, database_name=database)
         await store.setup()
         await store.record_success("j", "text", "d1", "parser", "p-0")
-        await store.record_soft_failure(
-            "j", "text", "d2", "parser", "p-0", "chunker", "c-0", 1, "boom"
-        )
-        await store.record_hard_failure(
-            "j", "text", "d3", "parser", "p-0", "chunker", "c-0", "dead"
-        )
+        await store.record_soft_failure("j", "text", "d2", "parser", "p-0", "chunker", "c-0", 1, "boom")
+        await store.record_hard_failure("j", "text", "d3", "parser", "p-0", "chunker", "c-0", "dead")
 
         assert await store.get_stage_counts("j") == [
             {
@@ -63,15 +59,9 @@ def test_unique_errors_use_last_soft_failure_or_hard_failure() -> None:
     async def scenario(client: AsyncMongoClient, database: str) -> None:
         store = MongoDBJobResultsStore(client, database_name=database)
         await store.setup()
-        await store.record_soft_failure(
-            "j", "text", "d2", "parser", "p-0", "chunker", "c-0", 1, "boom"
-        )
-        await store.record_soft_failure(
-            "j", "text", "d2", "parser", "p-0", "chunker", "c-0", 2, "boom again"
-        )
-        await store.record_hard_failure(
-            "j", "text", "d3", "parser", "p-0", "chunker", "c-0", "dead"
-        )
+        await store.record_soft_failure("j", "text", "d2", "parser", "p-0", "chunker", "c-0", 1, "boom")
+        await store.record_soft_failure("j", "text", "d2", "parser", "p-0", "chunker", "c-0", 2, "boom again")
+        await store.record_hard_failure("j", "text", "d3", "parser", "p-0", "chunker", "c-0", "dead")
 
         errors = await store.get_unique_errors("j")
 

@@ -161,9 +161,7 @@ class ProcessingMessage:
 
     def __post_init__(self) -> None:
         if self.priority is not None and (
-            not isinstance(self.priority, int)
-            or isinstance(self.priority, bool)
-            or not 0 <= self.priority <= 255
+            not isinstance(self.priority, int) or isinstance(self.priority, bool) or not 0 <= self.priority <= 255
         ):
             msg = "priority must be an int in 0..255 (excluding bool) or None"
             raise ValueError(msg)
@@ -241,14 +239,10 @@ class ProcessingMessage:
             job_metadata=self.job_metadata,
             job_parameters=self.job_parameters,
             preprocessing_required=(
-                preprocessing_required
-                if preprocessing_required is not None
-                else self.preprocessing_required
+                preprocessing_required if preprocessing_required is not None else self.preprocessing_required
             ),
             preprocessing_completed=(
-                preprocessing_completed
-                if preprocessing_completed is not None
-                else self.preprocessing_completed
+                preprocessing_completed if preprocessing_completed is not None else self.preprocessing_completed
             ),
         )
 

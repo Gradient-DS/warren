@@ -29,9 +29,7 @@ def test_lane_routing_matches_topic_bindings() -> None:
         ]
         queues = [conn.broker.bind(exchange, key, key) for key in bindings]
         body = {"data_type": "raw_document", "lane": "interactive", "priority": 2}
-        publisher = MemoryPublisher(
-            conn, exchange, route_func=MessageFieldRouter(prefix_field="lane")
-        )
+        publisher = MemoryPublisher(conn, exchange, route_func=MessageFieldRouter(prefix_field="lane"))
         await publisher(body)
         assert [queue.qsize() for queue in queues] == [1, 0, 1, 1]
         for queue in (queues[0], queues[2], queues[3]):

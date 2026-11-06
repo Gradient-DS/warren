@@ -129,9 +129,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
         6. Schedule pending retries from the store
         """
         if self._infra is None:
-            with self._exception_wrapping(
-                "Infrastructure setup (RabbitMQ/MongoDB/Redis)"
-            ):
+            with self._exception_wrapping("Infrastructure setup (RabbitMQ/MongoDB/Redis)"):
                 self._infra = await create_runtime_infrastructure(self._config)
 
         with self._exception_wrapping("Store injection check"):
@@ -183,25 +181,19 @@ class RetryWorkerRunner(WorkerRunnerBase):
             try:
                 await self._retry_worker.shutdown()
             except Exception as exc:
-                self._log.warning(
-                    f"Retry worker shutdown failed: {summarize_exception_chain(exc)}"
-                )
+                self._log.warning(f"Retry worker shutdown failed: {summarize_exception_chain(exc)}")
 
         if self._republish_publisher is not None:
             try:
                 await self._republish_publisher.teardown()
             except Exception as exc:
-                self._log.warning(
-                    f"Publisher teardown failed: {summarize_exception_chain(exc)}"
-                )
+                self._log.warning(f"Publisher teardown failed: {summarize_exception_chain(exc)}")
 
         if self._infra is not None and self._owns_infra:
             try:
                 await close_runtime_infrastructure(self._infra)
             except Exception as exc:
-                self._log.warning(
-                    f"Infrastructure teardown failed: {summarize_exception_chain(exc)}"
-                )
+                self._log.warning(f"Infrastructure teardown failed: {summarize_exception_chain(exc)}")
 
     async def _create_default_retry_store(self) -> DocumentStoreInterface:
         retry_cfg = self._config.retry
@@ -223,9 +215,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
             base_key=f"retry:{retry_cfg.collection_name}",
             default_ttl_seconds=cache_ttl_seconds,
         )
-        return CachedDocumentStore(
-            mongo_store, cache, cache_ttl_seconds=cache_ttl_seconds
-        )
+        return CachedDocumentStore(mongo_store, cache, cache_ttl_seconds=cache_ttl_seconds)
 
     def _create_default_publisher(self) -> PublisherInterface:
         # Republish to the DATA exchange, replaying the original routing key

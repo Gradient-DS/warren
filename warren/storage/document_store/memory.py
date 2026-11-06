@@ -50,8 +50,7 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
         self._collection_name = collection_name
         self._doc_id_field = doc_id_field
         self._unique_indexes: list[tuple[str, ...]] = [
-            (spec,) if isinstance(spec, str) else tuple(spec)
-            for spec in (unique_indexes or [])
+            (spec,) if isinstance(spec, str) else tuple(spec) for spec in (unique_indexes or [])
         ]
         self._docs: dict[str, dict] = {}
         # Per constraint: field values -> key in ``_docs``. Insert and update
@@ -68,9 +67,7 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
 
         # Same rule as the Mongo store: with unique indexes configured the
         # first one is the upsert key, otherwise the doc id is.
-        upsert_key = (
-            self._unique_indexes[0] if self._unique_indexes else (self._doc_id_field,)
-        )
+        upsert_key = self._unique_indexes[0] if self._unique_indexes else (self._doc_id_field,)
         replaced = self._find_by_fields(upsert_key, new) if overwrite_existing else None
 
         clashes = self._clashing_ids(new) - {replaced}
@@ -113,22 +110,15 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
             raise DocumentNotFoundError(msg)
         return copy.deepcopy(self._docs[key])
 
-    async def query(
-        self, params: dict, *, sort_by: str | None = None
-    ) -> AsyncGenerator[dict, None]:
+    async def query(self, params: dict, *, sort_by: str | None = None) -> AsyncGenerator[dict, None]:
         for field, value in params.items():
             if field.startswith("$") or isinstance(value, dict):
-                msg = (
-                    f"MemoryDocumentStore.query supports flat equality only, "
-                    f"got {field!r}: {value!r}"
-                )
+                msg = f"MemoryDocumentStore.query supports flat equality only, got {field!r}: {value!r}"
                 raise ValueError(msg)
 
         # Snapshot first: a caller may insert or delete while iterating.
         matches = [
-            doc
-            for doc in self._docs.values()
-            if all(doc.get(field) == value for field, value in params.items())
+            doc for doc in self._docs.values() if all(doc.get(field) == value for field, value in params.items())
         ]
         if sort_by is not None:
             matches.sort(key=lambda doc: doc[sort_by])
@@ -138,9 +128,7 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
     async def delete(self, doc_id: str, *, expected: dict | None = None) -> bool:
         key = self._require_id(doc_id)
         doc = self._docs.get(key)
-        if doc is None or any(
-            doc.get(field) != value for field, value in (expected or {}).items()
-        ):
+        if doc is None or any(doc.get(field) != value for field, value in (expected or {}).items()):
             return False
         del self._docs[key]
         self._remove_from_indexes(doc)
@@ -167,10 +155,7 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
 
     def _clashing_ids(self, doc: dict) -> set[str]:
         """Ids of stored documents that ``doc`` would collide with."""
-        found = (
-            index.get(_field_values(doc, fields))
-            for fields, index in self._indexes.items()
-        )
+        found = (index.get(_field_values(doc, fields)) for fields, index in self._indexes.items())
         return {key for key in found if key is not None}
 
     def _add_to_indexes(self, key: str, doc: dict) -> None:

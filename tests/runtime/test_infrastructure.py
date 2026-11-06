@@ -106,17 +106,11 @@ def test_redis_url_overrides_host_and_preserves_url_options() -> None:
 
 
 @pytest.mark.parametrize("use_url", [False, True])
-def test_secrets_are_hidden_in_representations_and_logs(
-    caplog: pytest.LogCaptureFixture, *, use_url: bool
-) -> None:
+def test_secrets_are_hidden_in_representations_and_logs(caplog: pytest.LogCaptureFixture, *, use_url: bool) -> None:
     sensitive_value = "sensitive-test-value"
     if use_url:
-        mongo = MongoDBConfig(
-            uri=SecretStr(f"mongodb://worker:{sensitive_value}@localhost")
-        )
-        redis = RedisConfig(
-            url=SecretStr(f"redis://worker:{sensitive_value}@localhost")
-        )
+        mongo = MongoDBConfig(uri=SecretStr(f"mongodb://worker:{sensitive_value}@localhost"))
+        redis = RedisConfig(url=SecretStr(f"redis://worker:{sensitive_value}@localhost"))
     else:
         mongo = MongoDBConfig(username="worker", password=SecretStr(sensitive_value))
         redis = RedisConfig(username="worker", password=SecretStr(sensitive_value))
@@ -189,9 +183,7 @@ def test_startup_retries_and_closes_failed_attempts(
     manager = _ConnectionManager(failures=3 if target == "broker" else 0)
     mongo = _StoreClient(failures=3 if target == "mongodb" else 0)
     redis = _StoreClient(failures=3 if target == "redis" else 0)
-    monkeypatch.setattr(
-        infrastructure.backends, "create_connection_manager", lambda config: manager
-    )
+    monkeypatch.setattr(infrastructure.backends, "create_connection_manager", lambda config: manager)
     monkeypatch.setattr(infrastructure, "_create_mongo_client", lambda config: mongo)
     monkeypatch.setattr(infrastructure, "_create_redis_client", lambda config: redis)
     delays: list[float] = []
@@ -211,13 +203,9 @@ def test_startup_retries_and_closes_failed_attempts(
     with caplog.at_level(logging.WARNING):
         if attempts <= 3:
             with pytest.raises(ConnectionError, match="unavailable"):
-                asyncio.run(
-                    infrastructure.create_runtime_infrastructure(config, sleep=sleep)
-                )
+                asyncio.run(infrastructure.create_runtime_infrastructure(config, sleep=sleep))
         else:
-            infra = asyncio.run(
-                infrastructure.create_runtime_infrastructure(config, sleep=sleep)
-            )
+            infra = asyncio.run(infrastructure.create_runtime_infrastructure(config, sleep=sleep))
             assert infra == infrastructure.RuntimeInfra(mongo, redis, manager)
     used = min(attempts, 4)
     failed = min(attempts, 3)
@@ -243,11 +231,7 @@ def test_memory_startup_skips_stores_and_retry_delays(
 
     monkeypatch.setattr(infrastructure, "_create_mongo_client", unexpected)
     monkeypatch.setattr(infrastructure, "_create_redis_client", unexpected)
-    infra = asyncio.run(
-        infrastructure.create_runtime_infrastructure(
-            RuntimeConfig(backend="memory"), sleep=sleep
-        )
-    )
+    infra = asyncio.run(infrastructure.create_runtime_infrastructure(RuntimeConfig(backend="memory"), sleep=sleep))
     assert infra.mongo_client is infra.redis_client is None
     asyncio.run(infrastructure.close_runtime_infrastructure(infra))
 
@@ -266,15 +250,9 @@ def test_startup_warning_redacts_credentials_and_flattens_exception_chain(
                 raise ConnectionError(sensitive_value) from error
 
     manager = FailingManager()
-    monkeypatch.setattr(
-        infrastructure.backends, "create_connection_manager", lambda config: manager
-    )
-    monkeypatch.setattr(
-        infrastructure, "_create_mongo_client", lambda config: _StoreClient()
-    )
-    monkeypatch.setattr(
-        infrastructure, "_create_redis_client", lambda config: _StoreClient()
-    )
+    monkeypatch.setattr(infrastructure.backends, "create_connection_manager", lambda config: manager)
+    monkeypatch.setattr(infrastructure, "_create_mongo_client", lambda config: _StoreClient())
+    monkeypatch.setattr(infrastructure, "_create_redis_client", lambda config: _StoreClient())
     config = RuntimeConfig(mongodb=MongoDBConfig(uri=SecretStr(uri)))
     with caplog.at_level(logging.WARNING), pytest.raises(ConnectionError):
         asyncio.run(infrastructure.create_runtime_infrastructure(config))
@@ -286,9 +264,7 @@ def test_startup_warning_redacts_credentials_and_flattens_exception_chain(
 
 
 @pytest.mark.parametrize("cancel", [False, True])
-def test_startup_cleans_up_partial_connections(
-    monkeypatch: pytest.MonkeyPatch, *, cancel: bool
-) -> None:
+def test_startup_cleans_up_partial_connections(monkeypatch: pytest.MonkeyPatch, *, cancel: bool) -> None:
     class Manager(_ConnectionManager):
         async def setup(self) -> None:
             raise asyncio.CancelledError
@@ -306,9 +282,7 @@ def test_startup_cleans_up_partial_connections(
     async def sleep(delay: float) -> None:
         pytest.fail("Cancelled startup must not retry")
 
-    monkeypatch.setattr(
-        infrastructure.backends, "create_connection_manager", lambda config: manager
-    )
+    monkeypatch.setattr(infrastructure.backends, "create_connection_manager", lambda config: manager)
     monkeypatch.setattr(infrastructure, "_create_mongo_client", lambda config: mongo)
     monkeypatch.setattr(infrastructure, "_create_redis_client", create_redis)
     config = RuntimeConfig.model_validate({"startup": {"attempts": 3 if cancel else 1}})

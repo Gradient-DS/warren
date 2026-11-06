@@ -11,9 +11,7 @@ from warren.workers.messages import MessageOrigin, ProcessingMessage
 
 
 def test_message_scope_roundtrip_and_derive() -> None:
-    message = ProcessingMessage(
-        "input", {}, "job-1", MessageOrigin("source", "1"), scope="a"
-    )
+    message = ProcessingMessage("input", {}, "job-1", MessageOrigin("source", "1"), scope="a")
     raw = {**message.to_dict(), "future_field": True}
     derived = ProcessingMessage.create_from(raw).derive(
         data_type="output", data={}, origin=MessageOrigin("worker", "1")
@@ -31,9 +29,7 @@ def test_message_scope_roundtrip_and_derive() -> None:
 @pytest.mark.parametrize("backend", ["memory", "rabbitmq", "kafka"])
 @pytest.mark.parametrize("scope", [None, "a", "INVALID", {"raw": True}])
 @pytest.mark.parametrize("sync", [False, True])
-def test_handler_receives_raw_scope_and_resets(
-    backend: str, scope: object, sync: bool
-) -> None:
+def test_handler_receives_raw_scope_and_resets(backend: str, scope: object, sync: bool) -> None:
     class SyncWorker(FakeWorker):
         def __call__(self, message: dict) -> dict:
             assert get_current_scope() == scope
@@ -74,9 +70,7 @@ def test_failure_envelopes_preserve_scope(backend: str, soft: bool) -> None:
 
     async def run() -> None:
         publisher = FakePublisher()
-        manager, process = await make_consumer(
-            backend, FailingWorker(), publisher, None
-        )
+        manager, process = await make_consumer(backend, FailingWorker(), publisher, None)
         await process({"data_type": "input", "scope": "a"})
         assert get_current_scope() is None
         envelope = publisher.published[0]

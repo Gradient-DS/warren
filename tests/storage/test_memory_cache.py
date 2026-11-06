@@ -59,9 +59,7 @@ def test_default_ttl_applies_and_none_means_forever() -> None:
 def test_prefix_operations_match_literally() -> None:
     async def scenario() -> tuple:
         cache: MemoryCache[dict] = MemoryCache()
-        await cache.set_many(
-            {"doc123:0": {"i": 0}, "doc123:1": {"i": 1}, "doc1234:0": {"i": 9}}
-        )
+        await cache.set_many({"doc123:0": {"i": 0}, "doc123:1": {"i": 1}, "doc1234:0": {"i": 9}})
         narrow = await cache.get_by_key_prefix("doc123:")
         broad = await cache.get_by_key_prefix("doc123")
         deleted = await cache.delete_by_key_prefix("doc123:")

@@ -32,14 +32,8 @@ def pipeline_module(monkeypatch):
 
 @pytest.mark.parametrize("exchange_type", ["fanout", "topic", "direct"])
 @pytest.mark.parametrize("custom_routing", [False, True])
-def test_cli_forwards_publication_router(
-    monkeypatch, tmp_path, pipeline_module, exchange_type, custom_routing
-):
-    route_func = (
-        MessageFieldRouter(prefix_field=LANE_FIELD, default_prefix="bulk")
-        if custom_routing
-        else None
-    )
+def test_cli_forwards_publication_router(monkeypatch, tmp_path, pipeline_module, exchange_type, custom_routing):
+    route_func = MessageFieldRouter(prefix_field=LANE_FIELD, default_prefix="bulk") if custom_routing else None
     pipeline = replace(
         pipeline_module.PIPELINE,
         exchange=RMQExchangeConfig(name="documents", type=exchange_type),
@@ -78,9 +72,7 @@ def test_cli_forwards_publication_router(
 
 
 def test_launcher_validates_publication_before_running(monkeypatch, pipeline_module):
-    pipeline_module.PIPELINE = replace(
-        pipeline_module.PIPELINE, publication=PublishSpec(route=Route("input"))
-    )
+    pipeline_module.PIPELINE = replace(pipeline_module.PIPELINE, publication=PublishSpec(route=Route("input")))
     run = AsyncMock()
     monkeypatch.setattr(launcher, "run", run)
 

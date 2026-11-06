@@ -21,7 +21,7 @@ jobs:
       python-paths: 'warren/'
       python-uv: true
 
-  # Ruff, hygiene hooks, gitleaks and actionlint from .pre-commit-config.yaml;
+  # Ruff, hygiene hooks, uv-lock, gitleaks and actionlint from .pre-commit-config.yaml;
   # here so the required `gate` enforces it.
   pre-commit:
     if: github.event.pull_request.draft != true

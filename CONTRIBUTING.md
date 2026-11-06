@@ -20,7 +20,7 @@ ruff check .
 ruff format --check .
 ```
 
-All three must pass before a PR can merge — CI runs exactly these commands.
+All three must pass before a PR can merge. CI runs the tests directly and the lint checks through the hooks in `.pre-commit-config.yaml` (ruff, whitespace and YAML/TOML checks, gitleaks, actionlint). To run the same hooks locally, install them once with `uvx pre-commit install`, or run them on demand with `uvx pre-commit run --all-files`.
 
 To exercise changes against a real pipeline, run the fake example pipeline from the README quickstart (needs local RabbitMQ, MongoDB, and Redis, e.g. via Docker).
 

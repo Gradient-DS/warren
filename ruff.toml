@@ -5,7 +5,7 @@
 # `document_processing/distributed/**/*.py` there now covers this whole repo.
 
 target-version = "py312"
-line-length = 88
+line-length = 120
 
 # ---------------------------------------------------------------------------
 # Lint
@@ -63,6 +63,9 @@ select = [
 
     # --- Ruff-specific ---
     "RUF",     # various antipatterns, mutable class defaults, etc.
+
+    # --- Docstrings ---
+    "D",       # pydocstyle, Google convention (see [lint.pydocstyle])
 ]
 
 ignore = [
@@ -82,6 +85,13 @@ ignore = [
 
     # --- Ruff ---
     "RUF012",  # mutable class variable annotation: conflicts with dataclass patterns
+
+    # --- Docstrings ---
+    "D100",    # module docstring
+    "D104",    # package docstring
+    "D105",    # magic methods: Python defines what they do
+    "D107",    # __init__: document constructor arguments on the class
+    "D417",    # list only the args whose name and type do not say enough
 ]
 
 # --- Auto-fix policy ---
@@ -129,6 +139,9 @@ section-order = [
 # ---------------------------------------------------------------------------
 # Plugin configuration
 # ---------------------------------------------------------------------------
+[lint.pydocstyle]
+convention = "google"
+
 [lint.flake8-annotations]
 allow-star-arg-any = false
 suppress-none-returning = true
@@ -151,7 +164,7 @@ extend-immutable-calls = [
 # ---------------------------------------------------------------------------
 [lint.per-file-ignores]
 # Tests: relax annotations, unused fixture args, assertions, boolean traps
-"tests/**/*.py" = ["ANN", "ARG", "S101", "FBT"]
+"tests/**/*.py" = ["ANN", "ARG", "S101", "FBT", "D1"]
 # Config files may have values that look like hardcoded secrets
 "**/config*.py" = ["S105", "S106"]
 "**/settings*.py" = ["S105", "S106"]
@@ -174,7 +187,6 @@ extend-immutable-calls = [
     "B004",    # consumer.py uses getattr(x, "__call__") to fetch the bound method for
                # an iscoroutinefunction check (async __call__ detection); callable() is
                # not an equivalent substitution here.
-    "E501",    # usage-example docstrings exceed 88 cols; wrapping is noisy.
 ]
 
 # ---------------------------------------------------------------------------
@@ -183,3 +195,4 @@ extend-immutable-calls = [
 [format]
 quote-style = "double"
 indent-style = "space"
+docstring-code-format = true

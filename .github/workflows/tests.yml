@@ -7,6 +7,11 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
+  # Ruff, hygiene hooks, gitleaks and actionlint from .pre-commit-config.yaml.
+  pre-commit:
+    if: github.event.pull_request.draft != true
+    uses: Gradient-DS/security-ci/.github/workflows/pre-commit.yml@v13
+
   test:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
@@ -19,12 +24,6 @@ jobs:
 
       - name: Install package + dev tools + all extras
         run: pip install -e ".[dev,rmq,kafka,gcs,s3,http]"
-
-      - name: Ruff lint
-        run: ruff check .
-
-      - name: Ruff format check
-        run: ruff format --check .
 
       - name: Unit tests
         run: python -m pytest tests -q

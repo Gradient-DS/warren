@@ -335,9 +335,11 @@ handles the per-item processing.
 
 ## Development
 
+Development uses [uv](https://docs.astral.sh/uv/) with the committed `uv.lock`:
+
 ```bash
-pip install -e ".[dev]"
-ruff check && ruff format --check && pytest -q
+uv sync --all-extras
+uv run ruff check && uv run ruff format --check && uv run pytest -q
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues through

@@ -12,10 +12,10 @@ Fixes GRA-
 
 ## How was it tested?
 
-<!-- e.g. `python -m pytest tests -q`, or a manual run of the fake example pipeline -->
+<!-- e.g. `uv run pytest tests -q`, or a manual run of the fake example pipeline -->
 
 ## Checklist
 
-- [ ] `python -m pytest tests -q` passes
+- [ ] `uv run pytest tests -q` passes
 - [ ] `ruff check .` and `ruff format --check .` are clean
 - [ ] Docs updated where behavior changed (README, `warren/runtime/USAGE.md`, `warren/docs/`)

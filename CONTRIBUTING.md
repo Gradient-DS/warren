@@ -4,20 +4,22 @@ Thanks for your interest in contributing! This document covers the practical sid
 
 ## Development setup
 
-Requires Python 3.12+.
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/Gradient-DS/warren.git
 cd warren
-pip install -e ".[dev]"
+uv sync --all-extras
 ```
+
+This installs the package in editable mode with every extra and the dev tools, at the versions pinned in `uv.lock`, which CI installs with `uv sync --locked --all-extras`. After changing dependencies in `pyproject.toml`, run `uv lock` and commit `uv.lock`. `pip install -e ".[dev]"` still works if you prefer pip, without the lockfile pins.
 
 ## Tests and lint
 
 ```bash
-python -m pytest tests -q
-ruff check .
-ruff format --check .
+uv run pytest tests -q
+uv run ruff check .
+uv run ruff format --check .
 ```
 
 All three must pass before a PR can merge. CI runs the tests directly and the lint checks through the hooks in `.pre-commit-config.yaml` (ruff, whitespace and YAML/TOML checks, gitleaks, actionlint). To run the same hooks locally, install them once with `uvx pre-commit install`, or run them on demand with `uvx pre-commit run --all-files`.

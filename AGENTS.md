@@ -9,9 +9,9 @@ system. Published to PyPI as `warren` (Apache-2.0).
 ## Commands
 
 ```bash
-pip install -e ".[dev]"             # Dev install (includes what the tests import)
-pytest                              # Tests (no infrastructure needed)
-ruff check && ruff format           # Lint + format (config in ruff.toml)
+uv sync --all-extras                # Dev install from uv.lock (all extras + dev tools)
+uv run pytest                       # Tests (no infrastructure needed)
+uv run ruff check && uv run ruff format   # Lint + format (config in ruff.toml)
 ```
 
 The runnable examples need local RabbitMQ + MongoDB + Redis — the README

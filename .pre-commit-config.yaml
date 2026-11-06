@@ -17,6 +17,10 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.13.7
+    hooks:
+      - id: uv-lock
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
     hooks:

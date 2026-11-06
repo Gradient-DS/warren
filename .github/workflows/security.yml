@@ -21,14 +21,22 @@ jobs:
       python-paths: 'warren/'
       python-uv: true
 
+  # Ruff, hygiene hooks, gitleaks and actionlint from .pre-commit-config.yaml;
+  # here so the required `gate` enforces it.
+  pre-commit:
+    if: github.event.pull_request.draft != true
+    uses: Gradient-DS/security-ci/.github/workflows/pre-commit.yml@v13
+    secrets: inherit
+
   gate:
-    needs: [source]
+    needs: [source, pre-commit]
     if: ${{ always() && github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
     steps:
       - name: Fail unless every security job succeeded
         env:
           SOURCE: ${{ needs.source.result }}
+          PRE_COMMIT: ${{ needs.pre-commit.result }}
         run: |
-          echo "source=$SOURCE"
-          [ "$SOURCE" = "success" ]
+          echo "source=$SOURCE pre-commit=$PRE_COMMIT"
+          [ "$SOURCE" = "success" ] && [ "$PRE_COMMIT" = "success" ]

@@ -12,11 +12,10 @@ on:
 jobs:
   source:
     if: github.event.pull_request.draft != true
-    uses: Gradient-DS/security-ci/.github/workflows/security-source.yml@33d2ef167da03d3edfd6732684c17347cc957c82 # v5
+    uses: Gradient-DS/security-ci/.github/workflows/security-source.yml@71dea3696135309a19a1541157a249821bc08a2b # v16
     secrets: inherit
     permissions:
       contents: read
-      issues: write
     with:
       python-paths: 'warren/'
       python-uv: true
@@ -25,7 +24,7 @@ jobs:
   # here so the required `gate` enforces it.
   pre-commit:
     if: github.event.pull_request.draft != true
-    uses: Gradient-DS/security-ci/.github/workflows/pre-commit.yml@f9642945013e452c0dd9c2eb7ddbcd1bda4361c4 # v13
+    uses: Gradient-DS/security-ci/.github/workflows/pre-commit.yml@71dea3696135309a19a1541157a249821bc08a2b # v16
     secrets: inherit
 
   gate:

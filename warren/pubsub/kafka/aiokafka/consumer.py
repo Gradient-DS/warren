@@ -33,6 +33,7 @@ from warren.pubsub.routing import REPLAY_ROUTING_KEY_FIELD
 from warren.workers.messages import (
     ExtractMessageIdentityFunc,
     extract_message_identity,
+    validate_message,
 )
 
 
@@ -343,13 +344,16 @@ class KafkaConsumerManager(ConsumerManagerBase):
 
     async def _process_message(self, message: ConsumerRecord) -> None:
         """Process a single message: deserialize, execute worker, handle commit/seek."""
-        # Deserialize. TypeError covers tombstone records (value=None).
         try:
-            body = json.loads(message.value)
-        except (json.JSONDecodeError, TypeError) as e:
-            self._log.error(f"Failed to deserialize message: {summarize_exception_chain(e)}")
-            await self._commit(message)  # ≙ reject(requeue=False)
-            return
+            await self._process_delivery(message)
+        except Exception as error:
+            self._log.error(f"Message rejected: {summarize_exception_chain(error)}")
+            await self._commit(message)
+
+    async def _process_delivery(self, message: ConsumerRecord) -> None:
+        body = json.loads(message.value)
+        validate_message(body)
+        self._extract_identity(body)
 
         try:
             result = await self._call_handler(body)

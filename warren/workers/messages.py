@@ -339,3 +339,16 @@ def extract_message_identity(message: dict) -> str:
     doc_id = data.get("doc_id", "?")
     part_idx = data.get("part_idx", "?")
     return f"job={job_id} doc={doc_id} part={part_idx}"
+
+
+def validate_message(message: object) -> None:
+    """Validate framework fields before dispatch or identity extraction.
+
+    :raises ValueError: If the body or its data is not a dictionary.
+    """
+    if not isinstance(message, dict):
+        reason = "message must be a dictionary"
+        raise ValueError(reason)
+    if "data" in message and not isinstance(message["data"], dict):
+        reason = "message data must be a dictionary"
+        raise ValueError(reason)

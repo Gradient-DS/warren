@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Reject malformed RabbitMQ and Kafka deliveries even when decoding, identity
+  extraction or failure handling raises, so subsequent messages keep flowing.
+
 - The `path` document resolver is confined to its base directory: absolute
   paths, `..` traversal and symlinks resolving outside it are refused, and
   `base_dir` is required. The runtime registers it only when

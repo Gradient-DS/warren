@@ -7,6 +7,7 @@ every settle site and pin that a task exception is logged rather than lost.
 """
 
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -169,17 +170,11 @@ def test_hard_failure_publishes_envelope_and_rejects() -> None:
 
 def test_message_task_exception_is_logged(caplog: pytest.LogCaptureFixture) -> None:
     """A non-transport error escaping the task must reach the log, not GC."""
-
-    class _Exploding(FakeIncomingMessage):
-        @property
-        def channel(self) -> object:
-            msg = "not a transport error"
-            raise KeyError(msg)
-
     manager = make_manager(FakeWorker(result=None))
+    manager._process_message = AsyncMock(side_effect=KeyError("unexpected task error"))
 
     async def scenario() -> None:
-        await manager._on_message(_Exploding())  # type: ignore[arg-type]
+        await manager._on_message(FakeIncomingMessage())  # type: ignore[arg-type]
         await asyncio.gather(*manager._in_flight_tasks, return_exceptions=True)
         await asyncio.sleep(0)  # let the done-callback run
 

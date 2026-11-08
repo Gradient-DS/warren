@@ -41,6 +41,7 @@ from warren.pubsub.routing import DELIVERY_COUNT_FIELD, REPLAY_ROUTING_KEY_FIELD
 from warren.workers.messages import (
     ExtractMessageIdentityFunc,
     extract_message_identity,
+    validate_message,
 )
 
 
@@ -309,14 +310,26 @@ class RMQConsumerManager(ConsumerManagerBase):
 
     async def _process_message(self, message: AbstractIncomingMessage) -> None:
         """Process a single message: deserialize, execute worker, handle ack/nack."""
-        # Deserialize
         try:
-            body = json.loads(message.body)
-        except json.JSONDecodeError as e:
-            self._log.error(f"Failed to deserialize message: {summarize_exception_chain(e)}")
-            await self._settle(message, "reject", identity="?")
-            return
+            await self._process_delivery(message)
+        except asyncio.CancelledError:
+            await self._settle(message, "requeue", identity="?")
+            raise
+        except Exception as error:
+            self._log.error(f"Message rejected: {summarize_exception_chain(error)}")
+            try:
+                await self._settle(message, "reject", identity="?")
+            except Exception as settle_error:
+                self._log.error(f"Reject failed: {summarize_exception_chain(settle_error)}")
+                # Closing the delivery channel releases its unacked deliveries.
+                try:
+                    await message.channel.close()
+                except Exception as close_error:
+                    self._log.error(f"Channel close failed: {summarize_exception_chain(close_error)}")
 
+    async def _process_delivery(self, message: AbstractIncomingMessage) -> None:
+        body = json.loads(message.body)
+        validate_message(body)
         identity = self._extract_identity(body)
 
         if (

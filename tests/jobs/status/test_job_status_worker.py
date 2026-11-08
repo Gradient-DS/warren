@@ -102,7 +102,7 @@ def test_transient_error_is_retried_until_it_heals() -> None:
 
     assert result is None  # completion short-circuits (num_documents None)
     assert results.record_calls == 3  # 2 transient failures + 1 success
-    assert jobs.get_job_calls == 1  # completion checked once, after success
+    assert jobs.get_job_calls == 3  # membership checked before each recording attempt
 
 
 def test_sustained_transient_error_drops_observation() -> None:
@@ -114,7 +114,7 @@ def test_sustained_transient_error_drops_observation() -> None:
 
     assert result is None  # dropped (acked), not raised
     assert results.record_calls == 5  # all attempts used
-    assert jobs.get_job_calls == 0  # never got past recording
+    assert jobs.get_job_calls == 5  # membership checked before each recording attempt
 
 
 def test_permanent_error_propagates_without_retry() -> None:

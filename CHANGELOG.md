@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Restrict job observations and completion counts to optional stored `doc_ids`.
+  Runtime status workers validate origins against the pipeline capabilities and
+  the stored job routing plan. Jobs without membership or origin metadata retain
+  their existing behavior; broker publisher identity is not authenticated.
+
 - Expire persisted retries one week after their due time by default, using
   a BSON date and `retention.retry_records_ttl_seconds`. Pending scans backfill
   legacy rows; custom retry stores retain ownership of their indexes.

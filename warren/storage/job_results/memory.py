@@ -102,11 +102,21 @@ class MemoryJobResultsStore(Base, JobResultsStoreInterface):
         record.pop("retry_count", None)
         record.pop("soft_failures", None)
 
-    async def count_completed_docs(self, job_id: str, final_data_type: str) -> int:
-        return sum(1 for r in self._for_job(job_id) if r["data_type"] == final_data_type and r["success"])
+    async def count_completed_docs(self, job_id: str, final_data_type: str, *, doc_ids: list[str] | None = None) -> int:
+        return sum(
+            1
+            for r in self._for_job(job_id)
+            if r["data_type"] == final_data_type and r["success"] and (doc_ids is None or r["doc_id"] in doc_ids)
+        )
 
-    async def count_hard_failed_docs(self, job_id: str) -> int:
-        return len({r["doc_id"] for r in self._for_job(job_id) if "hard_failure" in r})
+    async def count_hard_failed_docs(self, job_id: str, *, doc_ids: list[str] | None = None) -> int:
+        return len(
+            {
+                r["doc_id"]
+                for r in self._for_job(job_id)
+                if "hard_failure" in r and (doc_ids is None or r["doc_id"] in doc_ids)
+            }
+        )
 
     async def get_stage_counts(self, job_id: str) -> list[dict]:
         stages: dict[str, dict] = {}

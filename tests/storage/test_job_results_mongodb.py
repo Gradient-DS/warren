@@ -1,4 +1,5 @@
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -30,3 +31,24 @@ def test_hard_failure_count_matches_the_partial_index(rows: list[dict], expected
             {"$count": "total"},
         ]
     ]
+
+
+@pytest.mark.parametrize("doc_ids", [[], ["own"]])
+def test_completion_queries_restrict_document_membership(doc_ids: list[str]) -> None:
+    client = MongoClient()
+    collection = AggregateCollection([])
+    collection.count_documents = AsyncMock(return_value=0)
+    client["test"].collections["job_results"] = collection
+    store = MongoDBJobResultsStore(client, database_name="test")
+
+    async def run() -> None:
+        assert await store.count_completed_docs("j", "final", doc_ids=doc_ids) == 0
+        assert await store.count_hard_failed_docs("j", doc_ids=doc_ids) == 0
+
+    asyncio.run(run())
+    collection.count_documents.assert_awaited_once_with(
+        {"job_id": "j", "doc_id": {"$in": doc_ids}, "data_type": "final", "success": True}
+    )
+    assert collection.pipelines[0][0] == {
+        "$match": {"job_id": "j", "doc_id": {"$in": doc_ids}, "hard_failure": {"$exists": True}}
+    }

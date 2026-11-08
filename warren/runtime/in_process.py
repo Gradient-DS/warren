@@ -18,6 +18,7 @@ from warren.runtime.config import RuntimeConfig
 from warren.runtime.infrastructure import RuntimeInfra
 from warren.runtime.runner import DefaultWorkerRunner, create_default_resolvers
 from warren.runtime.spec import PipelineSpec
+from warren.runtime.validation import build_capability_registry
 from warren.storage.documents.fetcher import CachedDocumentFetcher
 from warren.storage.memory_registry import MemoryStoreRegistry
 from warren.workers.runners import WorkerRunnerBase
@@ -107,6 +108,7 @@ async def create_in_process_runners(
             "job-status-0",
             exchange=observer,
             job_store=stores.job_store(),
+            capabilities=build_capability_registry(pipeline),
             job_results_store=stores.job_results_store(),
             infra=infra,
         )

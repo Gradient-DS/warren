@@ -228,20 +228,24 @@ class MongoDBJobResultsStore(Base, JobResultsStoreInterface):
         self,
         job_id: str,
         final_data_type: str,
+        *,
+        doc_ids: list[str] | None = None,
     ) -> int:
         return await self._collection.count_documents(
             {
                 "job_id": job_id,
+                **({"doc_id": {"$in": doc_ids}} if doc_ids is not None else {}),
                 "data_type": final_data_type,
                 "success": True,
             }
         )
 
-    async def count_hard_failed_docs(self, job_id: str) -> int:
+    async def count_hard_failed_docs(self, job_id: str, *, doc_ids: list[str] | None = None) -> int:
         pipeline = [
             {
                 "$match": {
                     "job_id": job_id,
+                    **({"doc_id": {"$in": doc_ids}} if doc_ids is not None else {}),
                     "hard_failure": {"$exists": True},
                 },
             },

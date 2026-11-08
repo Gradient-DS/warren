@@ -189,7 +189,7 @@ def observer_exchange(exchange: RMQExchangeConfig) -> RMQExchangeConfig:
     so the framework derives a dedicated **fanout** observer exchange
     (``<name>.observer``). On a direct pipeline, workers echo their results to it
     and lifecycle envelopes go to it, so observers see the whole pipeline; the
-    user never declares it. See warren/docs/routing.md.
+    framework declares it with the same passive setting. See warren/docs/routing.md.
     """
     if exchange.type in ("fanout", "topic"):
         return exchange
@@ -197,6 +197,7 @@ def observer_exchange(exchange: RMQExchangeConfig) -> RMQExchangeConfig:
         name=f"{exchange.name}.observer",
         type="fanout",
         durable=exchange.durable,
+        passive=exchange.passive,
     )
 
 

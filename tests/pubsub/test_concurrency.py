@@ -108,7 +108,9 @@ def test_rabbitmq_prefetch_is_at_least_concurrency(prefetch: int, concurrency: i
         async def set_qos(self, *, prefetch_count: int) -> None:
             self.prefetch_count = prefetch_count
 
-        async def declare_exchange(self, name: str, exchange_type: str, *, durable: bool) -> _FakeExchange:
+        async def declare_exchange(
+            self, name: str, exchange_type: str, *, durable: bool, passive: bool = False
+        ) -> _FakeExchange:
             return _FakeExchange()
 
     class Connection:

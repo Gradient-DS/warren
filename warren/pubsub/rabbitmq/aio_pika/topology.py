@@ -34,6 +34,7 @@ async def declare_exchange(
             config.name,
             config.type,
             durable=config.durable,
+            passive=config.passive,
         )
     except Exception as e:
         msg = f"Failed to declare exchange '{config.name}' (type={config.type})"

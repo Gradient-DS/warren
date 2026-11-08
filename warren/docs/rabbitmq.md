@@ -24,6 +24,30 @@ Producer → Exchange → Binding (routing key match?) → Queue → Consumer
 | `topic` | Wildcards: `*` (one word), `#` (zero or more) |
 | `fanout` | Ignored — all bound queues receive all messages |
 
+## Existing exchanges
+
+Set `passive=True` on the pipeline's `RMQExchangeConfig` to use exchanges
+that are provisioned separately:
+
+```python
+exchange = RMQExchangeConfig(name="jobs", type="topic", passive=True)
+```
+
+Publishers and consumers then passively declare the exchange: setup checks
+that it exists and does not create or configure it. A missing exchange fails
+setup with `PubSubSetupError`. The default is `passive=False`, preserving
+normal exchange declaration.
+
+Set `type` to the existing exchange's type because Warren uses it to choose
+routing and bindings. Queue declaration and binding still run normally; the
+account needs permission for those operations and for publishing or consuming.
+
+The setting follows derived exchanges and all runners, including job-status,
+retry, and publication. For a direct data exchange named `jobs`, provision
+both `jobs` (direct) and `jobs.observer` (fanout) before starting workers in
+passive mode. For fanout and topic, the data exchange is also the observer.
+The memory and Kafka backends ignore this RabbitMQ declaration setting.
+
 ## Worker Patterns
 
 **Competing consumers (shared queue):** Multiple instances of the same worker type share one queue. Each message goes to ONE worker. Use for load balancing / task distribution.

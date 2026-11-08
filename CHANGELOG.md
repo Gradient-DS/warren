@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `RMQExchangeConfig.passive` lets publishers and consumers use existing
+  exchanges without configuring them. Derived observer exchanges and support
+  runners preserve the setting; missing exchanges fail setup.
+
 - Each package `__init__.py` re-exports the public names of its modules and
   lists them in `__all__`, for example `from warren.workers import
   ProcessingMessage` and `from warren import HardFailureException`. The

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-08
+
 ### Added
 
 - `RMQExchangeConfig.passive` lets publishers and consumers use existing
@@ -39,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `DocumentStoreInterface` gains `update_if`, which retry stores must implement.
+  The built-in MongoDB, memory and cached stores do.
 - `warren.storage` no longer re-exports `ResultsStoreInterface`. Import it
   from `warren.storage.results`, its only package home.
 

@@ -132,7 +132,7 @@ class RetentionConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    retry_records_ttl_seconds: int | None = Field(default=604800, gt=0, strict=True)
+    retry_records_ttl_seconds: int | None = Field(default=604800, gt=0)
     job_records_ttl_seconds: int | None = Field(default=None, gt=0)
     job_records_max_age_seconds: int | None = Field(default=None, gt=0)
 

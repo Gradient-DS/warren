@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Accept environment-expanded numeric YAML values for retry policy and retention
+  settings while preserving their bounds and finite-number checks.
+
 - Preserve immediate subsequent retries received by a standby during publishing,
   using generation-matched store updates without replacing pending retries.
 

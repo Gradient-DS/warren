@@ -275,3 +275,38 @@ def test_retention_from_yaml(tmp_path: Path, ttl: int | None, max_age: int | Non
 def test_invalid_retention_settings(settings: dict[str, int]) -> None:
     with pytest.raises(ValidationError):
         RuntimeConfig.model_validate({"retention": settings})
+
+
+@pytest.mark.parametrize(
+    ("section", "field", "value", "expected"),
+    [
+        ("policy", "initial_delay", "12", 12),
+        ("policy", "max_retries", "3", 3),
+        ("policy", "backoff_base", "1.5", 1.5),
+        ("policy", "max_delay_cap", "600", 600),
+        ("policy", "max_retries_cap", "8", 8),
+        ("policy", "fallback_requeue_delay", "0.25", 0.25),
+        ("retention", "retry_records_ttl_seconds", "86400", 86400),
+    ],
+)
+def test_env_retry_numeric_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, section: str, field: str, value: str, expected: int | float
+) -> None:
+    monkeypatch.setenv("WARREN_TEST_RETRY_VALUE", value)
+    setting = {field: "${WARREN_TEST_RETRY_VALUE}"}
+    data = {"retry": {"policy": setting}} if section == "policy" else {"retention": setting}
+    config = RuntimeConfig.from_yaml(_write_yaml(tmp_path, yaml.safe_dump(data)))
+    actual = getattr(config.retry.policy if section == "policy" else config.retention, field)
+    assert actual == expected
+    assert type(actual) is type(expected)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("initial_delay", "-1"), ("backoff_base", "NaN"), ("backoff_base", "Infinity"), ("max_delay_cap", "later")],
+)
+def test_env_retry_numeric_bounds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str, value: str) -> None:
+    monkeypatch.setenv("WARREN_TEST_RETRY_VALUE", value)
+    data = {"retry": {"policy": {field: "${WARREN_TEST_RETRY_VALUE}"}}}
+    with pytest.raises(ValidationError):
+        RuntimeConfig.from_yaml(_write_yaml(tmp_path, yaml.safe_dump(data)))

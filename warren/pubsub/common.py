@@ -117,13 +117,13 @@ class RetryConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    initial_delay: int = Field(default=30, ge=0, strict=True)
-    max_retries: int = Field(default=5, ge=0, strict=True)
-    backoff_base: float = Field(default=2.0, ge=0, strict=True, allow_inf_nan=False)
+    initial_delay: int = Field(default=30, ge=0)
+    max_retries: int = Field(default=5, ge=0)
+    backoff_base: float = Field(default=2.0, ge=0, allow_inf_nan=False)
     jitter: bool = True
-    max_delay_cap: int = Field(default=300, ge=0, strict=True)
-    max_retries_cap: int = Field(default=10, ge=0, strict=True)
-    fallback_requeue_delay: float = Field(default=2.0, ge=0, strict=True, allow_inf_nan=False)
+    max_delay_cap: int = Field(default=300, ge=0)
+    max_retries_cap: int = Field(default=10, ge=0)
+    fallback_requeue_delay: float = Field(default=2.0, ge=0, allow_inf_nan=False)
 
 
 @dataclass(frozen=True)

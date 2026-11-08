@@ -34,6 +34,7 @@ for sync code that runs in a thread.
 
 - `build_message_key`
 - `build_message_key_prefix`
+- `validate_message`
 - `extract_message_identity`
 - `ExtractMessageIdentityFunc`
 """
@@ -47,6 +48,7 @@ from warren.workers.messages import (
     build_message_key,
     build_message_key_prefix,
     extract_message_identity,
+    validate_message,
 )
 from warren.workers.runners import ConsumerManagerFactory, WorkerRunnerBase
 from warren.workers.workers import (
@@ -73,4 +75,5 @@ __all__ = [
     "build_message_key",
     "build_message_key_prefix",
     "extract_message_identity",
+    "validate_message",
 ]

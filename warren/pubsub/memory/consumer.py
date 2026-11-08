@@ -308,7 +308,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
             **({"scope": body["scope"]} if "scope" in body else {}),
             "data_type": "soft-failure",
             "data": body,
-            "job_id": body.get("job_id"),
+            **({"job_id": body["job_id"]} if "job_id" in body else {}),
             "origin": {
                 "type": self._consumer.type,
                 "name": self._consumer.name,
@@ -346,7 +346,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
                 **({"scope": body["scope"]} if "scope" in body else {}),
                 "data_type": "hard-failure",
                 "data": body,
-                "job_id": body.get("job_id"),
+                **({"job_id": body["job_id"]} if "job_id" in body else {}),
                 "origin": {
                     "type": self._consumer.type,
                     "name": self._consumer.name,

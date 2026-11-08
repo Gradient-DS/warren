@@ -29,6 +29,7 @@ from warren.storage.scoping import scope_fields
 from warren.workers.messages import (
     build_message_key,
     extract_message_identity,
+    validate_message,
 )
 from warren.workers.workers import (
     AsyncProcessingWorkerBase,
@@ -129,6 +130,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
 
         :return: None -- no downstream publish.
         """
+        validate_message(message)
         if message.get("data_type") != "soft-failure":
             return None
 

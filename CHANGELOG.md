@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Validate message and failure-envelope IDs before storage access. IDs must
+  be strings without line separators; omitted IDs remain supported.
+
 - Reject malformed RabbitMQ and Kafka deliveries even when decoding, identity
   extraction or failure handling raises, so subsequent messages keep flowing.
 

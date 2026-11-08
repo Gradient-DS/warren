@@ -24,6 +24,7 @@ from warren.storage.jobs.interface import (
 from warren.storage.retry import (
     run_with_transient_retry,
 )
+from warren.workers.messages import validate_message
 from warren.workers.workers import (
     FilteringWorkerBase,
 )
@@ -103,6 +104,7 @@ class JobStatusWorker(FilteringWorkerBase):
         the observation is then dropped (acked) rather than re-fanned to
         the bus.
         """
+        validate_message(message)
         data_type = message.get("data_type")
         job_id = message["job_id"]
 

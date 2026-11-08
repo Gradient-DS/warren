@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Use the shared publisher-origin constant when validating job observations.
+
 - Re-read job state after recording an observation so concurrent document-count
   and completion updates are reflected in the completion check.
 

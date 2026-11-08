@@ -14,6 +14,7 @@ from collections.abc import Mapping
 
 from basics.logging_utils import summarize_exception_chain
 
+from warren.constants import PUBLISHER_ORIGIN_TYPE
 from warren.pubsub.routing import ROUTING_PLAN_KEY, RoutingPlan
 from warren.storage.exceptions import (
     TransientStoreError,
@@ -205,7 +206,7 @@ class JobStatusWorker(FilteringWorkerBase):
         data_type = inner.get("data_type")
         if not isinstance(data_type, str):
             return False
-        if producer == "publisher":
+        if producer == PUBLISHER_ORIGIN_TYPE:
             # Publication has a known framework origin but no declared output type.
             if (
                 data_type == job.get("final_data_type")

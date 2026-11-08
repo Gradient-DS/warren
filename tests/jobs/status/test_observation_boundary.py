@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+import warren.jobs.status.job_status_worker as status_module
 from tests.storage.job_store_doubles import JobCollection, MongoClient
 from warren.common import MessageConsumerInterface
 from warren.jobs.status.job_status_worker import JobStatusWorker
@@ -186,5 +187,18 @@ def test_publisher_can_finish_a_job_without_a_declared_worker_output() -> None:
         job_id = await jobs.create_job("final", num_documents=1)
         worker = JobStatusWorker("status", job_store=jobs, job_results_store=results, capabilities={})
         assert await worker(observation(job_id, origin="publisher")) is not None
+
+    asyncio.run(run())
+
+
+def test_publication_origin_uses_shared_constant(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(status_module, "PUBLISHER_ORIGIN_TYPE", "source", raising=False)
+
+    async def run() -> None:
+        jobs, results = MemoryJobStore(), MemoryJobResultsStore()
+        job_id = await jobs.create_job("final", num_documents=1)
+        worker = JobStatusWorker("status", job_store=jobs, job_results_store=results, capabilities={})
+        assert await worker(observation(job_id, origin="publisher")) is None
+        assert await worker(observation(job_id, origin="source")) is not None
 
     asyncio.run(run())

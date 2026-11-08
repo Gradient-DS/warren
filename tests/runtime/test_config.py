@@ -259,7 +259,7 @@ def test_retention_defaults_to_unmanaged() -> None:
 def test_retention_from_yaml(tmp_path: Path, ttl: int | None, max_age: int | None) -> None:
     settings = {"job_records_ttl_seconds": ttl, "job_records_max_age_seconds": max_age}
     path = _write_yaml(tmp_path, yaml.safe_dump({"retention": settings}))
-    assert RuntimeConfig.from_yaml(path).retention.model_dump() == settings
+    assert RuntimeConfig.from_yaml(path).retention.model_dump() == {"retry_records_ttl_seconds": 604800, **settings}
 
 
 @pytest.mark.parametrize(

@@ -46,6 +46,7 @@ from warren.storage.document_store.interface import (
 from warren.storage.document_store.mongodb import (
     MongoDBDocumentStore,
 )
+from warren.storage.mongo_retention import configure_ttl_index
 from warren.workers.runners import (
     ConsumerManagerFactory,
     WorkerRunnerBase,
@@ -205,6 +206,11 @@ class RetryWorkerRunner(WorkerRunnerBase):
             fields_to_index=["scope"] if self._config.scoping.enabled else None,
         )
         await mongo_store.setup()
+        await configure_ttl_index(
+            self._infra.mongo_client[self._config.mongodb.database][retry_cfg.collection_name],
+            "fire_at_date",
+            self._config.retention.retry_records_ttl_seconds,
+        )
         if self._config.scoping.enabled:
             return mongo_store
 

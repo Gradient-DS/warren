@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Expire persisted retries one week after their due time by default, using
+  a BSON date and `retention.retry_records_ttl_seconds`. Pending scans backfill
+  legacy rows; custom retry stores retain ownership of their indexes.
+
 - Preserve pending retry generations with insert-only persistence, including
   across workers and for legacy rows; condition cleanup on the fetched generation.
 

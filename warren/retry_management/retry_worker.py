@@ -13,6 +13,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
+from datetime import UTC, datetime
 
 from basics.logging_utils import summarize_exception_chain
 
@@ -155,11 +156,13 @@ class RetryWorker(AsyncProcessingWorkerBase):
 
         generation = str(uuid.uuid4())
 
+        fire_at = self._clock() + delay_seconds
         envelope = {
             **fields,
             self.REQUIRED_DOC_ID_FIELD: retry_key,
             "message": failed_message,
-            "fire_at": self._clock() + delay_seconds,
+            "fire_at": fire_at,
+            "fire_at_date": datetime.fromtimestamp(fire_at, UTC),
             "retry_after_seconds": delay_seconds,
             "generation": generation,
         }
@@ -204,12 +207,19 @@ class RetryWorker(AsyncProcessingWorkerBase):
                     retry_key = envelope[self.REQUIRED_DOC_ID_FIELD]
                     validate_message(envelope["message"])
                     fire_at = nonnegative_number(envelope["fire_at"], "retry fire_at")
-                except (KeyError, ValueError) as e:
+                    fire_at_date = datetime.fromtimestamp(fire_at, UTC)
+                except (KeyError, ValueError, OverflowError, OSError) as e:
                     # A single malformed persisted envelope must not abort
                     # recovery of the rest.
                     skipped_count += 1
                     self._log.warning(f"Skipping malformed persisted retry envelope: {summarize_exception_chain(e)}")
                     continue
+
+                if "fire_at_date" not in envelope:
+                    try:
+                        await self._retry_store.update(retry_key, {"fire_at_date": fire_at_date})
+                    except DocumentNotFoundError:
+                        continue
 
                 if retry_key in self._republishing_keys:
                     continue

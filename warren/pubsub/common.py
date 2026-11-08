@@ -9,7 +9,7 @@ from typing import Literal, Protocol
 import time
 from dataclasses import dataclass
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from warren.exceptions import WarrenError
 
@@ -117,13 +117,13 @@ class RetryConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    initial_delay: int = 30
-    max_retries: int = 5
-    backoff_base: float = 2.0
+    initial_delay: int = Field(default=30, ge=0, strict=True)
+    max_retries: int = Field(default=5, ge=0, strict=True)
+    backoff_base: float = Field(default=2.0, ge=0, strict=True, allow_inf_nan=False)
     jitter: bool = True
-    max_delay_cap: int = 300
-    max_retries_cap: int = 10
-    fallback_requeue_delay: float = 2.0
+    max_delay_cap: int = Field(default=300, ge=0, strict=True)
+    max_retries_cap: int = Field(default=10, ge=0, strict=True)
+    fallback_requeue_delay: float = Field(default=2.0, ge=0, strict=True, allow_inf_nan=False)
 
 
 @dataclass(frozen=True)

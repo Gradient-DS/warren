@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Reject invalid retry counters and delays, cap scheduler delays with the
+  configured policy, and saturate exponential backoff without overflow.
+
 - Validate message and failure-envelope IDs before storage access. IDs must
   be strings without line separators; omitted IDs remain supported.
 

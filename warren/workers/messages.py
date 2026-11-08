@@ -61,6 +61,8 @@ from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from warren._retry_policy import retry_metadata
+
 
 @dataclass(frozen=True)
 class MessageOrigin:
@@ -364,6 +366,8 @@ def validate_message(message: object) -> None:
                 if not isinstance(value, str) or any(character in value for character in "\r\n\x85\u2028\u2029"):
                     reason = f"{id_field} must be a string without line separators"
                     raise ValueError(reason)
+        if "retry" in message:
+            retry_metadata(message["retry"])
         if message.get("data_type") not in ("soft-failure", "hard-failure"):
             return
         message = data

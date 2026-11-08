@@ -153,6 +153,7 @@ class RetryWorkerRunner(WorkerRunnerBase):
             scoping_enabled=self._config.scoping.enabled,
             republish_publisher=self._republish_publisher,
             message_key_func=self._message_key_func,
+            retry_config=self._config.retry.policy,
             lease=(
                 MongoRetryLease(
                     self._infra.mongo_client,

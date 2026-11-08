@@ -16,9 +16,11 @@ from contextlib import suppress
 
 from basics.logging_utils import summarize_exception_chain
 
+from warren._retry_policy import nonnegative_number, retry_metadata
 from warren.pubsub.common import (
     PublisherInterface,
     PublishFailureException,
+    RetryConfig,
 )
 from warren.retry_management.lease import RetryLeaseInterface
 from warren.storage.document_store.interface import (
@@ -59,6 +61,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
     :param message_key_func: Function to extract a composite key from
         a message dict. Defaults to building key from
         job_id/doc_id/part_idx using ``build_message_key``.
+    :param retry_config: Delay defaults and caps, shared with the consumers.
     :param scoping_enabled: Prefix the retry key with the scope of the
         message (``s:<scope>:``) when the message has a valid scope.
     :param lease: Lease that lets one instance schedule and republish at a
@@ -82,6 +85,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
         republish_publisher: PublisherInterface,
         message_key_func: Callable[[dict], str] | None = None,
         scoping_enabled: bool = False,
+        retry_config: RetryConfig | None = None,
         lease: RetryLeaseInterface | None = None,
         lease_ttl_seconds: int = 30,
         clock: Callable[[], float] = time.time,
@@ -97,6 +101,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
         if lease_ttl_seconds <= 0:
             msg = "lease_ttl_seconds must be positive"
             raise ValueError(msg)
+        self._retry_config = retry_config or RetryConfig()
         self._lease = lease
         self._lease_ttl = lease_ttl_seconds
         self._clock = clock
@@ -135,12 +140,12 @@ class RetryWorker(AsyncProcessingWorkerBase):
             return None
 
         failed_message: dict = message["data"]
-        retry_info = failed_message.get("retry", {})
+        retry_info = retry_metadata(failed_message.get("retry", {}))
         fields = scope_fields(self._scoping_enabled, failed_message.get("scope"))
         retry_key = self._message_key_func(failed_message)
         if fields:
             retry_key = f"s:{fields['scope']}:{retry_key}"
-        delay_seconds = retry_info.get("after", 30)
+        delay_seconds = min(retry_info.get("after", self._retry_config.initial_delay), self._retry_config.max_delay_cap)
 
         generation = str(uuid.uuid4())
 
@@ -187,8 +192,9 @@ class RetryWorker(AsyncProcessingWorkerBase):
                     return
                 try:
                     retry_key = envelope[self.REQUIRED_DOC_ID_FIELD]
-                    fire_at = envelope["fire_at"]
-                except KeyError as e:
+                    validate_message(envelope["message"])
+                    fire_at = nonnegative_number(envelope["fire_at"], "retry fire_at")
+                except (KeyError, ValueError) as e:
                     # A single malformed persisted envelope must not abort
                     # recovery of the rest.
                     skipped_count += 1

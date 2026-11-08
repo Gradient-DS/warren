@@ -2,7 +2,6 @@ from typing import Any, Literal
 
 import asyncio
 import json
-import random
 from collections.abc import Awaitable
 
 from aio_pika.abc import (
@@ -14,6 +13,7 @@ from aio_pika.abc import (
 from aio_pika.exceptions import AMQPError, ChannelInvalidStateError
 from basics.logging_utils import summarize_exception_chain
 
+from warren._retry_policy import resolve_retry_after, resolve_retry_max, retry_metadata
 from warren.common import (
     HardFailureException,
     MessageConsumerInterface,
@@ -517,8 +517,8 @@ class RMQConsumerManager(ConsumerManagerBase):
             return
 
         # Read existing retry state from message (may be a re-retry)
-        existing_retry = body.get("retry", {})
-        current_count = existing_retry.get("count", 0)
+        existing_retry = retry_metadata(body.get("retry", {}))
+        current_count = min(existing_retry.get("count", 0), self._retry_config.max_retries_cap)
 
         # Workers can request delayed redelivery without consuming a
         # retry slot — used when SoftFailureException is the redelivery
@@ -651,20 +651,8 @@ class RMQConsumerManager(ConsumerManagerBase):
 
     def _resolve_retry_after(self, error: SoftFailureException, attempt: int) -> int:
         """Calculate delay for this retry attempt with exponential backoff and optional jitter."""
-        base = error.retry_after or self._retry_config.initial_delay
-        exp_base = error.backoff_base or self._retry_config.backoff_base
-        use_jitter = error.jitter if error.jitter is not None else self._retry_config.jitter
-
-        # attempt is 0 for a deferral that consumed no retry slot; clamp so
-        # the exponent never goes negative and halves the requested delay.
-        delay = base * (exp_base ** max(attempt - 1, 0))
-
-        if use_jitter:
-            delay *= random.uniform(0.5, 1.5)
-
-        return min(int(delay), self._retry_config.max_delay_cap)
+        return resolve_retry_after(error, attempt, self._retry_config)
 
     def _resolve_retry_max(self, error: SoftFailureException) -> int:
         """Resolve max retries: worker intent capped by system limit."""
-        requested = error.retry_max or self._retry_config.max_retries
-        return min(requested, self._retry_config.max_retries_cap)
+        return resolve_retry_max(error, self._retry_config)

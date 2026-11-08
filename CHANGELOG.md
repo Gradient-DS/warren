@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Treat explicit null message IDs like omitted IDs, preserving compatibility
+  with failure envelopes already in flight.
+
 - Accept environment-expanded numeric YAML values for retry policy and retention
   settings while preserving their bounds and finite-number checks.
 

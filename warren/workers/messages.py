@@ -348,7 +348,7 @@ def validate_message(message: object) -> None:
     """Validate framework fields before dispatch or identity extraction.
 
     :raises ValueError: If the body or its data is not a dictionary, or an
-        identity is not a string without line separators. Missing IDs are allowed.
+        identity is not a string without line separators. Missing and null IDs are allowed.
     """
     seen: set[int] = set()
     while True:
@@ -363,6 +363,8 @@ def validate_message(message: object) -> None:
         for container, id_field in ((message, "job_id"), (data, "doc_id")):
             if id_field in container:
                 value = container[id_field]
+                if value is None:
+                    continue
                 if not isinstance(value, str) or any(character in value for character in "\r\n\x85\u2028\u2029"):
                     reason = f"{id_field} must be a string without line separators"
                     raise ValueError(reason)

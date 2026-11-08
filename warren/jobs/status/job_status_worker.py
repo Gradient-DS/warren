@@ -168,7 +168,7 @@ class JobStatusWorker(FilteringWorkerBase):
         else:
             await self._handle_success(job_id, message)
 
-        result = await self._check_completion(job_id, job)
+        result = await self._check_completion(job_id)
         if result is not None and "scope" in message:
             result["scope"] = message["scope"]
         return result
@@ -310,10 +310,9 @@ class JobStatusWorker(FilteringWorkerBase):
             error=envelope.get("error", ""),
         )
 
-    async def _check_completion(self, job_id: str, job: dict | None = None) -> dict | None:
+    async def _check_completion(self, job_id: str) -> dict | None:
         """Check if a job is complete and return a completion signal if so."""
-        if job is None:
-            job = await self._job_store.get_job(job_id)
+        job = await self._job_store.get_job(job_id)
 
         status = job.get("status", {})
         if status.get("completed"):

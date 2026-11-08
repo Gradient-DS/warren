@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Re-read job state after recording an observation so concurrent document-count
+  and completion updates are reflected in the completion check.
+
 - Treat explicit null message IDs like omitted IDs, preserving compatibility
   with failure envelopes already in flight.
 

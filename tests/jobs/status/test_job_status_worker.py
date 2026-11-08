@@ -8,6 +8,7 @@ escape to the bus.
 """
 
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -102,7 +103,7 @@ def test_transient_error_is_retried_until_it_heals() -> None:
 
     assert result is None  # completion short-circuits (num_documents None)
     assert results.record_calls == 3  # 2 transient failures + 1 success
-    assert jobs.get_job_calls == 3  # membership checked before each recording attempt
+    assert jobs.get_job_calls == 4  # membership before each attempt, completion after recording
 
 
 def test_sustained_transient_error_drops_observation() -> None:
@@ -221,3 +222,41 @@ def test_failures_at_multiple_stages_count_as_one_item() -> None:
         }
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("change", ["count_known", "count_increased", "completed"])
+def test_completion_rereads_job_after_recording(change: str) -> None:
+    async def run() -> None:
+        jobs, results = MemoryJobStore(), MemoryJobResultsStore()
+        job_id = await jobs.create_job("final", num_documents=None if change == "count_known" else 1)
+        worker = JobStatusWorker("status", job_store=jobs, job_results_store=results)
+        started, resume = asyncio.Event(), asyncio.Event()
+        record_success = results.record_success
+
+        async def record(**kwargs: object) -> None:
+            started.set()
+            await resume.wait()
+            await record_success(**kwargs)
+
+        results.record_success = record
+        results.count_completed_docs = AsyncMock(wraps=results.count_completed_docs)
+        task = asyncio.create_task(worker.process({"job_id": job_id, "data_type": "final", "data": {"doc_id": "doc"}}))
+        try:
+            await started.wait()
+            if change == "completed":
+                await jobs.update_completion(job_id, completed=True, with_failures=False)
+            else:
+                await jobs.update_num_documents(job_id, 1 if change == "count_known" else 2)
+        finally:
+            resume.set()
+        output = await task
+        if change == "count_known":
+            assert output is not None
+        else:
+            assert output is None
+        if change == "completed":
+            results.count_completed_docs.assert_not_awaited()
+        elif change == "count_increased":
+            assert not (await jobs.get_status(job_id))["completed"]
+
+    asyncio.run(run())

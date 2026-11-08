@@ -46,3 +46,35 @@ def test_conditional_delete_preserves_replaced_rows(backend: str, cached: bool) 
         assert await store.delete("legacy", expected={"generation": None})
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("backend", ["memory", "mongodb"])
+@pytest.mark.parametrize("cached", [False, True])
+def test_conditional_update_requires_current_generation(backend: str, cached: bool) -> None:
+    async def run() -> None:
+        mongo = MongoClient()
+        mongo["control"].collections["retries"] = ConditionalCollection()
+        store = (
+            MemoryDocumentStore(collection_name="retries", doc_id_field="retry_key")
+            if backend == "memory"
+            else MongoDBDocumentStore(
+                mongo, database_name="control", collection_name="retries", doc_id_field="retry_key"
+            )
+        )
+        if cached:
+            store = CachedDocumentStore(store, MemoryCache())
+        await store.insert({"retry_key": "key", "generation": "old"})
+        assert not await store.update_if("missing", {"republishing": True}, expected={"generation": "old"})
+        assert not await store.update_if("key", {"republishing": True}, expected={"generation": "new"})
+        assert "republishing" not in await store.get_document("key")
+        assert await store.update_if("key", {"republishing": True}, expected={"generation": "old"})
+        assert (await store.get_document("key"))["republishing"] is True
+        assert await store.update_if(
+            "key", {"generation": "new", "republishing": False}, expected={"generation": "old", "republishing": True}
+        )
+        assert not await store.update_if("key", {"republishing": True}, expected={"generation": "old"})
+        assert (await store.get_document("key"))["generation"] == "new"
+        await store.insert({"retry_key": "legacy"})
+        assert await store.update_if("legacy", {"republishing": True}, expected={"generation": None})
+
+    asyncio.run(run())

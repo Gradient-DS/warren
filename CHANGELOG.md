@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   load when you first use them, so the package imports without the `gcs` and
   `http` extras.
 
+### Fixed
+
+- Preserve immediate subsequent retries received by a standby during publishing,
+  using generation-matched store updates without replacing pending retries.
+
 ### Changed
 
 - `warren.storage` no longer re-exports `ResultsStoreInterface`. Import it

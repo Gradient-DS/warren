@@ -99,15 +99,20 @@ on the exchange, self-selecting for `data_type: "soft-failure"` messages.
 
 ## Pending generation ownership
 
-Each accepted retry row receives a UUID `generation`. A retry key is occupied
-until its row is successfully republished and conditionally deleted. Receipts
-use insert-only persistence: neither a duplicate nor an envelope with a different
-count or body can replace a pending row. This applies across workers through the
-store's unique retry-key index. Retry counts are untrusted and do not authorize
-replacement. A new generation can be accepted once the key is free. Competing
-receipts while it is occupied are ignored, including during a publish in flight.
-Legacy rows without a generation remain recoverable and receive the same protection;
-there is no new message field. Conditional deletion matches the fetched generation.
+Each accepted retry row receives a UUID `generation`. Receipts use insert-only
+persistence while that generation is pending. Before publishing, the active worker
+atomically sets `republishing: true` only if the generation still matches. A receipt
+that collides with a marked row can replace it with a new generation, conditionally
+matching both the old generation and the mark. This preserves an immediate subsequent
+soft failure received by a standby before the active finishes cleanup. A receipt
+colliding with an unmarked pending row is ignored, regardless of its count or body.
+
+Cleanup conditionally deletes only the generation that was published. A marked row
+left behind by a crash is recovered by the next pending scan; republishing it twice
+is acceptable. Known publish failures restore the pending state if the generation
+still matches. Legacy rows without a generation use the same transitions with a
+missing generation matching None. No new message field is required. Custom retry
+stores must implement the atomic `DocumentStoreInterface.update_if` operation.
 
 ## Components
 

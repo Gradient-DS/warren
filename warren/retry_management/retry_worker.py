@@ -56,9 +56,11 @@ class RetryWorker(AsyncProcessingWorkerBase):
     Omitting the lease is intended for single-process use.
 
     A generation is the store-issued UUID of one accepted pending row, not
-    the untrusted retry count. An occupied key is immutable until republish
-    succeeds or retention removes it; duplicate and competing envelopes are
-    ignored. Legacy pending rows without a generation are also protected.
+    the untrusted retry count. A pending generation is immutable. Before
+    publishing, its row is conditionally marked as republishing so an immediate
+    failure can replace it. Cleanup matches the old generation and preserves
+    that replacement. Marked rows remain recoverable after an interrupted publish.
+    Legacy rows without a generation use the same transitions.
 
     :param worker_name: Worker identifier.
     :param retry_store: Persistent store for messages awaiting retry.
@@ -165,6 +167,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
             "fire_at_date": datetime.fromtimestamp(fire_at, UTC),
             "retry_after_seconds": delay_seconds,
             "generation": generation,
+            "republishing": False,
         }
 
         identity = extract_message_identity(failed_message)
@@ -175,11 +178,24 @@ class RetryWorker(AsyncProcessingWorkerBase):
         )
 
         async with self._retry_lock:
-            try:
-                await self._retry_store.insert(envelope)
-            except DocumentAlreadyExistsError:
-                self._log.info(f"[{identity}] Retry already pending; preserving its generation")
-                return None
+            while True:
+                try:
+                    await self._retry_store.insert(envelope)
+                    break
+                except DocumentAlreadyExistsError:
+                    # Read authoritative state: a different process may have changed it.
+                    current = await anext(self._retry_store.query({self.REQUIRED_DOC_ID_FIELD: retry_key}), None)
+                    if current is None:
+                        continue
+                    if current.get("republishing") is not True:
+                        self._log.info(f"[{identity}] Retry already pending; preserving its generation")
+                        return None
+                    if await self._retry_store.update_if(
+                        retry_key,
+                        envelope,
+                        expected={"generation": current.get("generation"), "republishing": True},
+                    ):
+                        break
             self._schedule_republish(retry_key, delay_seconds, generation)
 
         return None
@@ -413,6 +429,12 @@ class RetryWorker(AsyncProcessingWorkerBase):
 
             if not self._can_publish():
                 return
+            if not await self._retry_store.update_if(
+                retry_key, {"republishing": True}, expected={"generation": envelope.get("generation")}
+            ):
+                return
+            if not self._can_publish():
+                return
             message = envelope["message"]
             identity = extract_message_identity(message)
             retry_info = message.get("retry", {})
@@ -420,6 +442,9 @@ class RetryWorker(AsyncProcessingWorkerBase):
             try:
                 await self._republish_publisher(message)
             except PublishFailureException as e:
+                await self._retry_store.update_if(
+                    retry_key, {"republishing": False}, expected={"generation": envelope.get("generation")}
+                )
                 self._log.error(
                     f"[{identity}] Failed to republish, "
                     f"will recover on the next pending scan: "

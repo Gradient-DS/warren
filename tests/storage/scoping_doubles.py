@@ -33,7 +33,10 @@ class Collection(ResultCollection):
 
     @staticmethod
     def matches(row: dict, query: dict) -> bool:
-        return all(row.get(key) == value for key, value in query.items())
+        return all(
+            all(Collection.matches(row, clause) for clause in value) if key == "$and" else row.get(key) == value
+            for key, value in query.items()
+        )
 
     async def count_documents(self, query: dict, *, limit: int = 0) -> int:
         count = sum(self.matches(row, query) for row in self.rows)

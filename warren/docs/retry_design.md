@@ -97,6 +97,18 @@ on the exchange, self-selecting for `data_type: "soft-failure"` messages.
    ```
    The RetryWorker unwraps `message["data"]` to get the original message for republishing.
 
+## Pending generation ownership
+
+Each accepted retry row receives a UUID `generation`. A retry key is occupied
+until its row is successfully republished and conditionally deleted. Receipts
+use insert-only persistence: neither a duplicate nor an envelope with a different
+count or body can replace a pending row. This applies across workers through the
+store's unique retry-key index. Retry counts are untrusted and do not authorize
+replacement. A new generation can be accepted once the key is free. Competing
+receipts while it is occupied are ignored, including during a publish in flight.
+Legacy rows without a generation remain recoverable and receive the same protection;
+there is no new message field. Conditional deletion matches the fetched generation.
+
 ## Components
 
 ### 1. SoftFailureException

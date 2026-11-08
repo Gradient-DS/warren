@@ -347,7 +347,11 @@ def test_standby_replacement_survives_inflight_publish_cleanup() -> None:
         await publisher.started.wait()
         original = await anext(retries.query({}))
         replacement = failed("same", 1)
-        await second(replacement)
+        # Exercise cleanup against a store-side replacement independently of receipt policy.
+        await retries.insert(
+            {**original, "message": replacement["data"], "generation": "replacement", "fire_at": clock.now + 1},
+            overwrite_existing=True,
+        )
         publisher.resume.set()
         await finish_publishing(first)
         current = await retries.get_document(original["retry_key"])

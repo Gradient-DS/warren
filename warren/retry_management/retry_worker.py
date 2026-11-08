@@ -24,6 +24,7 @@ from warren.pubsub.common import (
 )
 from warren.retry_management.lease import RetryLeaseInterface
 from warren.storage.document_store.interface import (
+    DocumentAlreadyExistsError,
     DocumentNotFoundError,
     DocumentStoreInterface,
 )
@@ -52,6 +53,11 @@ class RetryWorker(AsyncProcessingWorkerBase):
     persisted messages and reschedules remaining delays. With a lease, call
     ``start`` to acquire ownership and poll for takeover. Standbys only persist.
     Omitting the lease is intended for single-process use.
+
+    A generation is the store-issued UUID of one accepted pending row, not
+    the untrusted retry count. An occupied key is immutable until republish
+    succeeds or retention removes it; duplicate and competing envelopes are
+    ignored. Legacy pending rows without a generation are also protected.
 
     :param worker_name: Worker identifier.
     :param retry_store: Persistent store for messages awaiting retry.
@@ -166,7 +172,11 @@ class RetryWorker(AsyncProcessingWorkerBase):
         )
 
         async with self._retry_lock:
-            await self._retry_store.insert(envelope, overwrite_existing=True)
+            try:
+                await self._retry_store.insert(envelope)
+            except DocumentAlreadyExistsError:
+                self._log.info(f"[{identity}] Retry already pending; preserving its generation")
+                return None
             self._schedule_republish(retry_key, delay_seconds, generation)
 
         return None
@@ -408,10 +418,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
                 return
 
             if self._can_publish():
-                if self._lease is None:
-                    await self._retry_store.delete(retry_key)
-                else:
-                    await self._retry_store.delete(retry_key, expected={"generation": envelope.get("generation")})
+                await self._retry_store.delete(retry_key, expected={"generation": envelope.get("generation")})
 
             self._log.info(f"[{identity}] Republished retry message (attempt {retry_info.get('count', '?')})")
 

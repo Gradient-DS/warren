@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Preserve pending retry generations with insert-only persistence, including
+  across workers and for legacy rows; condition cleanup on the fetched generation.
+
 - Reject invalid retry counters and delays, cap scheduler delays with the
   configured policy, and saturate exponential backoff without overflow.
 

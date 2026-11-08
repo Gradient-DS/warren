@@ -15,6 +15,7 @@ from warren.pubsub.common import (
     RouteFunc,
 )
 from warren.storage.scoping import current_scope
+from warren.workers.messages import validate_message
 
 
 class BasePublisher(Base, PublisherInterface, metaclass=ABCMeta):
@@ -84,6 +85,7 @@ class ConsumerManagerBase(Base, ConsumerManagerInterface, metaclass=ABCMeta):
         self._publishers: list[PublisherInterface] = publishers or []
 
     async def _call_handler(self, body: dict) -> dict | None:
+        validate_message(body)
         if self._handler_slots is not None:
             await self._handler_slots.acquire()
         token = object()

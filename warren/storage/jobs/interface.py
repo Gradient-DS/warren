@@ -45,6 +45,8 @@ class JobStoreInterface(Protocol):
         num_documents: int | None = None,
         metadata: dict | None = None,
         scope: str | None = None,
+        *,
+        doc_ids: list[str] | None = None,
     ) -> str:
         """Create a new job entry with a store-generated ID.
 
@@ -54,6 +56,9 @@ class JobStoreInterface(Protocol):
         :param num_documents: Total document count, if known upfront.
             Can be set later via ``update_num_documents``.
         :param metadata: Optional application-defined metadata.
+        :param doc_ids: Complete document membership, when known. None keeps
+            count-based completion for streaming and legacy jobs. An empty
+            list allows no document observations. Independent of num_documents.
         :param scope: Scope to store on the job; None uses the current
             handler scope. Ignored when scoping is off or the scope is not
             valid.

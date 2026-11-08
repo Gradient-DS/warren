@@ -97,6 +97,23 @@ on the exchange, self-selecting for `data_type: "soft-failure"` messages.
    ```
    The RetryWorker unwraps `message["data"]` to get the original message for republishing.
 
+## Pending generation ownership
+
+Each accepted retry row receives a UUID `generation`. Receipts use insert-only
+persistence while that generation is pending. Before publishing, the active worker
+atomically sets `republishing: true` only if the generation still matches. A receipt
+that collides with a marked row can replace it with a new generation, conditionally
+matching both the old generation and the mark. This preserves an immediate subsequent
+soft failure received by a standby before the active finishes cleanup. A receipt
+colliding with an unmarked pending row is ignored, regardless of its count or body.
+
+Cleanup conditionally deletes only the generation that was published. A marked row
+left behind by a crash is recovered by the next pending scan; republishing it twice
+is acceptable. Known publish failures restore the pending state if the generation
+still matches. Legacy rows without a generation use the same transitions with a
+missing generation matching None. No new message field is required. Custom retry
+stores must implement the atomic `DocumentStoreInterface.update_if` operation.
+
 ## Components
 
 ### 1. SoftFailureException

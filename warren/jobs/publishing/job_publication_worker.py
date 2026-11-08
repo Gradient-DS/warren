@@ -11,6 +11,7 @@ from warren.common import HardFailureException
 from warren.jobs.publishing.job_documents_publisher import (
     JobDocumentsPublisher,
 )
+from warren.workers.messages import validate_message
 from warren.workers.workers import (
     FilteringWorkerBase,
 )
@@ -98,6 +99,7 @@ class JobPublicationWorker(FilteringWorkerBase):
         :return: None -- publishing produces individual document
             messages via the publisher's own ``PublisherInterface``.
         """
+        validate_message(message)
         job_id: str = message["job_id"]
 
         data: dict | None = message.get("data")

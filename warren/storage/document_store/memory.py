@@ -100,6 +100,14 @@ class MemoryDocumentStore(Base, DocumentStoreInterface):
         stored.update(updates)
         self._add_to_indexes(key, stored)
 
+    async def update_if(self, doc_id: str, updates: dict, *, expected: dict) -> bool:
+        key = self._require_id(doc_id)
+        doc = self._docs.get(key)
+        if doc is None or any(doc.get(field) != value for field, value in expected.items()):
+            return False
+        await self.update(doc_id, updates)
+        return True
+
     async def exists(self, doc_id: str) -> bool:
         return self._require_id(doc_id) in self._docs
 

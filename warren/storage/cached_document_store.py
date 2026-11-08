@@ -100,6 +100,12 @@ class CachedDocumentStore(Base):
         await self._store.update(doc_id, updates)
         await self._safe_cache_delete(doc_id)
 
+    async def update_if(self, doc_id: str, updates: dict, *, expected: dict) -> bool:
+        """Condition the backing-store write on its current values, bypassing cache."""
+        updated = await self._store.update_if(doc_id, updates, expected=expected)
+        await self._safe_cache_delete(doc_id)
+        return updated
+
     async def delete(
         self,
         doc_id: str,

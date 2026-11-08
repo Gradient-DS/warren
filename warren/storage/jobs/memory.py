@@ -8,6 +8,7 @@ from basics.base import Base
 
 from warren.storage.jobs.interface import JobNotFoundError, JobStoreInterface
 from warren.storage.scoping import scope_fields
+from warren.workers.messages import validate_message
 
 
 class MemoryJobStore(Base, JobStoreInterface):
@@ -32,13 +33,19 @@ class MemoryJobStore(Base, JobStoreInterface):
         num_documents: int | None = None,
         metadata: dict | None = None,
         scope: str | None = None,
+        *,
+        doc_ids: list[str] | None = None,
     ) -> str:
+        if doc_ids is not None:
+            for doc_id in doc_ids:
+                validate_message({"data": {"doc_id": doc_id}})
         now = datetime.now(UTC)
         job_id = f"job-{now.strftime('%Y-%m-%d')}-{uuid.uuid4().hex[:8]}"
         self._jobs[job_id] = {
             **scope_fields(self._scoping_enabled, scope),
             "job_id": job_id,
             "final_data_type": final_data_type,
+            **({"doc_ids": list(doc_ids)} if doc_ids is not None else {}),
             "parameters": copy.deepcopy(parameters) if parameters else {},
             "num_documents": num_documents,
             "status": {

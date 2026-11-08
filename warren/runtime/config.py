@@ -122,6 +122,9 @@ class RetentionConfig(BaseModel):
         seconds after its last write. ``JobStatusWorkerRunner`` passes it
         to its default stores. Pass it to the stores that you build. None
         means no expiry.
+    :param retry_records_ttl_seconds: Delete retry rows this many seconds
+        after their due time. Defaults to one week, so future retries cannot
+        expire. None leaves existing TTL indexes untouched.
     :param job_records_max_age_seconds: Delete a job record this many
         seconds after it is created, also when the job does not complete.
         Must be at least ``job_records_ttl_seconds``. None means no expiry.
@@ -129,6 +132,7 @@ class RetentionConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    retry_records_ttl_seconds: int | None = Field(default=604800, gt=0)
     job_records_ttl_seconds: int | None = Field(default=None, gt=0)
     job_records_max_age_seconds: int | None = Field(default=None, gt=0)
 

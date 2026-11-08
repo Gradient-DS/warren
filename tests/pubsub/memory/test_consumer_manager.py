@@ -461,3 +461,17 @@ def test_shutdown_drains_the_in_flight_message_and_tears_down_publishers() -> No
 
     assert asyncio.run(scenario()) == [{"data_type": "y"}]
     assert data.teardown_called
+
+
+@pytest.mark.parametrize("raw", [b'{"retry":{"count":-1}}', b'{"retry":{"after":NaN}}', b"\xff", b"[" * 2000])
+def test_malformed_memory_input_does_not_publish_another_failure(raw: bytes) -> None:
+    async def run() -> None:
+        worker, control = _FakeWorker(), _FakePublisher()
+        manager = await _manager(worker, control_publisher=control)
+        await manager._process_message(_delivery(raw))
+        assert not worker.calls
+        assert not control.published
+        await manager._process_message(_delivery())
+        assert worker.calls == [_BODY]
+
+    asyncio.run(run())

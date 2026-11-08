@@ -1,9 +1,9 @@
 import asyncio
 import json
-import random
 
 from basics.logging_utils import summarize_exception_chain
 
+from warren._retry_policy import resolve_retry_after, resolve_retry_max, retry_metadata
 from warren.common import (
     HardFailureException,
     MessageConsumerInterface,
@@ -24,6 +24,7 @@ from warren.pubsub.routing import REPLAY_ROUTING_KEY_FIELD
 from warren.workers.messages import (
     ExtractMessageIdentityFunc,
     extract_message_identity,
+    validate_message,
 )
 
 
@@ -216,10 +217,13 @@ class MemoryConsumerManager(ConsumerManagerBase):
     async def _process_message(self, delivery: Delivery) -> None:
         """Process one delivery: decode, run the worker, settle."""
         try:
-            body = json.loads(delivery.body)
-        except (json.JSONDecodeError, TypeError) as e:
-            self._log.error(f"Failed to deserialize message: {summarize_exception_chain(e)}")
-            return  # reject(requeue=False)
+            await self._process_delivery(delivery)
+        except Exception as error:
+            self._log.error(f"Message rejected: {summarize_exception_chain(error)}")
+
+    async def _process_delivery(self, delivery: Delivery) -> None:
+        body = json.loads(delivery.body)
+        validate_message(body)
 
         try:
             result = await self._call_handler(body)
@@ -267,8 +271,8 @@ class MemoryConsumerManager(ConsumerManagerBase):
             self._requeue(delivery)
             return
 
-        existing_retry = body.get("retry", {})
-        current_count = existing_retry.get("count", 0)
+        existing_retry = retry_metadata(body.get("retry", {}))
+        current_count = min(existing_retry.get("count", 0), self._retry_config.max_retries_cap)
 
         # A worker can ask for delayed redelivery without spending a retry
         # slot (polling a long-running operation). Then the counter and the
@@ -308,7 +312,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
             **({"scope": body["scope"]} if "scope" in body else {}),
             "data_type": "soft-failure",
             "data": body,
-            "job_id": body.get("job_id"),
+            **({"job_id": body["job_id"]} if "job_id" in body else {}),
             "origin": {
                 "type": self._consumer.type,
                 "name": self._consumer.name,
@@ -346,7 +350,7 @@ class MemoryConsumerManager(ConsumerManagerBase):
                 **({"scope": body["scope"]} if "scope" in body else {}),
                 "data_type": "hard-failure",
                 "data": body,
-                "job_id": body.get("job_id"),
+                **({"job_id": body["job_id"]} if "job_id" in body else {}),
                 "origin": {
                     "type": self._consumer.type,
                     "name": self._consumer.name,
@@ -362,20 +366,8 @@ class MemoryConsumerManager(ConsumerManagerBase):
 
     def _resolve_retry_after(self, error: SoftFailureException, attempt: int) -> int:
         """Delay for this attempt: exponential backoff, optional jitter, capped."""
-        base = error.retry_after or self._retry_config.initial_delay
-        exp_base = error.backoff_base or self._retry_config.backoff_base
-        use_jitter = error.jitter if error.jitter is not None else self._retry_config.jitter
-
-        # attempt is 0 for a deferral that consumed no retry slot; clamp so
-        # the exponent never goes negative and halves the requested delay.
-        delay = base * (exp_base ** max(attempt - 1, 0))
-
-        if use_jitter:
-            delay *= random.uniform(0.5, 1.5)
-
-        return min(int(delay), self._retry_config.max_delay_cap)
+        return resolve_retry_after(error, attempt, self._retry_config)
 
     def _resolve_retry_max(self, error: SoftFailureException) -> int:
         """Max retries: worker intent capped by the system limit."""
-        requested = error.retry_max or self._retry_config.max_retries
-        return min(requested, self._retry_config.max_retries_cap)
+        return resolve_retry_max(error, self._retry_config)

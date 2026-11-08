@@ -59,11 +59,18 @@ class RMQConnectionConfig(BaseModel):
 
 
 class RMQExchangeConfig(BaseModel):
+    """Exchange declaration settings.
+
+    :param passive: Require an existing exchange instead of creating it.
+        Applies to publisher and consumer setup, including derived observers.
+    """
+
     name: str
     # "headers" is intentionally unsupported (routes on binding arguments,
     # a different code path from routing keys).
     type: Literal["fanout", "direct", "topic"] = "topic"
     durable: bool = True
+    passive: bool = False
 
 
 class RMQQueueConfig(BaseModel):

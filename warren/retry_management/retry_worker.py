@@ -13,15 +13,19 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
+from datetime import UTC, datetime
 
 from basics.logging_utils import summarize_exception_chain
 
+from warren._retry_policy import nonnegative_number, retry_metadata
 from warren.pubsub.common import (
     PublisherInterface,
     PublishFailureException,
+    RetryConfig,
 )
 from warren.retry_management.lease import RetryLeaseInterface
 from warren.storage.document_store.interface import (
+    DocumentAlreadyExistsError,
     DocumentNotFoundError,
     DocumentStoreInterface,
 )
@@ -29,6 +33,7 @@ from warren.storage.scoping import scope_fields
 from warren.workers.messages import (
     build_message_key,
     extract_message_identity,
+    validate_message,
 )
 from warren.workers.workers import (
     AsyncProcessingWorkerBase,
@@ -50,6 +55,13 @@ class RetryWorker(AsyncProcessingWorkerBase):
     ``start`` to acquire ownership and poll for takeover. Standbys only persist.
     Omitting the lease is intended for single-process use.
 
+    A generation is the store-issued UUID of one accepted pending row, not
+    the untrusted retry count. A pending generation is immutable. Before
+    publishing, its row is conditionally marked as republishing so an immediate
+    failure can replace it. Cleanup matches the old generation and preserves
+    that replacement. Marked rows remain recoverable after an interrupted publish.
+    Legacy rows without a generation use the same transitions.
+
     :param worker_name: Worker identifier.
     :param retry_store: Persistent store for messages awaiting retry.
         Must use ``"retry_key"`` as its ``doc_id_field``.
@@ -58,6 +70,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
     :param message_key_func: Function to extract a composite key from
         a message dict. Defaults to building key from
         job_id/doc_id/part_idx using ``build_message_key``.
+    :param retry_config: Delay defaults and caps, shared with the consumers.
     :param scoping_enabled: Prefix the retry key with the scope of the
         message (``s:<scope>:``) when the message has a valid scope.
     :param lease: Lease that lets one instance schedule and republish at a
@@ -81,6 +94,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
         republish_publisher: PublisherInterface,
         message_key_func: Callable[[dict], str] | None = None,
         scoping_enabled: bool = False,
+        retry_config: RetryConfig | None = None,
         lease: RetryLeaseInterface | None = None,
         lease_ttl_seconds: int = 30,
         clock: Callable[[], float] = time.time,
@@ -96,6 +110,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
         if lease_ttl_seconds <= 0:
             msg = "lease_ttl_seconds must be positive"
             raise ValueError(msg)
+        self._retry_config = retry_config or RetryConfig()
         self._lease = lease
         self._lease_ttl = lease_ttl_seconds
         self._clock = clock
@@ -129,26 +144,30 @@ class RetryWorker(AsyncProcessingWorkerBase):
 
         :return: None -- no downstream publish.
         """
+        validate_message(message)
         if message.get("data_type") != "soft-failure":
             return None
 
         failed_message: dict = message["data"]
-        retry_info = failed_message.get("retry", {})
+        retry_info = retry_metadata(failed_message.get("retry", {}))
         fields = scope_fields(self._scoping_enabled, failed_message.get("scope"))
         retry_key = self._message_key_func(failed_message)
         if fields:
             retry_key = f"s:{fields['scope']}:{retry_key}"
-        delay_seconds = retry_info.get("after", 30)
+        delay_seconds = min(retry_info.get("after", self._retry_config.initial_delay), self._retry_config.max_delay_cap)
 
         generation = str(uuid.uuid4())
 
+        fire_at = self._clock() + delay_seconds
         envelope = {
             **fields,
             self.REQUIRED_DOC_ID_FIELD: retry_key,
             "message": failed_message,
-            "fire_at": self._clock() + delay_seconds,
+            "fire_at": fire_at,
+            "fire_at_date": datetime.fromtimestamp(fire_at, UTC),
             "retry_after_seconds": delay_seconds,
             "generation": generation,
+            "republishing": False,
         }
 
         identity = extract_message_identity(failed_message)
@@ -159,7 +178,24 @@ class RetryWorker(AsyncProcessingWorkerBase):
         )
 
         async with self._retry_lock:
-            await self._retry_store.insert(envelope, overwrite_existing=True)
+            while True:
+                try:
+                    await self._retry_store.insert(envelope)
+                    break
+                except DocumentAlreadyExistsError:
+                    # Read authoritative state: a different process may have changed it.
+                    current = await anext(self._retry_store.query({self.REQUIRED_DOC_ID_FIELD: retry_key}), None)
+                    if current is None:
+                        continue
+                    if current.get("republishing") is not True:
+                        self._log.info(f"[{identity}] Retry already pending; preserving its generation")
+                        return None
+                    if await self._retry_store.update_if(
+                        retry_key,
+                        envelope,
+                        expected={"generation": current.get("generation"), "republishing": True},
+                    ):
+                        break
             self._schedule_republish(retry_key, delay_seconds, generation)
 
         return None
@@ -185,13 +221,21 @@ class RetryWorker(AsyncProcessingWorkerBase):
                     return
                 try:
                     retry_key = envelope[self.REQUIRED_DOC_ID_FIELD]
-                    fire_at = envelope["fire_at"]
-                except KeyError as e:
+                    validate_message(envelope["message"])
+                    fire_at = nonnegative_number(envelope["fire_at"], "retry fire_at")
+                    fire_at_date = datetime.fromtimestamp(fire_at, UTC)
+                except (KeyError, ValueError, OverflowError, OSError) as e:
                     # A single malformed persisted envelope must not abort
                     # recovery of the rest.
                     skipped_count += 1
                     self._log.warning(f"Skipping malformed persisted retry envelope: {summarize_exception_chain(e)}")
                     continue
+
+                if "fire_at_date" not in envelope:
+                    try:
+                        await self._retry_store.update(retry_key, {"fire_at_date": fire_at_date})
+                    except DocumentNotFoundError:
+                        continue
 
                 if retry_key in self._republishing_keys:
                     continue
@@ -385,6 +429,12 @@ class RetryWorker(AsyncProcessingWorkerBase):
 
             if not self._can_publish():
                 return
+            if not await self._retry_store.update_if(
+                retry_key, {"republishing": True}, expected={"generation": envelope.get("generation")}
+            ):
+                return
+            if not self._can_publish():
+                return
             message = envelope["message"]
             identity = extract_message_identity(message)
             retry_info = message.get("retry", {})
@@ -392,6 +442,9 @@ class RetryWorker(AsyncProcessingWorkerBase):
             try:
                 await self._republish_publisher(message)
             except PublishFailureException as e:
+                await self._retry_store.update_if(
+                    retry_key, {"republishing": False}, expected={"generation": envelope.get("generation")}
+                )
                 self._log.error(
                     f"[{identity}] Failed to republish, "
                     f"will recover on the next pending scan: "
@@ -400,10 +453,7 @@ class RetryWorker(AsyncProcessingWorkerBase):
                 return
 
             if self._can_publish():
-                if self._lease is None:
-                    await self._retry_store.delete(retry_key)
-                else:
-                    await self._retry_store.delete(retry_key, expected={"generation": envelope.get("generation")})
+                await self._retry_store.delete(retry_key, expected={"generation": envelope.get("generation")})
 
             self._log.info(f"[{identity}] Republished retry message (attempt {retry_info.get('count', '?')})")
 

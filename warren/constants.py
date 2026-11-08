@@ -5,6 +5,6 @@ PUBLISHER_ORIGIN_TYPE: str = "publisher"
 
 ``RoutingPlanRouter`` routes a message whose origin is not a plan node
 to the plan entry. ``JobStatusWorker`` stores the value as
-``origin_type`` in the job results record. No other framework code
-reads this value.
+``origin_type`` in the job results record and recognizes this origin
+as the publication source.
 """

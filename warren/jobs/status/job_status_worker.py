@@ -10,8 +10,12 @@ Message classification:
 - Any other with valid ``job_id`` → record success
 """
 
+from collections.abc import Mapping
+
 from basics.logging_utils import summarize_exception_chain
 
+from warren.constants import PUBLISHER_ORIGIN_TYPE
+from warren.pubsub.routing import ROUTING_PLAN_KEY, RoutingPlan
 from warren.storage.exceptions import (
     TransientStoreError,
 )
@@ -24,6 +28,7 @@ from warren.storage.jobs.interface import (
 from warren.storage.retry import (
     run_with_transient_retry,
 )
+from warren.workers.messages import validate_message
 from warren.workers.workers import (
     FilteringWorkerBase,
 )
@@ -46,6 +51,19 @@ class JobStatusWorker(FilteringWorkerBase):
     ``hard_failed_count`` and ``with_failures`` in ``data``, and the
     parameters of the job in ``job_parameters``.
 
+    When the stored job has ``doc_ids``, only those IDs are recorded and
+    counted. Without that list, streaming and legacy jobs retain count-based
+    completion; document membership cannot be established from observations.
+    Origin types come from the injected pipeline capabilities and, when present,
+    the routing plan in the stored job parameters. Instance names are not known
+    to either. With neither source, origin checks retain legacy behavior.
+    Empty accepts/None produces metadata permits any type for a known worker.
+    The framework's ``publisher`` origin can emit initial documents, including
+    final documents when no worker declares that output type.
+    These checks validate declared membership, not broker publisher identity.
+
+    :param capabilities: Trusted worker types mapped to (accepts, produces).
+        Runners with a pipeline supply its existing capability registry.
     :param worker_name: Unique instance identifier.
     :param job_store: Store for job definitions and completion status.
     :param job_results_store: Store for per-document processing results.
@@ -65,10 +83,12 @@ class JobStatusWorker(FilteringWorkerBase):
         job_store: JobStoreInterface,
         job_results_store: JobResultsStoreInterface,
         worker_type: str | None = None,
+        capabilities: Mapping[str, tuple[frozenset[str], str | None]] | None = None,
         store_retry_attempts: int = 5,
         store_retry_base_delay: float = 1.0,
     ) -> None:
         super().__init__(worker_name, worker_type=worker_type)
+        self._capabilities = dict(capabilities) if capabilities is not None else None
         self._job_store = job_store
         self._job_results_store = job_results_store
         self._store_retry_attempts = store_retry_attempts
@@ -85,6 +105,7 @@ class JobStatusWorker(FilteringWorkerBase):
         ``JobDocumentsPublisher`` can be used directly without RMQ —
         so this worker must not depend on or react to it.
         """
+        validate_message(message)
         data_type = message.get("data_type")
         if data_type in ("job-completed", "job"):
             return False
@@ -103,6 +124,7 @@ class JobStatusWorker(FilteringWorkerBase):
         the observation is then dropped (acked) rather than re-fanned to
         the bus.
         """
+        validate_message(message)
         data_type = message.get("data_type")
         job_id = message["job_id"]
 
@@ -136,6 +158,10 @@ class JobStatusWorker(FilteringWorkerBase):
         message: dict,
     ) -> dict | None:
         """Record the observation and conditionally complete the job."""
+        job = await self._job_store.get_job(job_id)
+        if not self._accept_observation(job, message):
+            self._log.warning(f"Job {job_id}: observation outside known document membership or origins, skipping")
+            return None
         if data_type == "soft-failure":
             await self._handle_soft_failure(job_id, message["data"], message)
         elif data_type == "hard-failure":
@@ -147,6 +173,63 @@ class JobStatusWorker(FilteringWorkerBase):
         if result is not None and "scope" in message:
             result["scope"] = message["scope"]
         return result
+
+    def _accept_observation(self, job: dict, message: dict) -> bool:
+        is_failure = message.get("data_type") in ("soft-failure", "hard-failure")
+        inner = message["data"] if is_failure else message
+        if "job_id" in inner and inner["job_id"] != message["job_id"]:
+            return False
+        doc_id = inner.get("data", {}).get("doc_id")
+        doc_ids = job.get("doc_ids")
+        if doc_ids is not None and doc_id not in doc_ids:
+            return False
+
+        raw_plan = (job.get("parameters") or {}).get(ROUTING_PLAN_KEY)
+        nodes: set[str] | None = None
+        if raw_plan is not None:
+            plan = raw_plan if isinstance(raw_plan, RoutingPlan) else RoutingPlan.model_validate(raw_plan)
+            nodes = (
+                set(plan.entry) | set(plan.edges) | {node for successors in plan.edges.values() for node in successors}
+            )
+        capabilities = self._capabilities
+        if nodes is None and capabilities is None:
+            return True
+
+        def known(worker_type: object) -> bool:
+            return (
+                isinstance(worker_type, str)
+                and (nodes is None or worker_type in nodes)
+                and (capabilities is None or worker_type in capabilities)
+            )
+
+        producer = inner.get("origin", {}).get("type")
+        data_type = inner.get("data_type")
+        if not isinstance(data_type, str):
+            return False
+        if producer == PUBLISHER_ORIGIN_TYPE:
+            # Publication has a known framework origin but no declared output type.
+            if (
+                data_type == job.get("final_data_type")
+                and capabilities is not None
+                and any(produces == data_type for _, produces in capabilities.values())
+            ):
+                return False
+        elif not known(producer):
+            return False
+        elif capabilities is not None:
+            produces = capabilities[producer][1]
+            if produces is not None and data_type != produces:
+                return False
+
+        if is_failure:
+            consumer = message.get("origin", {}).get("type")
+            if not known(consumer):
+                return False
+            if capabilities is not None:
+                accepts = capabilities[consumer][0]
+                if accepts and data_type not in accepts:
+                    return False
+        return True
 
     async def _handle_success(
         self,
@@ -241,8 +324,9 @@ class JobStatusWorker(FilteringWorkerBase):
             return None
 
         final_data_type = job["final_data_type"]
-        completed_count = await self._job_results_store.count_completed_docs(job_id, final_data_type)
-        hard_failed_count = await self._job_results_store.count_hard_failed_docs(job_id)
+        membership = {"doc_ids": job["doc_ids"]} if job.get("doc_ids") is not None else {}
+        completed_count = await self._job_results_store.count_completed_docs(job_id, final_data_type, **membership)
+        hard_failed_count = await self._job_results_store.count_hard_failed_docs(job_id, **membership)
         total_resolved = completed_count + hard_failed_count
 
         if total_resolved < num_documents:

@@ -37,6 +37,7 @@ from warren.exceptions import WarrenError
 from warren.jobs.status.job_status_worker_runner import (
     JobStatusWorkerRunner,
 )
+from warren.runtime.validation import build_capability_registry
 
 
 module_logger: logging.Logger = get_logger(__name__)
@@ -113,7 +114,9 @@ async def start_job_status_worker(
     resolved_config = resolve_config_path(Path(config_file) if config_file else None, pipeline_dir)
 
     await run(
-        runner_factory_func=partial(JobStatusWorkerRunner, exchange=exchange),
+        runner_factory_func=partial(
+            JobStatusWorkerRunner, exchange=exchange, capabilities=build_capability_registry(pipeline)
+        ),
         config_file=resolved_config,
         worker_name=worker_name,
         worker_name_prefix="job-status-worker",

@@ -113,16 +113,22 @@ class JobResultsStoreInterface(Protocol):
         self,
         job_id: str,
         final_data_type: str,
+        *,
+        doc_ids: list[str] | None = None,
     ) -> int:
         """Count documents that reached the final stage successfully.
+
+        :param doc_ids: Restrict to trusted job membership when supplied.
 
         :return: Number of documents with ``success=True`` for
             ``final_data_type``.
         """
         ...
 
-    async def count_hard_failed_docs(self, job_id: str) -> int:
+    async def count_hard_failed_docs(self, job_id: str, *, doc_ids: list[str] | None = None) -> int:
         """Count documents that hard-failed at any stage.
+
+        :param doc_ids: Restrict to trusted job membership when supplied.
 
         :return: Number of distinct ``doc_id`` values with a
             ``hard_failure`` record.

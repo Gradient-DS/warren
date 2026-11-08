@@ -61,6 +61,8 @@ from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from warren._retry_policy import retry_metadata
+
 
 @dataclass(frozen=True)
 class MessageOrigin:
@@ -173,6 +175,7 @@ class ProcessingMessage:
         :return: Typed ProcessingMessage instance.
         :raises KeyError: If required fields are missing.
         """
+        validate_message(message)
         origin_raw = message["origin"]
         origin = MessageOrigin(type=origin_raw["type"], name=origin_raw["name"])
 
@@ -339,3 +342,34 @@ def extract_message_identity(message: dict) -> str:
     doc_id = data.get("doc_id", "?")
     part_idx = data.get("part_idx", "?")
     return f"job={job_id} doc={doc_id} part={part_idx}"
+
+
+def validate_message(message: object) -> None:
+    """Validate framework fields before dispatch or identity extraction.
+
+    :raises ValueError: If the body or its data is not a dictionary, or an
+        identity is not a string without line separators. Missing and null IDs are allowed.
+    """
+    seen: set[int] = set()
+    while True:
+        if not isinstance(message, dict) or id(message) in seen:
+            reason = "message must be a dictionary without envelope cycles"
+            raise ValueError(reason)
+        seen.add(id(message))
+        data = message.get("data", {})
+        if not isinstance(data, dict):
+            reason = "message data must be a dictionary"
+            raise ValueError(reason)
+        for container, id_field in ((message, "job_id"), (data, "doc_id")):
+            if id_field in container:
+                value = container[id_field]
+                if value is None:
+                    continue
+                if not isinstance(value, str) or any(character in value for character in "\r\n\x85\u2028\u2029"):
+                    reason = f"{id_field} must be a string without line separators"
+                    raise ValueError(reason)
+        if "retry" in message:
+            retry_metadata(message["retry"])
+        if message.get("data_type") not in ("soft-failure", "hard-failure"):
+            return
+        message = data

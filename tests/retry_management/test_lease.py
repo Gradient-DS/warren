@@ -348,6 +348,10 @@ def test_standby_replacement_survives_inflight_publish_cleanup() -> None:
         original = await anext(retries.query({}))
         replacement = failed("same", 1)
         await second(replacement)
+        accepted = await retries.get_document(original["retry_key"])
+        assert accepted["generation"] != original["generation"]
+        await second(failed("same", 2))
+        assert await retries.get_document(original["retry_key"]) == accepted
         publisher.resume.set()
         await finish_publishing(first)
         current = await retries.get_document(original["retry_key"])
@@ -360,5 +364,35 @@ def test_standby_replacement_survives_inflight_publish_cleanup() -> None:
         assert not [row async for row in retries.query({})]
         await first.shutdown()
         await second.shutdown()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_marked_retry_recovers_after_publish_is_interrupted(legacy: bool) -> None:
+    async def run() -> None:
+        client, retries, clock = MongoClient(), store(), Clock()
+        publisher = PausedPublisher()
+        first = make_worker(client, retries, publisher, clock, Sleep())
+        second_publisher = FakePublisher()
+        second = make_worker(client, retries, second_publisher, clock, Sleep())
+        try:
+            await first(failed("same"))
+            row = await anext(retries.query({}))
+            if legacy:
+                row.pop("generation")
+                await retries.insert(row, overwrite_existing=True)
+            await first.start()
+            await publisher.started.wait()
+            assert (await retries.get_document(row["retry_key"]))["republishing"] is True
+            await first.shutdown()
+            clock.now += 30
+            await second.start()
+            await finish_publishing(second)
+            assert second_publisher.published == [failed("same")["data"]]
+            assert not [row async for row in retries.query({})]
+        finally:
+            await first.shutdown()
+            await second.shutdown()
 
     asyncio.run(run())

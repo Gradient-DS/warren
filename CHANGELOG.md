@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `RMQExchangeConfig.passive` lets publishers and consumers use existing
+  exchanges without configuring them. Derived observer exchanges and support
+  runners preserve the setting; missing exchanges fail setup.
+
 - Each package `__init__.py` re-exports the public names of its modules and
   lists them in `__all__`, for example `from warren.workers import
   ProcessingMessage` and `from warren import HardFailureException`. The
@@ -17,12 +21,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   load when you first use them, so the package imports without the `gcs` and
   `http` extras.
 
+### Fixed
+
+- Use the shared publisher-origin constant when validating job observations.
+
+- Re-read job state after recording an observation so concurrent document-count
+  and completion updates are reflected in the completion check.
+
+- Treat explicit null message IDs like omitted IDs, preserving compatibility
+  with failure envelopes already in flight.
+
+- Accept environment-expanded numeric YAML values for retry policy and retention
+  settings while preserving their bounds and finite-number checks.
+
+- Preserve immediate subsequent retries received by a standby during publishing,
+  using generation-matched store updates without replacing pending retries.
+
 ### Changed
 
 - `warren.storage` no longer re-exports `ResultsStoreInterface`. Import it
   from `warren.storage.results`, its only package home.
 
 ### Security
+
+- Restrict job observations and completion counts to optional stored `doc_ids`.
+  Runtime status workers validate origins against the pipeline capabilities and
+  the stored job routing plan. Jobs without membership or origin metadata retain
+  their existing behavior; broker publisher identity is not authenticated.
+
+- Expire persisted retries one week after their due time by default, using
+  a BSON date and `retention.retry_records_ttl_seconds`. Pending scans backfill
+  legacy rows; custom retry stores retain ownership of their indexes.
+
+- Preserve pending retry generations with insert-only persistence, including
+  across workers and for legacy rows; condition cleanup on the fetched generation.
+
+- Reject invalid retry counters and delays, cap scheduler delays with the
+  configured policy, and saturate exponential backoff without overflow.
+
+- Validate message and failure-envelope IDs before storage access. IDs must
+  be strings without line separators; omitted IDs remain supported.
+
+- Reject malformed RabbitMQ and Kafka deliveries even when decoding, identity
+  extraction or failure handling raises, so subsequent messages keep flowing.
 
 - The `path` document resolver is confined to its base directory: absolute
   paths, `..` traversal and symlinks resolving outside it are refused, and

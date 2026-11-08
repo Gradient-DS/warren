@@ -67,6 +67,15 @@ class DocumentStoreInterface(Protocol):
         """
         ...
 
+    async def update_if(self, doc_id: str, updates: dict, *, expected: dict) -> bool:
+        """Atomically set fields only when the stored values match.
+
+        :param expected: Field values required for the update. A missing field
+            matches None. Conditions are combined with the document ID.
+        :return: Whether a matching document was updated; never inserts.
+        """
+        ...
+
     async def exists(
         self,
         doc_id: str,

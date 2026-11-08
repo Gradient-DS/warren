@@ -11,6 +11,7 @@ from pymongo.results import BulkWriteResult
 
 class MongoClient:
     def __init__(self) -> None:
+        self.indexes = {"unique": {"key": [(k, 1) for k in ("doc_id", "job_id", "part_idx")], "unique": True}}
         self.rows: list[dict] = []
         self.bulk_calls = 0
         self.single_calls = 0
@@ -19,16 +20,17 @@ class MongoClient:
     def __getitem__(self, key: str) -> Self:
         return self
 
-    async def create_index(self, keys: object, *, unique: bool) -> None:
-        pass
+    async def create_index(self, keys: str | list[tuple[str, int]], **options: object) -> None:
+        if isinstance(keys, str):
+            keys = [(keys, 1)]
+        name = "_".join(f"{key}_{direction}" for key, direction in keys)
+        self.indexes[name] = {"key": keys, **options}
 
     async def index_information(self) -> dict:
-        return {
-            "unique": {
-                "key": [(k, 1) for k in ("doc_id", "job_id", "part_idx")],
-                "unique": True,
-            }
-        }
+        return copy.deepcopy(self.indexes)
+
+    async def drop_index(self, name: str) -> None:
+        del self.indexes[name]
 
     def _replace(self, query: dict, row: dict) -> tuple[dict, bool]:
         for index, existing in enumerate(self.rows):

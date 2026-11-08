@@ -166,6 +166,13 @@ class MongoDBDocumentStore(Base, DocumentStoreInterface):
             msg = f"Document with id '{doc_id}' not found"
             raise DocumentNotFoundError(msg)
 
+    async def update_if(self, doc_id: str, updates: dict, *, expected: dict) -> bool:
+        """Apply fields atomically if both the ID and expected values match."""
+        collection = await self._get_collection()
+        query = {"$and": [{self._doc_id_field: self._denormalize_doc_id(doc_id)}, expected]}
+        result = await collection.update_one(query, {"$set": updates})
+        return result.matched_count > 0
+
     async def exists(
         self,
         doc_id: str,

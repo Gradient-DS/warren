@@ -19,6 +19,7 @@ from warren.storage.mongo_errors import (
 )
 from warren.storage.mongo_retention import configure_ttl_index
 from warren.storage.scoping import scope_fields
+from warren.workers.messages import validate_message
 
 
 if TYPE_CHECKING:
@@ -80,13 +81,19 @@ class MongoDBJobStore(Base, JobStoreInterface):
         num_documents: int | None = None,
         metadata: dict | None = None,
         scope: str | None = None,
+        *,
+        doc_ids: list[str] | None = None,
     ) -> str:
         job_id = self._generate_job_id()
+        if doc_ids is not None:
+            for doc_id in doc_ids:
+                validate_message({"data": {"doc_id": doc_id}})
         now = datetime.now(UTC)
         doc = {
             **scope_fields(self._scoping_enabled, scope),
             "job_id": job_id,
             "final_data_type": final_data_type,
+            **({"doc_ids": list(doc_ids)} if doc_ids is not None else {}),
             "parameters": parameters or {},
             "num_documents": num_documents,
             "status": {

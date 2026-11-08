@@ -8,6 +8,8 @@ Accepts ``RuntimeConfig`` and manages its own infrastructure. Custom
 components can be injected to override the defaults (e.g. for testing).
 """
 
+from collections.abc import Mapping
+
 from basics.logging_utils import summarize_exception_chain
 
 from warren.common import MessageConsumerInterface
@@ -67,6 +69,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         (``observer_exchange(pipeline.exchange)``). On a direct pipeline,
         the data exchange does not carry every message, so the worker
         sees no messages there.
+    :param capabilities: Trusted pipeline capability registry for origin checks.
     :param job_store: optional override for the job definitions store.
         Default: ``MongoDBJobStore``.
     :param job_results_store: optional override for the per-document
@@ -88,6 +91,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         *,
         exchange: RMQExchangeConfig,
         job_store: JobStoreInterface | None = None,
+        capabilities: Mapping[str, tuple[frozenset[str], str | None]] | None = None,
         job_results_store: JobResultsStoreInterface | None = None,
         consumer_manager_factory: ConsumerManagerFactory | None = None,
         infra: RuntimeInfra | None = None,
@@ -96,6 +100,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
         self._worker_name = worker_name
         self._config = config
         self._exchange = exchange
+        self._capabilities = capabilities
         self._job_store = job_store
         self._job_results_store = job_results_store
         self._consumer_manager_factory = consumer_manager_factory
@@ -136,6 +141,7 @@ class JobStatusWorkerRunner(WorkerRunnerBase):
 
         worker = JobStatusWorker(
             worker_name=self._worker_name,
+            capabilities=self._capabilities,
             job_store=self._job_store,
             job_results_store=self._job_results_store,
         )

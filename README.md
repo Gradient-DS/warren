@@ -12,6 +12,8 @@ The framework provides worker base classes and storage and pubsub interfaces.
 The [runtime](warren/runtime/USAGE.md) wires them to RabbitMQ or Kafka with
 MongoDB and Redis, or to in-process memory implementations for local use.
 
+![Warren architecture: a job publisher, a message broker, your workers, the Warren support workers, a cache and storage](https://raw.githubusercontent.com/Gradient-DS/warren/main/docs/architecture.png)
+
 ## Features
 
 - **Transport choice:** RabbitMQ and memory support fanout, topic and direct

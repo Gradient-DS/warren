@@ -73,7 +73,7 @@ This simplifies querying and ensures consistency between cache keys and storage.
 
 - Cache stores the **complete document**, not just the result field
 - This ensures consistency between cache and store retrieval
-- Cache failures are silently ignored (with TODO for warning logs)
+- Cache failures are logged as warnings and do not fail the operation; the store remains the source of truth
 
 **Cache key format** (ordered by hierarchy: job -> doc -> part):
 
@@ -217,4 +217,4 @@ def __init__(
 9. **result_id extraction**: Uses `get_doc_id_field()` to extract storage ID into `result_id`
 10. **Uniqueness enforcement**: Validated at construction via `has_unique_index()`, raises `ValueError` if missing
 11. **Streaming cache**: Controlled by `try_cache` parameter, cache-first when enabled; caches on read from store
-12. **Cache failures**: Silently ignored to not break main flow (TODO: add warning logs)
+12. **Cache failures**: Logged as warnings, never raised, to not break main flow (`HardFailureException` still propagates)

@@ -1,9 +1,3 @@
-# ruff.toml
-#
-# Adapted from soev-solutions' ruff.toml at extraction time (2026-06).
-# The per-file-ignores block that was scoped to
-# `document_processing/distributed/**/*.py` there now covers this whole repo.
-
 target-version = "py312"
 line-length = 120
 

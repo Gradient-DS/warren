@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A `docker-compose.yml` at the repository root starts RabbitMQ, MongoDB and
+  Redis for the Quickstart with `docker compose up -d --wait`.
+
 ## [0.7.0] — 2026-11-08
 
 ### Added

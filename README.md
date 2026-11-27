@@ -1,4 +1,9 @@
-# Warren
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/warren-logo-dark.png">
+    <img src="docs/assets/warren-logo-light.png" alt="Warren" width="520">
+  </picture>
+</p>
 
 [![tests](https://github.com/Gradient-DS/warren/actions/workflows/tests.yml/badge.svg)](https://github.com/Gradient-DS/warren/actions/workflows/tests.yml) [![PyPI version](https://img.shields.io/pypi/v/warren)](https://pypi.org/project/warren/) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
@@ -58,13 +63,15 @@ pip install -e ".[dev]"
 items produce eighteen final results without external data or API credentials.
 The stage and collection names below are those of the bundled example.
 
-**1. Start RabbitMQ, MongoDB, and Redis:**
+**1. Start RabbitMQ, MongoDB, and Redis** from the repository root, using the
+bundled `docker-compose.yml`:
 
 ```bash
-docker run -d --name warren-rabbitmq -p 5672:5672 rabbitmq:4
-docker run -d --name warren-mongodb -p 27017:27017 mongo:8
-docker run -d --name warren-redis -p 6379:6379 redis:7
+docker compose up -d --wait
 ```
+
+`--wait` returns once all three services pass their health checks, so the
+workers below can connect straight away.
 
 **2. Start the processing workers, one per terminal:**
 
@@ -104,6 +111,12 @@ python -m examples.inspect_job --job-name demo-001 --config-file examples/exchan
 With the job-status worker running, this prints per-stage counts until the job
 completes. Start more instances of a processing worker to share its load.
 Multiple retry workers may run too; only the lease holder schedules retries.
+
+**5. Tear down:**
+
+```bash
+docker compose down      # add -v to also delete the MongoDB data volume
+```
 
 ### Local pipelines without infrastructure
 

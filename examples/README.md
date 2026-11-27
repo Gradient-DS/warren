@@ -29,6 +29,11 @@ synthetic filtering workers), `capability_workers.py` (the declarative variants
 the direct example uses), `documents_publisher.py`, and `publish.py` (the shared
 fanout/topic publisher — direct has its own under `direct/publish.py`).
 
+## `deploy/keda/` — worker autoscaling
+
+[KEDA examples](deploy/keda/README.md) scale one worker Deployment on RabbitMQ
+queue depth or Kafka consumer lag.
+
 ## `inspect_job.py`
 
 A small read-only CLI that polls a job by name and prints a live per-stage view

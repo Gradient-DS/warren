@@ -1,0 +1,28 @@
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: warren-rabbitmq
+spec:
+  secretTargetRef:
+    - parameter: host
+      name: warren-rabbitmq-connection
+      key: host
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: warren-document-parser-rabbitmq
+spec:
+  scaleTargetRef:
+    name: warren-document-parser
+  minReplicaCount: 1
+  maxReplicaCount: 8
+  triggers:
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        queueName: jobs.document_parser
+        mode: QueueLength
+        value: "20"
+      authenticationRef:
+        name: warren-rabbitmq

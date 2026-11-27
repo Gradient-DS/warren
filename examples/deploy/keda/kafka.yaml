@@ -1,0 +1,17 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: warren-document-parser-kafka
+spec:
+  scaleTargetRef:
+    name: warren-document-parser
+  minReplicaCount: 1
+  maxReplicaCount: 6
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka:9092
+        topic: jobs
+        consumerGroup: jobs.document_parser
+        lagThreshold: "20"
+        offsetResetPolicy: earliest

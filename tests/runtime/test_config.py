@@ -187,13 +187,17 @@ def test_unknown_config_keys_are_rejected(tmp_path: Path, section: tuple[str, ..
     assert exc.value.errors()[0]["loc"] == (*section, "hosst")
 
 
+# Kubernetes deployment examples are not Warren RuntimeConfig files.
+_KUBERNETES_EXAMPLES = Path(__file__).resolve().parents[2] / "examples" / "deploy"
+
+
 @pytest.mark.parametrize(
     "path",
     sorted(
         path
         for directory in ("examples", "runtime_scripts", "tests")
         for path in (Path(__file__).resolve().parents[2] / directory).rglob("*")
-        if path.suffix in {".yaml", ".yml"}
+        if path.suffix in {".yaml", ".yml"} and _KUBERNETES_EXAMPLES not in path.parents
     ),
 )
 def test_repository_yaml_configs(path: Path) -> None:
